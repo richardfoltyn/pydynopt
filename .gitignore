@@ -3,3 +3,4 @@
 *.bak
 *.backup
 build/
+.spyder*
