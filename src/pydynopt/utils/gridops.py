@@ -5,10 +5,11 @@ from numpy import searchsorted, interp
 
 
 def interp_grid_prob(vals, grid_vals):
-    inext_low = searchsorted(grid_vals, vals)
+    vals = np.atleast_1d(vals)
+    inext_low = searchsorted(grid_vals, vals, side='right') - 1
     max_idx = grid_vals.shape[0] - 1
-    fp = np.arange(vals.shape[0])
-    pnext_low = interp(vals, grid_vals, fp) - fp
+    fp = np.arange(grid_vals.shape[0])
+    pnext_low = interp(vals, grid_vals, fp) - fp[inext_low]
 
     assert np.all(pnext_low >= 0) and np.all(pnext_low <= 1)
 
@@ -18,16 +19,29 @@ def interp_grid_prob(vals, grid_vals):
     return inext_low, inext_high, pnext_low, pnext_high
 
 
-def makegrid(x, y, axis=1):
+def makegrid(a_tup, axis=0, op=None):
 
-    x = np.matrix(x)
-    y = np.matrix(y)
+    assert axis <= 1
 
-    how = x.shape
-    how[1-axis] = 1
+    lengths = []
+    in_arrays = []
+    out_arrays = []
+    for (i, v) in enumerate(a_tup):
+        in_arrays.append(np.atleast_2d(v))
+        lengths.append(in_arrays[-1].shape[1-axis])
 
-    yy = np.tile(y, how)
-    xx = x.repeat(y.shape[axis], axis=axis)
+    for (i, v) in enumerate(in_arrays):
+        tile_by = [1, 1]
+        tile_by[1-axis] = np.prod(lengths[:i])
+        rep_by = np.prod(lengths[i+1:])
 
-    res = np.vstack((xx, yy))
+        vv = v.repeat(rep_by, axis=(1-axis))
+        vv = np.tile(vv, tuple(tile_by))
+        out_arrays.append(vv)
+
+    res = np.concatenate(tuple(out_arrays), axis=axis)
+
+    if op is not None:
+        res = op(res, axis=axis)
+
     return res
