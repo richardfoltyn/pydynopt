@@ -96,8 +96,8 @@ def pfi(ps, tol=1e-8, n_accel=30, maxiter=1000):
             assert np.all(np.min(px_next[ix]) >= 0)
             assert np.all(np.abs(np.sum(px_next[ix]) - 1) < 1e-12)
     else:
-        ix_next = np.array(0L).reshape((1, 1))
-        px_next = np.array(1L).reshape((1, 1))
+        ix_next = np.array(0).reshape((1, 1))
+        px_next = np.array(1).reshape((1, 1))
 
     dim_a, dtype_a = _action_info(ps, 0, 0)
     opt_choice = np.empty((nstates_end, nstates_exo, dim_a), dtype=dtype_a)

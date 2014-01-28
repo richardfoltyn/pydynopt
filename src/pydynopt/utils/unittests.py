@@ -27,6 +27,8 @@ class TestCartesianOp(ut.TestCase):
         self.first = np.arange(4)
         self.second = np.arange(4, 7)
         self.third = np.arange(7, 9)
+        self.fourth = np.arange(10).reshape((2, 5))
+        self.fifth = np.arange(10, 19).reshape((3, 3))
 
     def test_dimensions(self):
         out_len = np.prod((len(self.first), len(self.second),
@@ -58,3 +60,9 @@ class TestCartesianOp(ut.TestCase):
 
         self.assertEqual(result.shape[0], out_len, 'Output dimension test failed')
         self.assertEqual(result.shape[1], 1, 'Output dimension test failed')
+
+        result = cartesian_op((self.fourth, self.fifth), axis=0)
+        self.assertEqual(result.shape[0], self.fourth.shape[0] +
+                                          self.fifth.shape[0])
+        self.assertEqual(result.shape[1], self.fourth.shape[1] *
+                                        self.fifth.shape[1])
