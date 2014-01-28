@@ -46,7 +46,7 @@ def cartesian_op(a_tup, axis=0, op=None):
     res = np.concatenate(tuple(out_arrays), axis=axis)
 
     if op is not None:
-        res = op(res, axis=axis)
+        res = np.atleast_2d(op(res, axis=axis)).swapaxes(0, axis)
 
     return res
 
