@@ -34,7 +34,7 @@ class TestCartesianOp(ut.TestCase):
 
         result = cartesian_op((self.first, self.second, self.third), axis=0)
 
-        self.assertEqual(result.shape[0], 3L, 'Output dimension test failed')
+        self.assertEqual(result.shape[0], 3, 'Output dimension test failed')
         self.assertEqual(result.shape[1], out_len, 'Output dimension test '
                                                    'failed')
 
@@ -42,13 +42,13 @@ class TestCartesianOp(ut.TestCase):
                                self.second.reshape((-1, 1)),
                                self.third.reshape((-1, 1))), axis=1)
 
-        self.assertEqual(result.shape[1], 3L, 'Output dimension test failed')
+        self.assertEqual(result.shape[1], 3, 'Output dimension test failed')
         self.assertEqual(result.shape[0], out_len, 'Output dimension test '
                                                    'failed')
 
         result = cartesian_op((self.first, self.second, self.third), axis=0,
                               op=np.prod)
-        self.assertEqual(result.shape[0], 1L, 'Output dimension test failed')
+        self.assertEqual(result.shape[0], 1, 'Output dimension test failed')
         self.assertEqual(result.shape[1], out_len, 'Output dimension test failed')
 
         result = cartesian_op((self.first.reshape((-1, 1)),
@@ -57,4 +57,4 @@ class TestCartesianOp(ut.TestCase):
                               op=np.prod)
 
         self.assertEqual(result.shape[0], out_len, 'Output dimension test failed')
-        self.assertEqual(result.shape[1], 1L, 'Output dimension test failed')
+        self.assertEqual(result.shape[1], 1, 'Output dimension test failed')
