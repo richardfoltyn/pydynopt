@@ -6,6 +6,8 @@ from math import log
 
 from scipy.optimize import root
 
+from .cutils import _interp_grid_prob
+
 
 def interp_grid_prob(vals, grid_vals):
     v = np.asarray(vals).flatten()
@@ -22,6 +24,14 @@ def interp_grid_prob(vals, grid_vals):
     vs = vals.shape
     return i_low.reshape(vs), i_high.reshape(vs), p_low.reshape(vs), \
            p_high.reshape(vs)
+
+
+def interp_grid_prob2(vals, grid_vals):
+    v = np.asarray(vals).flatten()
+    g = np.asarray(grid_vals).flatten()
+    i_low, i_high, p_low, p_high = _interp_grid_prob(v, g)
+    vs = vals.shape
+    return i_low.reshape(vs), i_high.reshape(vs), p_low.reshape(vs), p_high.reshape(vs)
 
 
 def cartesian_op(a_tup, axis=0, op=None):
