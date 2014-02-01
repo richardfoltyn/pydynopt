@@ -77,20 +77,26 @@ def makegrid(start, stop, num, logs=True, insert_vals=None, log_shift=0,
             assert sol.success
             log_shift = sol.x
 
-        start = log(start + log_shift)
-        stop = log(stop + log_shift)
+        lstart, lstop = log(start + log_shift), log(stop + log_shift)
     else:
         log_shift = 0
+        lstart, lstop = start, stop
 
     rem = 0 if insert_vals is None else len(insert_vals)
 
-    grid = np.linspace(start, stop, num - rem)
+    grid = np.linspace(lstart, lstop, num - rem)
     if logs:
         grid = np.exp(grid) - log_shift
 
     if insert_vals is not None and len(insert_vals) > 0:
         idx_insert = np.searchsorted(grid, insert_vals) + 1
         grid = np.insert(grid, idx_insert, insert_vals)
+
+    # there may be some precision issues resulting in
+    # x != exp(log(x + log_shift) - log_shift
+    # so we replace the start and stop values with the requested values
+    grid[0] = start
+    grid[-1] = stop
 
     return grid
 
@@ -100,12 +106,22 @@ def makegrid_mirrored(start, stop, num, around, logs=False):
 
     start = np.min(start, around)
     frac_above = (stop - around) / (stop - start)
-    tmp_n = np.ceil(max(frac_above, 1 - frac_above) * num)
-    grid_above = makegrid(around, max(stop, abs(start)), tmp_n, logs=logs,
-                          log_shift=1)
-    grid_below = -1 * grid_above[-1:0:-1]
+    # try to get more 'balanced' division of grid, depending on whether
+    # majority of points is below or above 'around'
+    op = np.floor if frac_above > .5 else np.ceil
+    num_above = op(frac_above * (num-1))
+    num_below = num - num_above - 1
+    grid = makegrid(around, max(stop, abs(start)),
+                    max(num_below, num_above) + 1,
+                    logs=logs, log_shift=1)
+    idx_start = min(-1, num_below - max(num_above, num_below) - 1)
+    grid_below, grid_above = - grid[idx_start:0:-1], grid[:num_above+1]
+    grid = np.hstack((grid_below, grid_above))
+    # grid_below = -1 * grid_above[idx_last:0:-1]
 
-    grid = np.hstack((grid_below[start <= grid_below],
-                      grid_above[grid_above <= stop]))
+    # grid = np.hstack((grid_below, grid_above))
+
+    assert np.all(start <= grid) and np.all(grid <= stop)
+    assert len(grid) == num
 
     return grid
