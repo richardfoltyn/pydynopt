@@ -3,11 +3,12 @@ from __future__ import absolute_import, print_function, division
 
 class DynoptResult(object):
 
-    def __init__(self, ps, v, opt_choice, iters, tol, idx_to=None):
+    def __init__(self, ps, v, opt_choice, iters, tol, transitions=None):
         self._ps = ps
         self._v = v
         self._opt_choice = opt_choice
         self._iters, self._tol = iters, tol
+        self._trans = transitions
 
     @property
     def vfun(self):
@@ -28,3 +29,7 @@ class DynoptResult(object):
     @property
     def problem_spec(self):
         return self._ps
+
+    @property
+    def transition_matrix(self):
+        return self._trans
