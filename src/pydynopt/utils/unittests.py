@@ -113,6 +113,11 @@ class Test_makegrid_mirrored(ut.TestCase):
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
+        grid, idx0 = makegrid_mirrored(start, stop, num, around,
+                                       retaround=True, logs=True, log_shift=5)
+        self._basic_checks(start, stop, around, num, grid, idx0)
+        self._compare_elements(around, grid, idx0)
+
     def test_random(self):
         start, around, stop = np.sort(np.random.randn(3) * 10)
         num = 100
@@ -152,6 +157,22 @@ class Test_makegrid_mirrored(ut.TestCase):
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
+        # Test log-shifted transformation with log_shift > 1 and one-sided
+        # grid
+        start, around, stop = 0, 0, 10
+        lshift = 5
+        grid, idx0 = makegrid_mirrored(start, stop, num, around,
+                                       retaround=True, logs=True,
+                                       log_shift=lshift)
+
+        grid2 = np.exp(np.linspace(np.log(start + lshift),
+                                   np.log(stop+lshift), num=num)) -lshift
+        # adjust start / stop values as makegrid_mirrored does
+        grid2[0], grid2[-1] = start, stop
+        self.assertTrue(np.all(grid == grid2))
+
+        self._basic_checks(start, stop, around, num, grid, idx0)
+        self._compare_elements(around, grid, idx0)
 
     def _basic_checks(self, start, stop, around, num, grid, idx0):
         self.assertEqual(grid[idx0], around)
