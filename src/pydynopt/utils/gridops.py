@@ -101,25 +101,34 @@ def makegrid(start, stop, num, logs=True, insert_vals=None, log_shift=0,
     return grid
 
 
-def makegrid_mirrored(start, stop, num, around, logs=False):
+def makegrid_mirrored(start, stop, num, around, endpoint=True,
+                      logs=False, log_shift=1):
     assert start <= around <= stop
 
-    start = np.min(start, around)
-    frac_above = (stop - around) / (stop - start)
-    # try to get more 'balanced' division of grid, depending on whether
-    # majority of points is below or above 'around'
-    op = np.floor if frac_above > .5 else np.ceil
-    num_above = op(frac_above * (num-1))
-    num_below = num - num_above - 1
-    grid = makegrid(around, max(stop, abs(start)),
-                    max(num_below, num_above) + 1,
-                    logs=logs, log_shift=1)
-    idx_start = min(-1, num_below - max(num_above, num_below) - 1)
-    grid_below, grid_above = - grid[idx_start:0:-1], grid[:num_above+1]
-    grid = np.hstack((grid_below, grid_above))
-    # grid_below = -1 * grid_above[idx_last:0:-1]
+    adj_stop = stop - around
+    adj_start = abs(start - around)
+    adj_around = 0
+    adj_num = num if not endpoint else num - 1
 
-    # grid = np.hstack((grid_below, grid_above))
+    f = lambda x: np.log(x + log_shift) if logs else lambda y: y
+    finv = lambda x: np.exp(x) - log_shift if logs else lambda y: y
+
+    frac = min(f(adj_start), f(adj_stop)) / (f(adj_stop) + f(adj_start))
+    t_num = np.ceil(frac * adj_num)
+    frm, to = f(adj_around), min(f(adj_start), f(adj_stop))
+    step = np.linspace(frm, to, t_num, retstep=True)
+    grid_short = finv(np.linspace(frm, to, t_num))
+    to = frm + step * (adj_num - t_num + 1) * 1.5
+    grid_long = finv(np.arange(frm, to, step)[1:adj_num - t_num])
+
+    if endpoint:
+        grid_long = np.append(grid_long, stop)
+
+    sgn_long = np.sign(adj_stop - adj_start)
+
+    grid_low = (- sgn_long) * grid_short + around
+    grid_high = sgn_long * grid_long + around
+    grid = np.hstack(grid_low, grid_high)
 
     assert np.all(start <= grid) and np.all(grid <= stop)
     assert len(grid) == num
