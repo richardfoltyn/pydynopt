@@ -102,35 +102,55 @@ def makegrid(start, stop, num, logs=True, insert_vals=None, log_shift=0,
 
 
 def makegrid_mirrored(start, stop, num, around, endpoint=True,
-                      logs=False, log_shift=1):
-    assert start <= around <= stop
+                      logs=False, log_shift=1, retaround=False):
+    assert start < around < stop
 
     adj_stop = stop - around
     adj_start = abs(start - around)
     adj_around = 0
     adj_num = num if not endpoint else num - 1
 
-    f = lambda x: np.log(x + log_shift) if logs else lambda y: y
-    finv = lambda x: np.exp(x) - log_shift if logs else lambda y: y
+    if logs:
+        f = lambda x: np.log(x + log_shift)
+        finv = lambda x: np.exp(x) - log_shift
+    else:
+        f = finv = lambda x: x
 
-    frac = min(f(adj_start), f(adj_stop)) / (f(adj_stop) + f(adj_start))
-    t_num = np.ceil(frac * adj_num)
-    frm, to = f(adj_around), min(f(adj_start), f(adj_stop))
-    step = np.linspace(frm, to, t_num, retstep=True)
-    grid_short = finv(np.linspace(frm, to, t_num))
-    to = frm + step * (adj_num - t_num + 1) * 1.5
-    grid_long = finv(np.arange(frm, to, step)[1:adj_num - t_num])
+    frac = max(f(adj_start), f(adj_stop)) / (f(adj_stop) + f(adj_start))
+    t_num = np.ceil(frac * num)
+    frm, to = f(adj_around), max(f(adj_start), f(adj_stop))
+    grid_long, step = np.linspace(frm, to, t_num, retstep=True)
+    grid_long = finv(grid_long)
+    grid_short = grid_long[1:adj_num - t_num + 1]
 
     if endpoint:
-        grid_long = np.append(grid_long, stop)
+        grid_short = np.append(grid_short, min(adj_start, adj_stop))
 
     sgn_long = np.sign(adj_stop - adj_start)
 
-    grid_low = (- sgn_long) * grid_short + around
-    grid_high = sgn_long * grid_long + around
-    grid = np.hstack(grid_low, grid_high)
+    # grid_short = (- sgn_long) * grid_short + around
+    # grid_long = sgn_long * grid_long + around
+    if sgn_long > 0:
+        grid = np.hstack((-grid_short[::-1], grid_long)) + around
+        # ensure that endpoint of the longer side of the grid has exactly the
+        # requested value. This may not be the case due to lack of precision,
+        # in particular when log transformation is applied.
+        grid[-1] = stop
+        if endpoint:
+            grid[0] = start
+        around_idx = len(grid_short)
+    else:
+        grid = np.hstack((- grid_long[::-1], grid_short)) + around
+        grid[0] = start
+        if endpoint:
+            grid[-1] = stop
+        around_idx = len(grid_long) - 1
 
+    # TODO: eventually remove these assertions as they are covered in unit
+    # test for some specific scenarios
     assert np.all(start <= grid) and np.all(grid <= stop)
-    assert len(grid) == num
 
-    return grid
+    if retaround:
+        return grid, around_idx
+    else:
+        return grid
