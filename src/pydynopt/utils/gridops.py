@@ -103,12 +103,19 @@ def makegrid(start, stop, num, logs=True, insert_vals=None, log_shift=0,
 
 def makegrid_mirrored(start, stop, num, around, endpoint=True,
                       logs=False, log_shift=1, retaround=False):
-    assert start < around < stop
+
+    assert start <= around <= stop and start < stop
 
     adj_stop = stop - around
     adj_start = abs(start - around)
     adj_around = 0
-    adj_num = num if not endpoint else num - 1
+    # check whether we actually need to manually include endpoint of
+    # 'shorter' arm of the grid. This is not the case if the endpoint
+    # coincides with 'around' and is thus on the grid in any case.
+    need_endpoint = (adj_stop > adj_start > 1e-12) or \
+                    (adj_start > abs(adj_stop) > 1e-12)
+
+    adj_num = num if not (endpoint and need_endpoint) else num - 1
 
     if logs:
         f = lambda x: np.log(x + log_shift)
@@ -117,13 +124,17 @@ def makegrid_mirrored(start, stop, num, around, endpoint=True,
         f = finv = lambda x: x
 
     frac = max(f(adj_start), f(adj_stop)) / (f(adj_stop) + f(adj_start))
-    t_num = np.ceil(frac * num)
-    frm, to = f(adj_around), max(f(adj_start), f(adj_stop))
-    grid_long, step = np.linspace(frm, to, t_num, retstep=True)
-    grid_long = finv(grid_long)
-    grid_short = grid_long[1:adj_num - t_num + 1]
 
-    if endpoint:
+    # number of elements on the 'long arm' of the grid
+    # make sure there is space left in case we need to add an endpoint value!
+    num_long = min(np.ceil(frac * num), adj_num)
+
+    frm, to = f(adj_around), max(f(adj_start), f(adj_stop))
+    grid_long, step = np.linspace(frm, to, num_long, retstep=True)
+    grid_long = finv(grid_long)
+    grid_short = grid_long[1:adj_num - num_long + 1]
+
+    if endpoint and need_endpoint:
         grid_short = np.append(grid_short, min(adj_start, adj_stop))
 
     sgn_long = np.sign(adj_stop - adj_start)
@@ -136,13 +147,13 @@ def makegrid_mirrored(start, stop, num, around, endpoint=True,
         # requested value. This may not be the case due to lack of precision,
         # in particular when log transformation is applied.
         grid[-1] = stop
-        if endpoint:
+        if endpoint and need_endpoint:
             grid[0] = start
         around_idx = len(grid_short)
     else:
         grid = np.hstack((- grid_long[::-1], grid_short)) + around
         grid[0] = start
-        if endpoint:
+        if endpoint and need_endpoint:
             grid[-1] = stop
         around_idx = len(grid_long) - 1
 

@@ -129,6 +129,30 @@ class Test_makegrid_mirrored(ut.TestCase):
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
+    def test_boundary(self):
+        start, around, stop = 0, 0, 10
+        num = 20
+
+        grid, idx0 = makegrid_mirrored(start, stop, num, around,
+                                       retaround=True)
+
+        self._basic_checks(start, stop, around, num, grid, idx0)
+        self._compare_elements(around, grid, idx0)
+
+        start, around, stop = -10, 0, 0
+
+        grid, idx0 = makegrid_mirrored(start, stop, num, around,
+                                       retaround=True)
+        self._basic_checks(start, stop, around, num, grid, idx0)
+        self._compare_elements(around, grid, idx0)
+
+        grid, idx0 = makegrid_mirrored(start, stop, num, around,
+                                       retaround=True, logs=True)
+
+        self._basic_checks(start, stop, around, num, grid, idx0)
+        self._compare_elements(around, grid, idx0)
+
+
     def _basic_checks(self, start, stop, around, num, grid, idx0):
         self.assertEqual(grid[idx0], around)
         self.assertEqual(num, len(grid))
