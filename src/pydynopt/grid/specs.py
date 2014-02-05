@@ -8,6 +8,9 @@ class ProblemSpec(object):
         self._grid_shape = grid_shape
         self._discount = discount
 
+        self._ndim = len(grid_shape)
+        self._nstates = np.prod(grid_shape)
+
     @property
     def grid_shape(self):
         return self._grid_shape
@@ -18,11 +21,11 @@ class ProblemSpec(object):
 
     @property
     def nstates(self):
-        return np.prod(self._grid_shape)
+        return self._nstates
 
     @property
     def ndim(self):
-        return len(self._grid_shape)
+        return self._ndim
 
     def actions(self, i_state, ix_state=0):
         pass
@@ -39,6 +42,11 @@ class ProblemSpecExogenous(ProblemSpec):
         self._grid_shape_end = grid_shape_end
         self._grid_shape_exo = grid_shape_exo
 
+        self._ndim_end = len(grid_shape_end)
+        self._ndim_exo = len(grid_shape_exo)
+        self._nstates_end = np.prod(grid_shape_end)
+        self._nstates_exo = np.prod(grid_shape_exo)
+
         super(ProblemSpecExogenous, self).__init__(
             grid_shape_end + grid_shape_exo, discount)
 
@@ -52,19 +60,19 @@ class ProblemSpecExogenous(ProblemSpec):
 
     @property
     def ndim_end(self):
-        return len(self._grid_shape_end)
+        return self._ndim_end
 
     @property
     def ndim_exo(self):
-        return len(self._grid_shape_exo)
+        return self._ndim_exo
 
     @property
     def nstates_end(self):
-        return np.prod(self._grid_shape_end)
+        return self._nstates_end
 
     @property
     def nstates_exo(self):
-        return np.prod(self._grid_shape_exo)
+        return self._nstates_exo
 
     def transitions_exo(self, ix):
         pass

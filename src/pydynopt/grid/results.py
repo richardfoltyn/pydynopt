@@ -10,9 +10,11 @@ class DynoptResult(object):
         # which will be the last dimension of this thing. Reshape accordingly.
         # Squeeze the policy function dimension if there is only one choice
         # variable.
-        ax = len(ps.grid_shape)
-        shp = ps.grid_shape + (-1,)
-        self._opt_choice = opt_choice.reshape(shp).squeeze(axis=ax)
+        if len(opt_choice.shape) > 2 and opt_choice.shape[2] > 1:
+            shp = ps.grid_shape + (-1,)
+        else:
+            shp = ps.grid_shape
+        self._opt_choice = opt_choice.reshape(shp)
         self._iters, self._tol = iters, tol
         self._trans = transitions
 
