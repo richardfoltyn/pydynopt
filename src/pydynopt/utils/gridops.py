@@ -10,11 +10,11 @@ from scipy.optimize import root
 
 
 def interp_grid_prob(vals, grid_vals):
-    v = np.asarray(vals).flatten()
-    g = np.asarray(grid_vals).flatten()
-    i_low = np.maximum(searchsorted(g, v, side='right') - 1, 0)
+    v = np.reshape(vals, (-1,))
+    g = np.reshape(grid_vals, (-1,))
+    i_low = np.fmax(searchsorted(g, v, side='right') - 1, 0)
     max_idx = len(g) - 1
-    fp = np.arange(len(g))
+    fp = np.arange(max_idx + 1)
     p_high = interp(v, g, fp) - fp[i_low]
 
     # assert np.all(p_high >= 0) and np.all(p_high <= 1)
@@ -27,51 +27,63 @@ def interp_grid_prob(vals, grid_vals):
 
 
 # def interp_grid_prob2(vals, grid_vals):
-#     v = np.asarray(vals).flatten()
-#     g = np.asarray(grid_vals).flatten()
-#     i_low, i_high, p_low, p_high = _interp_grid_prob(v, g)
+#     v = np.reshape(vals, (-1,))
+#     g = np.reshape(grid_vals, (-1,))
+#     i_low = np.fmax(searchsorted(g, v, side='right') - 1, 0)
+#     max_idx = len(g) - 1
+#     i_high = np.fmin(i_low + 1, max_idx)
+#
+#     gl = g[i_low]
+#     p_high = np.empty_like(i_low, dtype=float)
+#     p_high[i_high != i_low] = (v - gl) / (g[i_high] - gl)
+#     p_high[i_high == i_low] = 0
+#
+#     # assert np.all(p_high >= 0) and np.all(p_high <= 1)
+#     p_low = 1 - p_high
 #     vs = vals.shape
 #     return i_low.reshape(vs), i_high.reshape(vs), p_low.reshape(vs), p_high.reshape(vs)
 
 
+# def cartesian_op(a_tup, axis=0, op=None):
+#     assert axis <= 1
+#
+#     lengths = []
+#     in_arrays = []
+#     out_arrays = []
+#     for (i, v) in enumerate(a_tup):
+#         in_arrays.append(np.atleast_2d(v))
+#         lengths.append(in_arrays[-1].shape[1 - axis])
+#
+#     for (i, v) in enumerate(in_arrays):
+#         tile_by = [1, 1]
+#         tile_by[1 - axis] = np.prod(lengths[:i])
+#         rep_by = np.prod(lengths[i + 1:])
+#
+#         vv = v.repeat(rep_by, axis=(1 - axis))
+#         vv = np.tile(vv, tuple(tile_by))
+#         out_arrays.append(vv)
+#
+#     res = np.concatenate(tuple(out_arrays), axis=axis)
+#
+#     if op is not None:
+#         res = np.atleast_2d(op(res, axis=axis)).swapaxes(0, axis)
+#
+#     return res
+
+
 def cartesian_op(a_tup, axis=0, op=None):
-    assert axis <= 1
-
-    lengths = []
-    in_arrays = []
-    out_arrays = []
-    for (i, v) in enumerate(a_tup):
-        in_arrays.append(np.atleast_2d(v))
-        lengths.append(in_arrays[-1].shape[1 - axis])
-
-    for (i, v) in enumerate(in_arrays):
-        tile_by = [1, 1]
-        tile_by[1 - axis] = np.prod(lengths[:i])
-        rep_by = np.prod(lengths[i + 1:])
-
-        vv = v.repeat(rep_by, axis=(1 - axis))
-        vv = np.tile(vv, tuple(tile_by))
-        out_arrays.append(vv)
-
-    res = np.concatenate(tuple(out_arrays), axis=axis)
-
-    if op is not None:
-        res = np.atleast_2d(op(res, axis=axis)).swapaxes(0, axis)
-
-    return res
-
-
-def cartesian_op2(a_tup, axis=0, op=None):
     # assert axis <= 1
 
     na = len(a_tup)
 
     dim = np.empty((na, 2), dtype=np.uint32)
+    dtypes = np.empty((na, ), dtype=object)
     in_arrays = np.empty((na, ), dtype=object)
 
     for (i, v) in enumerate(a_tup):
         in_arrays[i] = np.atleast_2d(v).swapaxes(axis, 0)
         dim[i] = in_arrays[i].shape
+        dtypes[i] = in_arrays[i].dtype
 
     cumc = np.cumprod(dim[:, 1], axis=0)
     crd = np.zeros((dim.shape[0] + 1, ), dtype=np.uint32)
@@ -81,7 +93,8 @@ def cartesian_op2(a_tup, axis=0, op=None):
     reps = cumc[-1] / cumc
     tiles[1:] = cumc[:-1]
 
-    out = np.empty((crd[-1], cumc[-1]))
+    dt = np.find_common_type(dtypes, [])
+    out = np.empty((crd[-1], cumc[-1]), dtype=dt)
 
     for (i, v) in enumerate(in_arrays):
         out[crd[i]:crd[i+1]] = \

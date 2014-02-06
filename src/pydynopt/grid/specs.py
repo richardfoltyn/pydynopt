@@ -9,7 +9,7 @@ class ProblemSpec(object):
         self._discount = discount
 
         self._ndim = len(grid_shape)
-        self._nstates = np.prod(grid_shape)
+        self._nstates = int(np.prod(grid_shape))
 
     @property
     def grid_shape(self):
@@ -44,8 +44,8 @@ class ProblemSpecExogenous(ProblemSpec):
 
         self._ndim_end = len(grid_shape_end)
         self._ndim_exo = len(grid_shape_exo)
-        self._nstates_end = np.prod(grid_shape_end)
-        self._nstates_exo = np.prod(grid_shape_exo)
+        self._nstates_end = int(np.prod(grid_shape_end))
+        self._nstates_exo = int(np.prod(grid_shape_exo))
 
         super(ProblemSpecExogenous, self).__init__(
             grid_shape_end + grid_shape_exo, discount)
