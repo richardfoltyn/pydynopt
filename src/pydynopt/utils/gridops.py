@@ -103,7 +103,7 @@ def cartesian_op(a_tup, axis=0, op=None):
     out = out.swapaxes(axis, 0)
 
     if op is not None:
-        out = np.atleast_2d(op(out, axis=axis)).swapaxes(0, axis)
+        out = op(out, axis=axis)
 
     return out
 
