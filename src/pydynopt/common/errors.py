@@ -1,7 +1,7 @@
 __author__ = 'richard'
 
 
-class ConvergenceError(object):
+class ConvergenceError(BaseException):
 
     def __init__(self, iterations, tol):
         self._iters = iterations
