@@ -71,7 +71,7 @@ def interp_grid_prob(vals, grid_vals):
 #     return res
 
 
-def cartesian_op(a_tup, axis=0, op=None):
+def cartesian_op(a_tup, axis=0, op=None, dtype=None):
     # assert axis <= 1
 
     na = len(a_tup)
@@ -93,8 +93,9 @@ def cartesian_op(a_tup, axis=0, op=None):
     reps = cumc[-1] / cumc
     tiles[1:] = cumc[:-1]
 
-    dt = np.find_common_type(dtypes, [])
-    out = np.empty((crd[-1], cumc[-1]), dtype=dt)
+    if dtype is None:
+        dtype = np.find_common_type(dtypes, [])
+    out = np.empty((crd[-1], cumc[-1]), dtype=dtype)
 
     for (i, v) in enumerate(in_arrays):
         out[crd[i]:crd[i+1]] = \
