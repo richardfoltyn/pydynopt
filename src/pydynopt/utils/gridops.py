@@ -109,6 +109,24 @@ def cartesian_op(a_tup, axis=0, op=None, dtype=None):
     return out
 
 
+def cartesian_prod(arrays, axis=0, op=None):
+    broadcastable = np.ix_(*arrays)
+    broadcasted = np.broadcast_arrays(*broadcastable)
+    rows, cols = reduce(np.multiply, broadcasted[0].shape), len(broadcasted)
+    out = np.empty(rows * cols, dtype=broadcasted[0].dtype)
+    start, end = 0, rows
+    for a in broadcasted:
+        out[start:end] = a.reshape(-1)
+        start, end = end, end + rows
+
+    res = out.reshape(cols, rows)
+
+    if op is not None:
+        res = op(res, axis=axis)
+
+    return res
+
+
 def makegrid(start, stop, num, logs=True, insert_vals=None, log_shift=0,
              x0=None, num_at_x0=None):
     if insert_vals:
