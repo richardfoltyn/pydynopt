@@ -24,48 +24,47 @@ class TestInterpGrid(ut.TestCase):
 
 class TestCartesianOp(ut.TestCase):
     def setUp(self):
-        self.first = np.arange(4)
-        self.second = np.arange(4, 7)
-        self.third = np.arange(7, 9)
-        self.fourth = np.arange(10).reshape((2, 5))
-        self.fifth = np.arange(10, 19).reshape((3, 3))
+        self.arr1 = np.arange(4)
+        self.arr2 = np.arange(4, 7)
+        self.arr3 = np.arange(7, 9)
+        self.arr4 = np.arange(10).reshape((2, 5))
+        self.arr5 = np.arange(10, 19).reshape((3, 3))
 
     def test_dimensions(self):
-        out_len = np.prod((len(self.first), len(self.second),
-                           len(self.third)))
 
-        result = cartesian_op((self.first, self.second, self.third), axis=0)
+        out_len = np.prod((len(self.arr1), len(self.arr2),
+                           len(self.arr3)))
+
+        result = cartesian_op((self.arr1, self.arr2, self.arr3), axis=0)
 
         self.assertEqual(result.shape[0], 3, 'Output dimension test failed')
         self.assertEqual(result.shape[1], out_len, 'Output dimension test '
                                                    'failed')
 
-        result = cartesian_op((self.first.reshape((-1, 1)),
-                               self.second.reshape((-1, 1)),
-                               self.third.reshape((-1, 1))), axis=1)
+        result = cartesian_op((self.arr1.reshape((-1, 1)),
+                               self.arr2.reshape((-1, 1)),
+                               self.arr3.reshape((-1, 1))), axis=1)
 
         self.assertEqual(result.shape[1], 3, 'Output dimension test failed')
         self.assertEqual(result.shape[0], out_len, 'Output dimension test '
                                                    'failed')
 
-        result = cartesian_op((self.first, self.second, self.third), axis=0,
+        result = cartesian_op((self.arr1, self.arr2, self.arr3), axis=0,
                               op=np.prod)
-        self.assertEqual(result.shape[0], 1, 'Output dimension test failed')
-        self.assertEqual(result.shape[1], out_len, 'Output dimension test failed')
+        self.assertEqual(result.shape[0], out_len, 'Output dimension test failed')
 
-        result = cartesian_op((self.first.reshape((-1, 1)),
-                               self.second.reshape((-1, 1)),
-                               self.third.reshape((-1, 1))), axis=1,
+        result = cartesian_op((self.arr1.reshape((-1, 1)),
+                               self.arr2.reshape((-1, 1)),
+                               self.arr3.reshape((-1, 1))), axis=1,
                               op=np.prod)
 
         self.assertEqual(result.shape[0], out_len, 'Output dimension test failed')
-        self.assertEqual(result.shape[1], 1, 'Output dimension test failed')
 
-        result = cartesian_op((self.fourth, self.fifth), axis=0)
-        self.assertEqual(result.shape[0], self.fourth.shape[0] +
-                                          self.fifth.shape[0])
-        self.assertEqual(result.shape[1], self.fourth.shape[1] *
-                                        self.fifth.shape[1])
+        result = cartesian_op((self.arr4, self.arr5), axis=0)
+        self.assertEqual(result.shape[0], self.arr4.shape[0] +
+                                          self.arr5.shape[0])
+        self.assertEqual(result.shape[1], self.arr4.shape[1] *
+                                        self.arr5.shape[1])
 
 
 class Test_makegrid_mirrored(ut.TestCase):
