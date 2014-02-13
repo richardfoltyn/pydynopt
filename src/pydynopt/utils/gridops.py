@@ -77,13 +77,11 @@ def cartesian_op(a_tup, axis=0, op=None, dtype=None):
     na = len(a_tup)
 
     dim = np.empty((na, 2), dtype=np.uint32)
-    dtypes = np.empty((na, ), dtype=object)
     in_arrays = np.empty((na, ), dtype=object)
 
     for (i, v) in enumerate(a_tup):
         in_arrays[i] = np.atleast_2d(v).swapaxes(axis, 0)
         dim[i] = in_arrays[i].shape
-        dtypes[i] = in_arrays[i].dtype
 
     cumc = np.cumprod(dim[:, 1], axis=0)
     crd = np.zeros((dim.shape[0] + 1, ), dtype=np.uint32)
@@ -94,7 +92,7 @@ def cartesian_op(a_tup, axis=0, op=None, dtype=None):
     tiles[1:] = cumc[:-1]
 
     if dtype is None:
-        dtype = np.find_common_type(dtypes, [])
+        dtype = a_tup[0].dtype
     out = np.empty((crd[-1], cumc[-1]), dtype=dtype)
 
     for (i, v) in enumerate(in_arrays):
