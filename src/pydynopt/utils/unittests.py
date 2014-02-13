@@ -75,15 +75,13 @@ class Test_makegrid_mirrored(ut.TestCase):
         start, around, stop = 0, 1, 10
         num = 20
 
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, retaround=True)
 
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
         start, around, stop = -10, 0, 5
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, retaround=True)
 
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
@@ -92,28 +90,28 @@ class Test_makegrid_mirrored(ut.TestCase):
         start, around, stop = 0, 1, 10
         num = 20
 
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True, logs=True)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, logs=True,
+                                       retaround=True)
 
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
         start, around, stop = -15, 0, 5
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True, logs=True)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, logs=True,
+                                       retaround=True)
 
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
         start, around, stop = 0, 10, 15
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True, logs=True)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, logs=True,
+                                       retaround=True)
 
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True, logs=True, log_shift=5)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, logs=True,
+                                       log_shift=5, retaround=True)
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
@@ -121,14 +119,14 @@ class Test_makegrid_mirrored(ut.TestCase):
         start, around, stop = np.sort(np.random.randn(3) * 10)
         num = 100
 
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True, logs=True)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, logs=True,
+                                       retaround=True)
 
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True, logs=False)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, logs=False,
+                                       retaround=True)
 
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
@@ -137,21 +135,19 @@ class Test_makegrid_mirrored(ut.TestCase):
         start, around, stop = 0, 0, 10
         num = 20
 
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, retaround=True)
 
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
         start, around, stop = -10, 0, 0
 
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, retaround=True)
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
 
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True, logs=True)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, logs=True,
+                                       retaround=True)
 
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)
@@ -160,15 +156,16 @@ class Test_makegrid_mirrored(ut.TestCase):
         # grid
         start, around, stop = 0, 0, 10
         lshift = 5
-        grid, idx0 = makegrid_mirrored(start, stop, num, around,
-                                       retaround=True, logs=True,
-                                       log_shift=lshift)
+        grid, idx0 = makegrid_mirrored(start, stop, around, num, logs=True,
+                                       log_shift=lshift, retaround=True)
 
         grid2 = np.exp(np.linspace(np.log(start + lshift),
                                    np.log(stop+lshift), num=num)) -lshift
         # adjust start / stop values as makegrid_mirrored does
         grid2[0], grid2[-1] = start, stop
-        self.assertTrue(np.all(grid == grid2))
+        # don't test for equality as the C-implementation and the one computed
+        # numpy might deviate slightly!
+        self.assertTrue(np.all(np.abs(grid == grid2)) < 1e-12)
 
         self._basic_checks(start, stop, around, num, grid, idx0)
         self._compare_elements(around, grid, idx0)

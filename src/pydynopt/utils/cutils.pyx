@@ -6,7 +6,7 @@ import cython
 from numpy cimport PyArray_NDIM, PyArray_DIMS, PyArray_Repeat, npy_intp, \
     PyArray_SwapAxes, PyArrayObject
 
-from libc.math cimport floor, fmod, fabs, log, ceil
+from libc.math cimport floor, fmod, fabs, log, ceil, exp
 from libc.stdlib cimport malloc, free
 # from libc.math cimport fmax, fmin
 
@@ -111,77 +111,123 @@ def _cartesian_cimpl_int64(a_tup, long[:,::1] out):
         free(reps)
         free(dims)
 
+
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cpdef _makegrid_mirrored_cimpl(double start, double stop,
+cdef void _logshift(double[::1] arr, double shift) nogil:
+    for i in range(arr.shape[0]):
+        arr[i] = log(arr[i] + shift)
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef void _logshift_inv(double[::1] arr, double shift) nogil:
+    for i in range(arr.shape[0]):
+        arr[i] = exp(arr[i]) - shift
+
+# Since on Windows 64bit linking against the C library containing fmin and fmax
+# does not work, we use these self-written implementations instead.
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef double _fmin(double x, double y) nogil:
+    return x if x < y else y
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef double _fmax(double x, double y) nogil:
+    return x if x > y else y
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+def makegrid_mirrored_cimpl(double start, double stop,
                               double around, double [::1] out,
                               bint endpoint=True,
                               bint logs=False, double log_shift=1):
 
     cdef double adj_start, adj_stop, adj_around, ladj_start, ladj_stop, ladj_around
-    cdef double frac
+    cdef double frac, to, frm, step
     cdef bint need_ep
     cdef unsigned long adj_num, num_long, num
-    cdef unsigned int sidx, i
-    cdef double step
+    cdef unsigned int i, ar_idx
     cdef int sgn_long
 
-    adj_start, adj_stop = fabs(start - around), stop - around
-    adj_around = 0
+    with nogil:
 
-    need_ep = (adj_stop > 0 and fabs(adj_start) > 0) and endpoint
+        adj_start, adj_stop = fabs(start - around), stop - around
+        adj_around = 0
 
-    num = <unsigned long> out.shape[0]
-    adj_num = num if not need_ep else num - 1
+        need_ep = (adj_stop > 0 and fabs(adj_start) > 0) and endpoint
 
-    if logs:
-        ladj_start, ladj_stop = log(adj_start + log_shift), log(adj_stop + log_shift)
-        ladj_around = log(adj_around + log_shift)
-    else:
-        ladj_around, ladj_stop, ladj_around = adj_start, adj_stop, adj_around
+        num = <unsigned long> out.shape[0]
+        adj_num = num if not need_ep else num - 1
 
-    frm, to = ladj_around, <double> np.fmax(ladj_stop, ladj_start)
+        if logs:
+            ladj_start = log(adj_start + log_shift)
+            ladj_stop = log(adj_stop + log_shift)
+            ladj_around = log(adj_around + log_shift)
+        else:
+            ladj_start, ladj_stop, ladj_around = adj_start, adj_stop, adj_around
 
-    if adj_start == 0 or adj_stop == 0:
-        frac = 1
-    else:
-        frac = (to - frm) / (ladj_stop + ladj_start - 2 * frm)
+        frm, to = ladj_around, _fmax(ladj_stop, ladj_start)
 
-    num_long = <unsigned long>np.fmin(ceil(frac * num), <double>adj_num)
+        if adj_start == 0 or adj_stop == 0:
+            frac = 1.0
+        else:
+            frac = (to - frm) / (ladj_stop + ladj_start - 2 * frm)
 
-    step = (to - frm)/num_long
-    sgn_long = 1 if adj_stop > adj_start else -1
+        num_long = <unsigned long> _fmin(ceil(frac * num), adj_num)
 
-    print(frm)
-    print(to)
-    print(step)
-    print(num)
-    print(adj_num)
-    print(num_long)
-    print(sgn_long)
+        step = (to - frm)/(num_long - 1)
+        sgn_long = 1 if adj_stop > adj_start else -1
 
+        if sgn_long > 0:
+            ar_idx = num - num_long
+            out[ar_idx] = frm
+            for i in range(ar_idx + 1, num):
+                out[i] = out[i-1] + step
 
-    if sgn_long > 0:
-        sidx = num - num_long
-        out[sidx] = frm
-        for i in range(sidx + 1, num):
-            out[i] = out[i-1] + step
-        for i in range(1, adj_num - num_long + 1):
-            out[sidx-i] = out[sidx - i + 1] - step
-        if need_ep:
+            if logs:
+                _logshift_inv(out[ar_idx:], log_shift)
+
+            for i in range(1, ar_idx + 1):
+                out[ar_idx-i] = 2 * out[ar_idx] - out[ar_idx + i]
+
+            for i in range(num - 1):
+                out[i] = out[i] + around
+
+            out[num-1] = stop
+            if need_ep:
+                out[0] = start
+        else:
+            ar_idx = num_long - 1
+            out[ar_idx] = frm
+            for i in range(1, num_long):
+                out[ar_idx-i] = out[ar_idx-i+1] + step
+
+            if logs:
+                _logshift_inv(out[:ar_idx+1], log_shift)
+
+            for i in range(1, num_long):
+                out[ar_idx-i] = 2 * out[ar_idx] - out[ar_idx-i]
+
+            for i in range(1, num - num_long + 1):
+                out[ar_idx + i] = 2 * out[ar_idx] - out[ar_idx - i]
+
+            for i in range(1, num):
+                out[i] = out[i] + around
+
             out[0] = start
-    else:
-        sidx = num_long - 1
-        out[sidx] = frm
-        for i in range(1, num_long):
-            out[sidx-i] = out[sidx-i+1] - step
-        for i in range(sidx + 1, adj_num):
-            out[i] = out[i - 1] + step
-        if need_ep:
-            out[num - 1] = stop
+            if need_ep:
+                out[num - 1] = stop
 
-    return sidx
+        # replace around with input value
+        out[ar_idx] = around
+
+    return ar_idx
 
 
 def _test():

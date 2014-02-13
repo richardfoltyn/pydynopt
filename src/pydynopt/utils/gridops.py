@@ -8,6 +8,8 @@ from scipy.optimize import root
 
 # from .cutils import _interp_grid_prob
 
+from .cutils import makegrid_mirrored_cimpl
+
 
 def interp_grid_prob(vals, grid_vals):
     v = np.reshape(vals, (-1,))
@@ -165,8 +167,23 @@ def makegrid(start, stop, num, logs=True, insert_vals=None, log_shift=0,
     return grid
 
 
-def makegrid_mirrored(start, stop, num, around, endpoint=True,
-                      logs=False, log_shift=1, retaround=False):
+def makegrid_mirrored2(start, stop, around, num, endpoint=True, logs=False,
+                       log_shift=1, retaround=False):
+
+    assert start <= around <= stop and start < stop
+    out = np.empty(num, dtype=np.float_)
+
+    around_idx = makegrid_mirrored_cimpl(start, stop, around, out, endpoint,
+                                         logs, log_shift)
+
+    if retaround:
+        return out, around_idx
+    else:
+        return out
+
+
+def makegrid_mirrored(start, stop, around, num, endpoint=True, logs=False,
+                      log_shift=1, retaround=False):
 
     assert start <= around <= stop and start < stop
 
