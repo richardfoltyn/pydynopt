@@ -16,8 +16,8 @@ def cartesian_op(a_tup, axis=0, op=None, dtype=None):
 
     res = np.empty((nrows, ncols), dtype=dtype, order='C')
 
-    if dtype == np.int64:
-        cu._cartesian_cimpl_int64(in_arrays, res, in_dim)
+    if dtype == np.int_:
+        cu._cartesian_cimpl_int64(in_arrays, res)
 
 
     if op is not None:
