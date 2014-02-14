@@ -5,3 +5,5 @@
 build/
 .spyder*
 *.pyc
+*.so
+*.pyd
