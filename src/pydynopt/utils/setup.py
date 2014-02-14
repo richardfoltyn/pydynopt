@@ -5,7 +5,7 @@ from Cython.Build import cythonize
 import numpy
 
 extensions = [
-    Extension("cutils", ["cutils.pyx"],
+    Extension("utils_cimpl", ["utils_cimpl.pyx"],
               include_dirs=[numpy.get_include()])
 ]
 

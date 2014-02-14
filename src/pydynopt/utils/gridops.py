@@ -6,10 +6,8 @@ from math import log
 
 from scipy.optimize import root
 
-# from .cutils import _interp_grid_prob
-
-from .cutils import makegrid_mirrored_cimpl
-from .cutils import interp_grid_prob_cimpl
+from .utils_cimpl import makegrid_mirrored_cimpl
+from .utils_cimpl import interp_grid_prob_cimpl
 
 
 def interp_grid_prob(vals, grid):
