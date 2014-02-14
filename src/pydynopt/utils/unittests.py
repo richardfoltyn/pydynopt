@@ -5,21 +5,45 @@ import unittest2 as ut
 
 from pydynopt.utils import *
 
+import pydynopt.utils.cutils as cu
+
 
 class TestInterpGrid(ut.TestCase):
 
-    def setUp(self):
-        self.vals = np.random.rand(10)
-        self.grid = np.array([0.0, 1.0])
-
     def test_interp_grid_prod(self):
-        ilow, ihigh, plow, phigh = interp_grid_prob(self.vals, self.grid)
+        vals = np.random.rand(10)
+        grid = np.array([0.0, 1.0])
+
+        ilow, ihigh, plow, phigh = interp_grid_prob(vals, grid)
 
         self.assertTrue(ilow.shape == ihigh.shape == plow.shape == phigh.shape)
-        self.assertTrue(ilow.shape == self.vals.shape)
+        self.assertTrue(ilow.shape == vals.shape)
         self.assertTrue(np.all(np.abs(plow + phigh - 1) < 1e-12))
-        self.assertTrue(np.all(np.abs(self.vals - phigh) < 1e-12))
+        self.assertTrue(np.all(np.abs(vals - phigh) < 1e-12))
         self.assertTrue(np.all(ilow <= ihigh))
+
+        vals2 = grid[ilow] * plow + grid[ihigh] * phigh
+        self.assertTrue(np.all(np.abs(vals - vals2) < 1e-12))
+
+    def test_out_of_bounds(self):
+        vals = np.array([-1, 0, 1, 2.0])
+        grid = np.array([0.0, 1.0])
+
+        ilow, ihigh, plow, phigh = interp_grid_prob(vals, grid)
+
+        self.assertTrue(ilow.shape == ihigh.shape == plow.shape == phigh.shape)
+        self.assertTrue(ilow.shape == vals.shape)
+        self.assertTrue(np.all(np.abs(plow + phigh - 1) < 1e-12))
+        self.assertTrue(np.all(ilow <= ihigh))
+
+        self.assertEqual(ilow[0], 0)
+        self.assertEqual(len(grid) - 1, ihigh[-1])
+        self.assertTrue(np.all(ihigh[-2:] == 1))
+        self.assertTrue(np.all(ilow[-2:] == 0))
+        self.assertTrue(np.all(np.abs(phigh[:2]) < 1e-12))
+        self.assertTrue(np.all(np.abs(plow[2:]) < 1e-12))
+
+
 
 
 class TestCartesianOp(ut.TestCase):

@@ -8,33 +8,38 @@ from numpy cimport PyArray_NDIM, PyArray_DIMS, PyArray_Repeat, npy_intp, \
 
 from libc.math cimport floor, fmod, fabs, log, ceil, exp
 from libc.stdlib cimport malloc, free
-# from libc.math cimport fmax, fmin
 
 
-ctypedef cnp.uint64_t NP_UINT_t
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+def interp_grid_prob_cimpl(double[::1] v, double[::1] g,
+                     long[::1] i_low, long[::1] i_high,
+                     double[::1] p_low, double[::1] p_high):
 
-def _interp_grid_prob(cnp.ndarray[cnp.float_t, ndim=1] v,
-                      cnp.ndarray[cnp.float_t, ndim=1] g):
+    cdef ssize_t len_v, len_g
+    cdef long i, j
+    cdef double delta
 
-    cdef cnp.ndarray[cnp.int_t, ndim=1, mode='c'] i_low, i_high
-    cdef cnp.ndarray[cnp.int_t, ndim=1] fp
-    cdef cnp.ndarray[cnp.float_t, ndim=1] p_low, p_high
+    len_v = v.shape[0]
+    len_g = g.shape[0]
 
-    cdef unsigned int max_idx
+    with nogil:
+        for i in range(0, len_v):
+            for j in range(0, len_g):
+                if g[j] >= v[i] or j == (len_g - 1):
+                    i_low[i] = _fmaxl(j - 1, 0)
+                    i_high[i] = _fmaxl(j, i_low[i] + 1)
+                    delta = g[i_high[i]] - g[i_low[i]]
+                    if v[i] > g[j]:
+                        p_low[i] = 0
+                    elif j == 0:
+                        p_low[i] = 1
+                    else:
+                        p_low[i] = (g[i_high[i]] - v[i]) / delta
 
-
-    i_low = cnp.ascontiguousarray(cnp.fmax(np.searchsorted(g, v, side='right')-
-                                         1, 0), dtype=np.int_)
-    max_idx = g.shape[0] - 1
-    fp = cnp.arange(max_idx + 1)
-    p_high = cnp.interp(v, g, fp) - fp[i_low]
-
-    assert cnp.all(p_high >= 0) and cnp.all(p_high <= 1)
-
-    i_high = cnp.where(i_low < max_idx, i_low + 1, i_low)
-    p_low = 1 - p_high
-
-    return i_low, i_high, p_low, p_high
+                    p_high[i] = 1.0 - p_low[i]
+                    break
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -138,6 +143,18 @@ cdef double _fmin(double x, double y) nogil:
 @cython.wraparound(False)
 @cython.cdivision(True)
 cdef double _fmax(double x, double y) nogil:
+    return x if x > y else y
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef long _fminl(long x, long y) nogil:
+    return x if x < y else y
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef long _fmaxl(long x, long y) nogil:
     return x if x > y else y
 
 @cython.boundscheck(False)
