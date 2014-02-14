@@ -16,6 +16,7 @@ class DynoptResult(object):
         self._opt_choice = opt_choice.reshape(shp)
         self._iters, self._tol = iters, tol
         self._transm = transm
+        self._par = ps.par
 
         # Copy all these attributes separately instead of storing the entire
         # problem specification object, as that one might be quite large due to
@@ -31,12 +32,16 @@ class DynoptResult(object):
             ps.ndim, ps.ndim_end, ps.ndim_exo
 
     @property
+    def par(self):
+        return self._par
+
+    @property
     def grid(self):
         return self._grid
 
     @property
     def idx(self):
-        return self.idx
+        return self._idx
 
     @property
     def grid_shape(self):

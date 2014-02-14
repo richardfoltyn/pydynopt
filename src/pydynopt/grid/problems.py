@@ -12,7 +12,7 @@ class GridContainer(object):
 
 
 class ProblemSpecExogenous(object):
-    def __init__(self, discount):
+    def __init__(self, par, discount):
         self._discount = discount
 
         self._grid_shape = tuple()
@@ -27,6 +27,12 @@ class ProblemSpecExogenous(object):
         self._stationary_dist = list()
 
         self._idx = GridContainer()
+
+        self._par = par
+
+    @property
+    def par(self):
+        return self._par
 
     @property
     def idx(self):
