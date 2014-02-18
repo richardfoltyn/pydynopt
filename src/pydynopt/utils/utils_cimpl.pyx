@@ -13,9 +13,9 @@ from libc.stdlib cimport malloc, free
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-def interp_grid_prob_cimpl(double[::1] v, double[::1] g,
-                     long[::1] i_low, long[::1] i_high,
-                     double[::1] p_low, double[::1] p_high):
+def interp_grid_prob_cimpl(double[:] v, double[:] g,
+                     long[:] i_low, long[:] i_high,
+                     double[:] p_low, double[:] p_high):
 
     cdef ssize_t len_v, len_g
     cdef long i, j

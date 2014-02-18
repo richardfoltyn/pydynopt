@@ -4,13 +4,8 @@ from __future__ import absolute_import, print_function, division
 class DynoptResult(object):
 
     def __init__(self, ps, v, opt_choice, iters, tol, transm=None):
-        self._v = v.reshape(ps.grid_shape)
-        # Policy functions might contain more than one choice variable,
-        # which will be the last dimension of this thing.
-        # It's more consistent to keep the action dimension around even if
-        # there is only one.
-        shp = ps.grid_shape + (-1,)
-        self._opt_choice = opt_choice.reshape(shp)
+        self._v = v
+        self._opt_choice = opt_choice
         self._iters, self._tol = iters, tol
         self._transm = transm
         self._par = ps.par

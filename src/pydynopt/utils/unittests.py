@@ -5,8 +5,6 @@ import unittest2 as ut
 
 from pydynopt.utils import *
 
-import pydynopt.utils.cutils as cu
-
 
 class TestInterpGrid(ut.TestCase):
 
