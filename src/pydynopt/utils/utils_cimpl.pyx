@@ -172,77 +172,90 @@ def makegrid_mirrored_cimpl(double start, double stop,
     cdef unsigned int i, ar_idx
     cdef int sgn_long
 
-    with nogil:
+    # with nogil:
 
-        adj_start, adj_stop = fabs(start - around), stop - around
-        adj_around = 0
+    adj_start, adj_stop = fabs(start - around), stop - around
+    adj_around = 0
 
-        need_ep = (adj_stop > 0 and fabs(adj_start) > 0) and endpoint
+    need_ep = (adj_stop > 0 and fabs(adj_start) > 0) and endpoint
 
-        num = <unsigned long> out.shape[0]
-        adj_num = num if not need_ep else num - 1
+    num = <unsigned long> out.shape[0]
+    adj_num = num if not need_ep else num - 1
 
-        if logs:
-            ladj_start = log(adj_start + log_shift)
-            ladj_stop = log(adj_stop + log_shift)
-            ladj_around = log(adj_around + log_shift)
-        else:
-            ladj_start, ladj_stop, ladj_around = adj_start, adj_stop, adj_around
+    if logs:
+        ladj_start = log(adj_start + log_shift)
+        ladj_stop = log(adj_stop + log_shift)
+        ladj_around = log(adj_around + log_shift)
+    else:
+        ladj_start, ladj_stop, ladj_around = adj_start, adj_stop, adj_around
 
-        frm, to = ladj_around, _fmax(ladj_stop, ladj_start)
+    frm, to = ladj_around, _fmax(ladj_stop, ladj_start)
 
-        if adj_start == 0 or adj_stop == 0:
-            frac = 1.0
-        else:
-            frac = (to - frm) / (ladj_stop + ladj_start - 2 * frm)
+    if adj_start == 0 or adj_stop == 0:
+        frac = 1.0
+    else:
+        frac = (to - frm) / (ladj_stop + ladj_start - 2 * frm)
 
+    # ensure that the long segment actually is longer, otherwise code below
+    # will have out-of-bounds indexing. This only is a problem for perfectly
+    # symmetric grids with even grid length.
+    if num % 2 == 0:
+        num_long = <unsigned long> _fmin(ceil(frac * (num+1)), adj_num)
+    else:
         num_long = <unsigned long> _fmin(ceil(frac * num), adj_num)
 
-        step = (to - frm)/(num_long - 1)
-        sgn_long = 1 if adj_stop > adj_start else -1
+    step = (to - frm)/(num_long - 1)
+    sgn_long = 1 if adj_stop > adj_start else -1
 
-        if sgn_long > 0:
-            ar_idx = num - num_long
-            out[ar_idx] = frm
-            for i in range(ar_idx + 1, num):
-                out[i] = out[i-1] + step
+    # print('\n\nCall: start: %5.4f, stop %5.4f, around: %5.4f' %
+    #       (start, stop, around))
+    # print('num: %d, adj_num: %d, num_long %d' % (num, adj_num, num_long))
+    # print('frac: %5.4f' % frac)
+    # print('step: %5.4f' % step)
+    # print('sng_long: %d' % sgn_long)
 
-            if logs:
-                _logshift_inv(out[ar_idx:], log_shift)
+    if sgn_long > 0:
+        ar_idx = num - num_long
+        out[ar_idx] = frm
+        for i in range(ar_idx + 1, num):
+            out[i] = out[i-1] + step
 
-            for i in range(1, ar_idx + 1):
-                out[ar_idx-i] = 2 * out[ar_idx] - out[ar_idx + i]
+        if logs:
+            _logshift_inv(out[ar_idx:], log_shift)
 
-            for i in range(num - 1):
-                out[i] = out[i] + around
+        for i in range(1, ar_idx + 1):
+            out[ar_idx-i] = 2 * out[ar_idx] - out[ar_idx + i]
 
-            out[num-1] = stop
-            if need_ep:
-                out[0] = start
-        else:
-            ar_idx = num_long - 1
-            out[ar_idx] = frm
-            for i in range(1, num_long):
-                out[ar_idx-i] = out[ar_idx-i+1] + step
+        for i in range(num - 1):
+            out[i] = out[i] + around
 
-            if logs:
-                _logshift_inv(out[:ar_idx+1], log_shift)
-
-            for i in range(1, num_long):
-                out[ar_idx-i] = 2 * out[ar_idx] - out[ar_idx-i]
-
-            for i in range(1, num - num_long + 1):
-                out[ar_idx + i] = 2 * out[ar_idx] - out[ar_idx - i]
-
-            for i in range(1, num):
-                out[i] = out[i] + around
-
+        out[num-1] = stop
+        if need_ep:
             out[0] = start
-            if need_ep:
-                out[num - 1] = stop
+    else:
+        ar_idx = num_long - 1
+        out[ar_idx] = frm
+        for i in range(1, num_long):
+            out[ar_idx-i] = out[ar_idx-i+1] + step
 
-        # replace around with input value
-        out[ar_idx] = around
+        if logs:
+            _logshift_inv(out[:ar_idx+1], log_shift)
+
+        for i in range(1, num_long):
+            out[ar_idx-i] = 2 * out[ar_idx] - out[ar_idx-i]
+
+        for i in range(1, num - num_long + 1):
+            out[ar_idx + i] = 2 * out[ar_idx] - out[ar_idx - i]
+
+        for i in range(1, num):
+            out[i] = out[i] + around
+
+        out[0] = start
+        if need_ep:
+            out[num - 1] = stop
+
+    # replace around with input value
+    out[ar_idx] = around
 
     return ar_idx
 
