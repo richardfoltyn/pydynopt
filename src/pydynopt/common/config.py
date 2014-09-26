@@ -12,7 +12,7 @@ class ParamContainer(object):
 
     def __deepcopy__(self, memo):
         res = ParamContainer.__new__(ParamContainer)
-        for (k, v) in self.__dict__.iteritems():
+        for (k, v) in self.__dict__.items():
             if not k.startswith('__'):
                 res.__dict__[k] = copy.deepcopy(v, memo)
 
