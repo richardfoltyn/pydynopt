@@ -1,6 +1,8 @@
 import numpy as np
 from numpy import pad
 
+from ..common import ConvergenceError
+
 
 def rouwenhorst(n, mu, rho, sigma):
     """
@@ -22,3 +24,30 @@ def rouwenhorst(n, mu, rho, sigma):
     z = np.linspace(-fi, fi, n) + mu
 
     return z, Pi
+
+
+def markov_probst(transm, tol=1e-12, maxiter=10000, transpose=True, mu0=None):
+
+    # This function should also work for sparse matrices from scipy.sparse,
+    # so do not use .T to get the transpose.
+    if transpose:
+        transm = transm.transpose()
+
+    assert np.all(np.abs(transm.sum(axis=0) - 1) < 1e-12)
+
+    if mu0 is None:
+        # start out with uniform distribution
+        mu0 = np.ones((transm.shape[0], ), dtype=np.float64)/transm.shape[0]
+
+    for it in range(maxiter):
+        mu1 = transm.dot(mu0)
+
+        dv = np.max(np.abs(mu0 - mu1))
+        if dv < tol:
+            return mu1/(np.sum(mu1))
+        else:
+            mu0 = mu1
+    else:
+        print('Failed to converge after %d iterations (delta = %e)' %
+              (it, dv))
+        raise ConvergenceError(it, dv)
