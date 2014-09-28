@@ -23,6 +23,8 @@ class DynoptResult(object):
         self._ndim, self._ndim_end, self._ndim_exo = \
             ps.ndim, ps.ndim_end, ps.ndim_exo
 
+        self._stat_dist = None
+
     @property
     def par(self):
         return self._par
@@ -90,3 +92,11 @@ class DynoptResult(object):
     @property
     def transm(self):
         return self._transm
+
+    @property
+    def stationary_dist(self):
+        return self._stat_dist
+
+    @stationary_dist.setter
+    def stationary_dist(self, value):
+        self._stat_dist = value
