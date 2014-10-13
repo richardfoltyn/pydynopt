@@ -5,4 +5,4 @@ from .processes import rouwenhorst, markov_probst
 from .gridops import *
 
 from .interpolate import vinterp, interp
-from .diagnostics import  print_dbg_factory
+from .diagnostics import  print_factory
