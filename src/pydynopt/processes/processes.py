@@ -26,7 +26,7 @@ def rouwenhorst(n, mu, rho, sigma):
     return z, Pi
 
 
-def markov_probst(transm, tol=1e-12, maxiter=10000, transpose=True, mu0=None):
+def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True, mu0=None):
 
     # This function should also work for sparse matrices from scipy.sparse,
     # so do not use .T to get the transpose.
