@@ -11,19 +11,24 @@ def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
     Implements AR(1) approximation by a Markov chain as proposed in
     Tauchen (1986) in Economic Letters.
 
-    Arguments:
-    rho     AR(1) autocorrelation parameter (lambda in Tauchen 1986)
-    sigma   Conditional or unconditional std. deviation or AR(1)
+    Parameters
+    ----------
+    rho :   AR(1) autocorrelation parameter (lambda in Tauchen 1986)
+    sigma : Conditional or unconditional std. deviation or AR(1)
             In the Tauchen (1986) notation this corresponds to sigma_epsilon
             and sigma_y, respectively.
-    n       Number of elements on discretized state space.
-    m       Determines range of state space, which has equidistant grid
+    n :     Number of elements on discretized state space.
+    m :     Determines range of state space, which has equidistant grid
             points on +/- m * sigma_y. Tauchen uses m=3, Floden (2008) sets
             m = 1.2 * log(n) * sigma_y
-    sigma_cond  If true, sigma equals sigma_epsilon, i.e. the conditional
-                std. deviation.
-    full_output If true, return ergodic distribution and implied
-                autocorrelation and std. deviation of discretized process.
+    sigma_cond : If true, sigma is taken to be the conditional std.
+                deviation, i.e. the standard deviation of the error term.
+    full_output : If true, return ergodic distribution, implied
+                  autocorrelation and std. deviation of discretized process.
+
+    Returns
+    -------
+
     """
 
     if sigma_cond:
