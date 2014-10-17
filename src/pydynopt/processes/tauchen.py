@@ -1,6 +1,7 @@
 __author__ = 'Richard Foltyn'
 
 from pydynopt.processes import markov_ergodic_dist
+from pydynopt.processes import markov_moments
 
 import numpy as np
 from scipy.stats import norm
@@ -61,19 +62,8 @@ def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
         # and implied autocorrelation / variance of the discretized process
         ergodic_dist = markov_ergodic_dist(transm)
 
-        z_mean_uc = np.dot(ergodic_dist, z)
-        z_var_uc = np.dot(np.power(z - z_mean_uc, 2), ergodic_dist)
-        z_demeaned = z - z_mean_uc
-        z_m1 = np.outer(z_demeaned, z_demeaned)
-        wgt = transm * ergodic_dist.reshape((-1, 1))
-
-        z_acov = np.sum(np.sum(z_m1 * wgt))
-
-        # implied autocorrelation and variance of error term of discretized
-        # process
-        rho_impl = z_acov / z_var_uc
-        sigma_e_impl = np.sqrt((1-rho_impl**2) * z_var_uc)
-        sigma_z_impl = np.sqrt(z_var_uc)
+        rho_impl, sigma_z_impl, sigma_e_impl = \
+            markov_moments(z, transm, ergodic_dist)
 
         return z, transm, ergodic_dist, rho_impl, sigma_z_impl, sigma_e_impl
     else:

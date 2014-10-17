@@ -51,3 +51,28 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True, mu0=No
         print('Failed to converge after %d iterations (delta = %e)' %
               (it, dv))
         raise ConvergenceError(it, dv)
+
+
+def markov_moments(states, transm, ergodic_dist=None):
+
+    if ergodic_dist is None:
+        ergodic_dist = markov_ergodic_dist(transm)
+
+    x = states
+
+    mean_uncond = np.dot(ergodic_dist, x)
+    var_uncond = np.dot(np.power(x - mean_uncond, 2), ergodic_dist)
+    x_demeaned = x - mean_uncond
+    x_m1 = np.outer(x_demeaned, x_demeaned)
+    wgt = transm * ergodic_dist.reshape((-1, 1))
+
+    # Autocovariance
+    autocov = np.sum(np.sum(x_m1 * wgt))
+
+    # implied autocorrelation and variance of error term of discretized
+    # process
+    autocorr = autocov / var_uncond
+    sigma_e = np.sqrt((1-autocorr**2) * var_uncond)
+    sigma_x = np.sqrt(var_uncond)
+
+    return autocorr, sigma_x, sigma_e
