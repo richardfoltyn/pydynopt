@@ -2,12 +2,9 @@
 from libc.stdlib cimport free, malloc
 
 import numpy as np
-cimport numpy as cnp
 from numpy cimport ndarray
 
-from cython cimport numeric
-
-from .types cimport numc2d_t
+from .types cimport num_arr2d_t, int_real_t
 
 cdef class Finalizer:
     cdef void *data
@@ -17,12 +14,12 @@ cdef class Finalizer:
             free(self.data)
 
 
-cdef ndarray make_ndarray(unsigned int nr, unsigned int nc, numeric basetype):
-    cdef numeric *arr = <numeric*>malloc(nr * nc * sizeof(numeric))
-    cdef numc2d_t mv = <numeric[:nr, :nc]>arr
+cdef ndarray make_ndarray(unsigned int nr, unsigned int nc, int_real_t basetype):
+    cdef int_real_t *arr = <int_real_t*>malloc(nr * nc * sizeof(int_real_t))
+    cdef num_arr2d_t mv = <int_real_t[:nr, :nc]>arr
     cdef Finalizer _finalizer = Finalizer()
     _finalizer.data = <void*>arr
-    cdef cnp.ndarray nparr = np.asarray(mv)
+    cdef ndarray nparr = np.asarray(mv)
     cnp.set_array_base(nparr, _finalizer)
 
     return nparr
