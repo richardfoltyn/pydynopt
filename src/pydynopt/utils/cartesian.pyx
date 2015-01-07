@@ -5,12 +5,12 @@ import numpy as np
 from cython cimport numeric
 from ..common.ndarray_wrappers cimport make_ndarray
 
-from ..common.types cimport numc2d_t, numc1d_t, int_real_t
+from ..common.types cimport num_arr2d_t, num_arr1d_t, int_real_t
 
 @boundscheck(False)
 @wraparound(False)
 @cdivision(True)
-cpdef int _cartesian2d(numc2d_t a, numc2d_t b, numc2d_t out) nogil:
+cpdef int _cartesian2d(num_arr2d_t a, num_arr2d_t b, num_arr2d_t out) nogil:
     """
     Create cartesian product of two arrays by repeating array `a`
     along axis=1 b.shape[1] times, and tiling array `b` along axis=1
@@ -57,7 +57,7 @@ cpdef int _cartesian2d(numc2d_t a, numc2d_t b, numc2d_t out) nogil:
 
 @boundscheck(False)
 @wraparound(False)
-def cartesian2d(numc2d_t a, numc2d_t b, numc2d_t out=None):
+def cartesian2d(num_arr2d_t a, num_arr2d_t b, num_arr2d_t out=None):
 
     cdef unsigned int nr_a, nr_b, nc_a, nc_b, nr_out, nc_out
     nr_a, nc_a = a.shape[0], a.shape[1]
@@ -81,7 +81,7 @@ def cartesian2d(numc2d_t a, numc2d_t b, numc2d_t out=None):
     else:
         return out
 
-def cartesian(numc1d_t a, numc1d_t b, numc2d_t out=None):
+def cartesian(num_arr1d_t a, num_arr1d_t b, num_arr2d_t out=None):
 
-    return cartesian2d(<numc2d_t>a[None, :], <numc2d_t>b[None, :], out)
+    return cartesian2d(<num_arr2d_t>a[None, :], <num_arr2d_t>b[None, :], out)
 
