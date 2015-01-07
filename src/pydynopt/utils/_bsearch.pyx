@@ -1,6 +1,3 @@
-
-from cython cimport numeric
-
 from ..common.types cimport int_real_t
 
 from cython import boundscheck, wraparound
@@ -8,25 +5,26 @@ from cython import boundscheck, wraparound
 
 @boundscheck(False)
 @wraparound(False)
-cpdef unsigned int _bsearch(int_real_t[:] arr, int_real_t key, bint which):
+cpdef unsigned int _bsearch(int_real_t[:] arr, int_real_t key,
+                            unsigned int lb, unsigned int ub,
+                            bint first) except -1:
 
-    cdef unsigned int n = arr.shape[0]
-    cdef unsigned int midx = n // 2
-    
-    cdef unsigned int bound = 0
-    cdef short dx = -1
-    if which == 1:
-        dx = 1
-        bound = n-1
-        
+    if arr[0] > key:
+        return -1
+
+    cdef unsigned int n = ub - lb + 1
+
+    if n <= 2:
+        if arr[lb] != arr[ub]:
+            return ub if arr[ub] <= key else lb
+        else:
+            return lb if first else ub
+
+
+    cdef unsigned int midx = (ub + lb) // 2
     cdef int_real_t mval = arr[midx]
-    
-    if mval > key:
-        return _bsearch(arr[:midx], key, which)
-    elif mval < key:
-        return _bsearch(arr[midx:], key, which)
+
+    if (key > mval and first) or (key >= mval and not first):
+        return _bsearch(arr, key, midx, ub, first)
     else:
-        while midx != bound and mval == arr[midx+dx]:
-            midx += dx
-        return midx
-        
+        return _bsearch(arr, key, lb, midx, first)
