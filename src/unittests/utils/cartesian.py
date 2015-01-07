@@ -121,10 +121,14 @@ class CartesianTest(ut.TestCase):
 
         a, b = self.get_arrays()
         ab1 = py_cartesian(a, b)
-        out = np.empty_like(ab1)
 
-        self.assertRaises(ValueError, cartesian2d, a=a, b=b,
-                          out=out[:-1, :-1])
+        # Create various combinations of misspecified shapes
+        out1 = np.empty((ab1.shape[0] - 1, ab1.shape[1] - 1), dtype=a.dtype)
+        out2 = np.empty((ab1.shape[0] - 1, ab1.shape[1] - 0), dtype=a.dtype)
+        out3 = np.empty((ab1.shape[0] - 0, ab1.shape[1] - 1), dtype=a.dtype)
 
-        retval = _cartesian2d(a, b, out[:-1, :])
-        self.assertEqual(retval, -1)
+        for out in (out1, out2, out3):
+            self.assertRaises(ValueError, cartesian2d, a=a, b=b, out=out)
+
+            retval = _cartesian2d(a, b, out)
+            self.assertEqual(retval, -1)
