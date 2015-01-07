@@ -1,10 +1,11 @@
 from ..common.types cimport int_real_t
 
-from cython import boundscheck, wraparound
+from cython import boundscheck, wraparound, cdivision
 
 
 @boundscheck(False)
 @wraparound(False)
+@cdivision(True)
 cpdef unsigned int _bsearch(int_real_t[:] arr, int_real_t key,
                             unsigned int lb, unsigned int ub,
                             bint first) except -1:
@@ -12,9 +13,7 @@ cpdef unsigned int _bsearch(int_real_t[:] arr, int_real_t key,
     if arr[0] > key:
         return -1
 
-    cdef unsigned int n = ub - lb + 1
-
-    if n <= 2:
+    if ub - lb <= 1:
         if arr[lb] != arr[ub]:
             return ub if arr[ub] <= key else lb
         else:
