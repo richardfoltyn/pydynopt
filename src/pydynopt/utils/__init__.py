@@ -6,7 +6,7 @@ from .gridops import *
 from .interpolate import vinterp, interp
 from .diagnostics import  print_factory
 
-from .cartesian import cartesian, cartesian2d
+from .cartesian import cartesian, cartesian2d, _cartesian2d
 
 from .bsearch import bsearch, BSearchFlag
 from ._bsearch import _bsearch

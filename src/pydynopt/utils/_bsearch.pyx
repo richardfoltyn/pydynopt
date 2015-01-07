@@ -8,7 +8,7 @@ from cython import boundscheck, wraparound, cdivision
 @cdivision(True)
 cpdef unsigned int _bsearch(int_real_t[:] arr, int_real_t key,
                             unsigned int lb, unsigned int ub,
-                            bint first) except -1:
+                            bint first) nogil except -1:
 
     if arr[0] > key:
         return -1
