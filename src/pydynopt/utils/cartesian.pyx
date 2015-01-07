@@ -5,7 +5,7 @@ import numpy as np
 from cython cimport numeric
 from ..common.ndarray_wrappers cimport make_ndarray
 
-from ..common.types cimport numc2d_t, numc1d_t
+from ..common.types cimport numc2d_t, numc1d_t, int_real_t
 
 @boundscheck(False)
 @wraparound(False)
@@ -32,7 +32,8 @@ cpdef int _cartesian2d(numc2d_t a, numc2d_t b, numc2d_t out) nogil:
         return -1
 
     cdef unsigned int r_idx, i, j, k, stride
-    cdef numeric ak, bk
+    # cdef numeric ak, bk
+    cdef int_real_t ak, bk
 
     for i in range(nr_a):
         for k in range(nc_a):
@@ -68,7 +69,7 @@ def cartesian2d(numc2d_t a, numc2d_t b, numc2d_t out=None):
     cdef bint force_ndarray = False
 
     if out is None:
-        out = make_ndarray(nr_out, nc_out, <numeric>a[0,0])
+        out = make_ndarray(nr_out, nc_out, <int_real_t>a[0,0])
         force_ndarray = True
 
     retval = _cartesian2d(a, b, out)

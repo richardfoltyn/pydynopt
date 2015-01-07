@@ -1,7 +1,6 @@
-from cython cimport numeric
-
-ctypedef numeric[:,::1] numc2d_t
-ctypedef numeric[::1] numc1d_t
+"""
+    Common type definitions.
+"""
 
 ctypedef fused int_real_t:
     short
@@ -9,3 +8,6 @@ ctypedef fused int_real_t:
     long
     float
     double
+
+ctypedef int_real_t[:, ::1] numc2d_t
+ctypedef int_real_t[::1] numc1d_t
