@@ -68,39 +68,3 @@ def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
         return z, transm, ergodic_dist, rho_impl, sigma_z_impl, sigma_e_impl
     else:
         return z, transm
-
-
-if __name__ == '__main__':
-
-    # Illustrate with the parametrization / results given in Tauchen (1986),
-    # Table 1
-    params = [[0.1, 0.101, 9],
-              [0.8, 0.167, 9],
-              [0.9, 0.229, 9],
-              [0.9, 0.229, 5]]
-
-    # Results from Table 1 for implied lambda and sigma_y of discretized process
-    tbl1_res = [[0.100, 0.103],
-                [0.798, 0.176],
-                [0.898, 0.253],
-                [0.932, 0.291]]
-
-    results = list()
-
-    for args in params:
-        allargs = args + [3, False, True]
-        results.append(tauchen(*allargs))
-
-    header = '{:>2s}{:>10s}{:>10s}{:>15s}{:>10s}'.format('N', 'lambda',
-                                                         'sigma_y',
-                                                         'lambda_bar',
-                                                         'sigma_yab')
-    print(header)
-    print('-' * len(header))
-    for i, res in enumerate(results):
-        print('{:2d}{:-10.2f}{:-10.3f}{:-15.3f}{:10.3f}'.format(params[i][2],
-              params[i][0], params[i][1], res[3], res[4]))
-
-        assert np.abs(tbl1_res[i][0] - res[3]) < 1e-3
-        assert np.abs(tbl1_res[i][1] - res[4]) < 1e-3
-
