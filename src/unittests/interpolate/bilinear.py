@@ -4,11 +4,9 @@ __author__ = 'Richard Foltyn'
 import unittest2 as ut
 import numpy as np
 
-from scipy.interpolate import interp2d, bisplev, bisplrep
+from scipy.interpolate import interpn
 
 from pydynopt.interpolate import interp_bilinear
-
-
 
 
 # Utility function used to compute cartesian product
@@ -42,10 +40,16 @@ class BilinearTest(ut.TestCase):
         def func1(a, b):
             return np.exp(a) + np.power(b, 2)
 
-        self.f1 = func1
+        self.z = get_z(func1, self.x, self.y)
 
-        z = [[func1(u, v) for v in self.y] for u in self.x]
-        self.z = np.asarray(z)
+    def test_constant(self):
+
+        f = lambda x, y: 0.0
+        z = get_z(f, self.x, self.y)
+
+        zhat = interp_bilinear(self.x0, self.y0, self.x, self.y, z)
+
+        self.assertTrue(np.max(np.abs(zhat - 0)) <= 1e-9)
 
     def test_extrapolate_linear_1d(self):
         """
@@ -139,7 +143,6 @@ class BilinearTest(ut.TestCase):
         zhat = interp_bilinear(xy[0], xy[1], self.x, self.y, z)
 
         self.assertTrue(np.max(np.abs(zhat - ztrue)) < 1e-9)
-
 
     def test_identity(self):
         """
