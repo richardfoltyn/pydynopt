@@ -1,7 +1,11 @@
-from ..common.types cimport int_real_t
+__author__ = 'Richard Foltyn'
+
+from enum import IntEnum
+import numpy as np
 
 from cython import boundscheck, wraparound, cdivision
 
+from ..common.types cimport int_real_t
 
 @boundscheck(False)
 @wraparound(False)
@@ -27,3 +31,17 @@ cpdef unsigned int _bsearch(int_real_t[:] arr, int_real_t key,
         return _bsearch(arr, key, midx, ub, first)
     else:
         return _bsearch(arr, key, lb, midx, first)
+
+
+class BSearchFlag(IntEnum):
+    first = 1
+    last = 0
+
+
+def bsearch(int_real_t[:] arr, int_real_t key, which=BSearchFlag.first):
+    if arr[0] > key:
+        raise ValueError('arr[0] <= key required!')
+
+    cdef unsigned int ifrom = 0, ito = arr.shape[0] - 1
+
+    return _bsearch(arr, key, ifrom, ito, <bint>bool(which))
