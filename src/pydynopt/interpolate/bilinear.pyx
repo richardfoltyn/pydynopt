@@ -12,6 +12,9 @@ cdef inline int _interp_bilinear_vec(double[:] x0, double[:] y0,
         double[:] x, double[:] y,
         double[:, :] fval, double[:] out) nogil:
 
+    # Some sanity checks: make sure dimension of input and output arrays 
+    # match. We also require at least 2 points in each direction on the 
+    # domain of f().
     if x.shape[0] != fval.shape[0] or y.shape[0] != fval.shape[1]:
         return -1
     if x.shape[0] < 2 or y.shape[0] < 2:
@@ -19,7 +22,10 @@ cdef inline int _interp_bilinear_vec(double[:] x0, double[:] y0,
     if x0.shape[0] != y0.shape[0] != out.shape[0]:
         return -3
 
-    cdef unsigned long xe = x.shape[0] - 1, ye = y.shape[0] - 1
+    # store last valid indexes in x and y direction
+    cdef unsigned long ix_last = x.shape[0] - 1, iy_last = y.shape[0] - 1
+    # define additional paramaters for _bsearch_impl: starting index and 
+    # first=1 so that the first index with arr[idx] <= key is returned. 
     cdef unsigned long ifrom = 0
     cdef bint first = 1
 
@@ -27,8 +33,17 @@ cdef inline int _interp_bilinear_vec(double[:] x0, double[:] y0,
     cdef unsigned long ix_lb, iy_lb
 
     cdef double xi, yi
-    cdef double wx, wy
+    # interpolation weights in x and y direction
+    cdef double xwgt, ywgt
+    # interpolants in x direction evaluated at lower and upper y
     cdef double fx1, fx2
+
+    # for each (x_i, y_i) combination where we compute interpolation,
+    # we first need to identify bounding rectangle with indexes ix_lb,
+    # iy_lb such that x0[ix_lb] <= xi < x0[ix_lb + 1] and
+    # y0[iy_lb] <= yi < y0[iy_lb + 1].
+    # Special care needs to be taken if xi or yi falls outside of the domain
+    # defined by x and y arrays. In that case we perform linear extrapolation.
 
     for i in range(x0.shape[0]):
 
@@ -36,30 +51,32 @@ cdef inline int _interp_bilinear_vec(double[:] x0, double[:] y0,
 
         if xi <= x[0]:
             ix_lb = 0
-        elif xi >= x[xe]:
-            ix_lb = xe - 1
+        elif xi >= x[ix_last]:
+            ix_lb = ix_last - 1
         else:
-            ix_lb = _bsearch_impl(x, xi, ifrom, xe, first)
+            ix_lb = _bsearch_impl(x, xi, ifrom, ix_last, first)
 
+        # lower and upper bounding indexes in x direction
         x_lb = x[ix_lb]
         x_ub = x[ix_lb + 1]
 
         if yi <= y[0]:
             iy_lb = 0
-        elif yi >= y[ye]:
-            iy_lb = ye - 1
+        elif yi >= y[iy_last]:
+            iy_lb = iy_last - 1
         else:
-            iy_lb = _bsearch_impl(y, yi, ifrom, ye, first)
+            iy_lb = _bsearch_impl(y, yi, ifrom, iy_last, first)
 
+        # lower and upper bounding indexes in y direction
         y_lb = y[iy_lb]
         y_ub = y[iy_lb + 1]
 
-        wx = (xi - x_lb) / (x_ub - x_lb)
-        fx1 = (1-wx) * fval[ix_lb, iy_lb] + wx * fval[ix_lb + 1, iy_lb]
-        fx2 = (1-wx) * fval[ix_lb, iy_lb + 1] + wx * fval[ix_lb + 1, iy_lb + 1]
+        xwgt = (xi - x_lb) / (x_ub - x_lb)
+        fx1 = (1-xwgt) * fval[ix_lb, iy_lb] + xwgt * fval[ix_lb + 1, iy_lb]
+        fx2 = (1-xwgt) * fval[ix_lb, iy_lb + 1] + xwgt * fval[ix_lb + 1, iy_lb + 1]
 
-        wy = (yi - y_lb) / (y_ub - y_lb)
-        out[i] = (1-wy) * fx1 + wy * fx2
+        ywgt = (yi - y_lb) / (y_ub - y_lb)
+        out[i] = (1-ywgt) * fx1 + ywgt * fx2
 
     return 0
 
