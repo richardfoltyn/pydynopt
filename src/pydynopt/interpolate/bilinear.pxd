@@ -1,8 +1,10 @@
 
-cdef int _interp2d_bilinear_vec(double[:] x0, double[:] y0,
-        double[:] x, double[:] y,
-        double[:, :] fval, double[:] out) nogil
+from ..common.types cimport real_t
 
-cdef int _interp2d_bilinear(double x0, double y0,
-        double[:] x, double[:] y,
-        double[:, :] fval, double *out)
+cdef int _interp2d_bilinear_vec(real_t[:] x0, real_t[:] y0,
+        real_t[:] x, real_t[:] y,
+        real_t[:, :] fval, real_t[:] out) nogil
+
+cdef int _interp2d_bilinear(real_t x0, real_t y0,
+        real_t[:] x, real_t[:] y,
+        real_t[:, :] fval, real_t *out)

@@ -4,13 +4,15 @@ from cython import boundscheck, wraparound, cdivision
 import numpy as np
 
 from ..utils.bsearch cimport _bsearch_impl
+from ..common.types cimport real_t
+from ..common.ndarray_wrappers cimport make_ndarray
 
 @boundscheck(False)
 @wraparound(False)
 @cdivision(True)
-cdef int _interp2d_bilinear_vec(double[:] x0, double[:] y0,
-        double[:] x, double[:] y,
-        double[:, :] fval, double[:] out) nogil:
+cdef int _interp2d_bilinear_vec(real_t[:] x0, real_t[:] y0,
+        real_t[:] x, real_t[:] y,
+        real_t[:, :] fval, real_t[:] out) nogil:
 
     # Some sanity checks: make sure dimension of input and output arrays 
     # match. We also require at least 2 points in each direction on the 
@@ -29,14 +31,14 @@ cdef int _interp2d_bilinear_vec(double[:] x0, double[:] y0,
     cdef unsigned long ifrom = 0
     cdef bint first = 1
 
-    cdef double x_lb, x_ub, y_lb, y_ub
+    cdef real_t x_lb, x_ub, y_lb, y_ub
     cdef unsigned long ix_lb, iy_lb
 
-    cdef double xi, yi
+    cdef real_t xi, yi
     # interpolation weights in x and y direction
-    cdef double xwgt, ywgt
+    cdef real_t xwgt, ywgt
     # interpolants in x direction evaluated at lower and upper y
-    cdef double fx1, fx2
+    cdef real_t fx1, fx2
 
     # for each (x_i, y_i) combination where we compute interpolation,
     # we first need to identify bounding rectangle with indexes ix_lb,
@@ -81,25 +83,26 @@ cdef int _interp2d_bilinear_vec(double[:] x0, double[:] y0,
     return 0
 
 
-cdef int _interp2d_bilinear(double x0, double y0, double[:] x, double[:] y,
-        double[:, :] fval, double *out):
+cdef int _interp2d_bilinear(real_t x0, real_t y0, real_t[:] x, real_t[:] y,
+        real_t[:, :] fval, real_t *out):
 
-    cdef double[:] xmv, ymv
-    cdef double[:] outmv
+    cdef real_t[:] xmv, ymv
+    cdef real_t[:] outmv
 
-    xmv = <double[:1]>&x0
-    ymv = <double[:1]>&y0
-    outmv = <double[:1]>out
+    xmv = <real_t[:1]>&x0
+    ymv = <real_t[:1]>&y0
+    outmv = <real_t[:1]>out
 
     return _interp2d_bilinear_vec(xmv, ymv, x, y, fval, outmv)
 
 
-def interp2d_bilinear(x0, y0, x, y, fval):
+def interp2d_bilinear(real_t[:] x0, real_t[:] y0, real_t[:] x, real_t[:] y,
+                      real_t[:,:] fval, real_t[:] out=None):
 
-    x0 = np.atleast_1d(x0)
-    y0 = np.atleast_1d(y0)
 
-    out = np.empty_like(x0)
+    cdef unsigned long nx = x0.shape[0]
+    if out is None:
+        out = make_ndarray(1, nx, <real_t>x0[0])
 
     retval = _interp2d_bilinear_vec(x0, y0, x, y, fval, out)
     if retval == -1:
@@ -110,6 +113,6 @@ def interp2d_bilinear(x0, y0, x, y, fval):
         raise ValueError('Dimensions of x0, y0 and output array not '
                          'conformable!')
 
-    return out
+    return np.asarray(out)
 
 
