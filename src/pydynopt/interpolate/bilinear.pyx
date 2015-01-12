@@ -8,7 +8,7 @@ from ..utils.bsearch cimport _bsearch_impl
 @boundscheck(False)
 @wraparound(False)
 @cdivision(True)
-cdef int _interp_bilinear_vec(double[:] x0, double[:] y0,
+cdef int _interp2d_bilinear_vec(double[:] x0, double[:] y0,
         double[:] x, double[:] y,
         double[:, :] fval, double[:] out) nogil:
 
@@ -81,7 +81,7 @@ cdef int _interp_bilinear_vec(double[:] x0, double[:] y0,
     return 0
 
 
-cdef int _interp_bilinear(double x0, double y0, double[:] x, double[:] y,
+cdef int _interp2d_bilinear(double x0, double y0, double[:] x, double[:] y,
         double[:, :] fval, double *out):
 
     cdef double[:] xmv, ymv
@@ -91,17 +91,17 @@ cdef int _interp_bilinear(double x0, double y0, double[:] x, double[:] y,
     ymv = <double[:1]>&y0
     outmv = <double[:1]>out
 
-    return _interp_bilinear_vec(xmv, ymv, x, y, fval, outmv)
+    return _interp2d_bilinear_vec(xmv, ymv, x, y, fval, outmv)
 
 
-def interp_bilinear(x0, y0, x, y, fval):
+def interp2d_bilinear(x0, y0, x, y, fval):
 
     x0 = np.atleast_1d(x0)
     y0 = np.atleast_1d(y0)
 
     out = np.empty_like(x0)
 
-    retval = _interp_bilinear_vec(x0, y0, x, y, fval, out)
+    retval = _interp2d_bilinear_vec(x0, y0, x, y, fval, out)
     if retval == -1:
         raise ValueError('Dimensions of x, y and fval not conformable')
     elif retval == -2:

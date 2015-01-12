@@ -4,9 +4,7 @@ __author__ = 'Richard Foltyn'
 import unittest2 as ut
 import numpy as np
 
-from scipy.interpolate import interpn
-
-from pydynopt.interpolate import interp_bilinear
+from pydynopt.interpolate import interp2d_bilinear
 
 
 # Utility function used to compute cartesian product
@@ -47,7 +45,7 @@ class BilinearTest(ut.TestCase):
         f = lambda x, y: 0.0
         z = get_z(f, self.x, self.y)
 
-        zhat = interp_bilinear(self.x0, self.y0, self.x, self.y, z)
+        zhat = interp2d_bilinear(self.x0, self.y0, self.x, self.y, z)
 
         self.assertTrue(np.max(np.abs(zhat - 0)) <= 1e-9)
 
@@ -61,14 +59,14 @@ class BilinearTest(ut.TestCase):
         z = get_z(f, x,  np.zeros_like(x))
 
         x0 = np.arange(-5, 15, dtype=np.float)
-        f0 = interp_bilinear(x0, x0, x, x, z)
+        f0 = interp2d_bilinear(x0, x0, x, x, z)
 
         self.assertTrue(np.max(np.abs(x0 - f0)) < 1e-9)
 
         # repeat in y direction
         f = lambda u, v: v
         z = get_z(f, np.zeros_like(x), x)
-        f0 = interp_bilinear(x0, x0, x, x, z)
+        f0 = interp2d_bilinear(x0, x0, x, x, z)
 
         self.assertTrue(np.max(np.abs(f0 - x0)) < 1e-9)
 
@@ -84,7 +82,7 @@ class BilinearTest(ut.TestCase):
             z = get_z(f, self.x, self.y)
 
             z0_true = np.diag(get_z(f, x0, y0))
-            z0_hat = interp_bilinear(x0, y0, self.x, self.y, z)
+            z0_hat = interp2d_bilinear(x0, y0, self.x, self.y, z)
 
             rerr = np.max(np.abs((z0_hat - z0_true)/z0_true))
             self.assertTrue(rerr < 1e-10)
@@ -102,7 +100,7 @@ class BilinearTest(ut.TestCase):
 
         # Note: np.interp does not extrapolate, so compare only inside domain!
         zhat_np = np.interp(self.x0, self.x, z[:, 0])
-        zhat = interp_bilinear(self.x0, y0, self.x, self.y, z)
+        zhat = interp2d_bilinear(self.x0, y0, self.x, self.y, z)
 
         self.assertTrue(np.max(np.abs(zhat-zhat_np)) < 1e-9)
 
@@ -112,7 +110,7 @@ class BilinearTest(ut.TestCase):
         x0 = np.zeros_like(self.y0)
 
         zhat_np = np.interp(self.y0, self.y, z[0])
-        zhat = interp_bilinear(x0, self.y0, self.x, self.y, z)
+        zhat = interp2d_bilinear(x0, self.y0, self.x, self.y, z)
 
         self.assertTrue(np.max(np.abs(zhat-zhat_np)) < 1e-9)
 
@@ -126,7 +124,7 @@ class BilinearTest(ut.TestCase):
 
         xy = cartesian(self.x0, self.y0)
         ztrue = np.array([f(u, v) for u, v in xy.T])
-        zhat = interp_bilinear(xy[0], xy[1], self.x, self.y, z)
+        zhat = interp2d_bilinear(xy[0], xy[1], self.x, self.y, z)
 
         self.assertTrue(np.max(np.abs(zhat - ztrue)) < 1e-9)
 
@@ -140,7 +138,7 @@ class BilinearTest(ut.TestCase):
 
         xy = cartesian(self.x0, self.y0)
         ztrue = np.array([f(u, v) for u, v in xy.T])
-        zhat = interp_bilinear(xy[0], xy[1], self.x, self.y, z)
+        zhat = interp2d_bilinear(xy[0], xy[1], self.x, self.y, z)
 
         self.assertTrue(np.max(np.abs(zhat - ztrue)) < 1e-9)
 
@@ -152,7 +150,7 @@ class BilinearTest(ut.TestCase):
 
         xy0 = cartesian(self.x, self.y)
 
-        zinterp = interp_bilinear(xy0[0], xy0[1], self.x, self.y,
+        zinterp = interp2d_bilinear(xy0[0], xy0[1], self.x, self.y,
                                   self.z)
 
         zinterp = zinterp.reshape((self.x.shape[0], -1))
