@@ -1,8 +1,8 @@
 
+from ..common.types cimport real_t
 
+cpdef int _interp1d_linear_vec(real_t[:] x0, real_t[:] xp,
+                                     real_t[:] fp, real_t[:] out) nogil
 
-cdef int _interp1d_linear_vec(double[:] x0, double[:] xp,
-                                     double[:] fp, double[:] out) nogil
-
-cdef int _interp1d_linear(double x, double[:] xp, double[:] fp,
-                                 double *out)
+cdef int _interp1d_linear(real_t x, real_t[:] xp, real_t[:] fp,
+                                 real_t *out)

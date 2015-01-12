@@ -34,6 +34,9 @@ cdef int _interp2d_bilinear_vec(real_t[:] x0, real_t[:] y0,
     cdef real_t x_lb, x_ub, y_lb, y_ub
     cdef unsigned long ix_lb, iy_lb
 
+    cdef real_t x_first = x[0], x_last = x[ix_last]
+    cdef real_t y_first = y[0], y_last = y[iy_last]
+
     cdef real_t xi, yi
     # interpolation weights in x and y direction
     cdef real_t xwgt, ywgt
@@ -47,13 +50,14 @@ cdef int _interp2d_bilinear_vec(real_t[:] x0, real_t[:] y0,
     # Special care needs to be taken if xi or yi falls outside of the domain
     # defined by x and y arrays. In that case we perform linear extrapolation.
 
+    cdef unsigned long i
     for i in range(x0.shape[0]):
 
         xi, yi = x0[i], y0[i]
 
-        if xi <= x[0]:
+        if xi <= x_first:
             ix_lb = 0
-        elif xi >= x[ix_last]:
+        elif xi >= x_last:
             ix_lb = ix_last - 1
         else:
             ix_lb = _bsearch_impl(x, xi, ifrom, ix_last, first)
@@ -62,9 +66,9 @@ cdef int _interp2d_bilinear_vec(real_t[:] x0, real_t[:] y0,
         x_lb = x[ix_lb]
         x_ub = x[ix_lb + 1]
 
-        if yi <= y[0]:
+        if yi <= y_first:
             iy_lb = 0
-        elif yi >= y[iy_last]:
+        elif yi >= y_last:
             iy_lb = iy_last - 1
         else:
             iy_lb = _bsearch_impl(y, yi, ifrom, iy_last, first)

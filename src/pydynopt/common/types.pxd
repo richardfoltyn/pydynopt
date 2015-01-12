@@ -2,13 +2,19 @@
     Common type definitions.
 """
 
+# ctypedef fused int_real_t:
+#     short
+#     unsigned short
+#     int
+#     unsigned int
+#     long
+#     unsigned long
+#     float
+#     double
+
 ctypedef fused int_real_t:
-    short
-    unsigned short
     int
-    unsigned int
     long
-    unsigned long
     float
     double
 

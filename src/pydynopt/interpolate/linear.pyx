@@ -3,13 +3,16 @@ from cython import boundscheck, wraparound, cdivision
 
 import numpy as np
 
+from ..common.types cimport real_t
 from ..utils.bsearch cimport _bsearch_impl
+
+from ..common.ndarray_wrappers cimport make_ndarray
 
 @boundscheck(False)
 @wraparound(False)
 @cdivision(True)
-cdef int _interp1d_linear_vec(double[:] x0, double[:] xp,
-        double[:] fp, double[:] out) nogil:
+cpdef int _interp1d_linear_vec(real_t[:] x, real_t[:] xp,
+        real_t[:] fp, real_t[:] out) nogil:
 
     # Some sanity checks: make sure dimension of input and output arrays 
     # match. We also require at least 2 points in each direction on the 
@@ -18,35 +21,37 @@ cdef int _interp1d_linear_vec(double[:] x0, double[:] xp,
         return -1
     if xp.shape[0] < 2:
         return -2
-    if x0.shape[0] != out.shape[0]:
+    if x.shape[0] != out.shape[0]:
         return -3
 
-    # store last valid indexes
-    cdef unsigned long ix_last = xp.shape[0] - 1
-    # define additional paramaters for _bsearch_impl: starting index and 
+    # store last valid index
+    cdef unsigned long ixp_last = xp.shape[0] - 1
+    # define additional parameters for _bsearch_impl: starting index and
     # first=1 so that the first index with arr[idx] <= key is returned. 
     cdef unsigned long ifrom = 0
     cdef bint first = 1
 
-    cdef double x_lb, x_ub,
+    cdef real_t x_lb, x_ub
     cdef unsigned long ix_lb
 
-    cdef double xi
-    # interpolation weights in x and y direction
-    cdef double wgt
+    cdef real_t xp0 = xp[0], xplast = xp[ixp_last]
+    cdef real_t xi
+    # interpolation weight
+    cdef real_t wgt
 
-    for i in range(x0.shape[0]):
+    cdef unsigned long i
+    for i in range(x.shape[0]):
 
-        xi = x0[i]
+        xi = x[i]
 
-        if xi <= xp[0]:
+        if xi <= xp0:
             ix_lb = 0
-        elif xi >= xp[ix_last]:
-            ix_lb = ix_last - 1
+        elif xi >= xplast:
+            ix_lb = ixp_last - 1
         else:
-            ix_lb = _bsearch_impl(xp, xi, ifrom, ix_last, first)
+            ix_lb = _bsearch_impl(xp, xi, ifrom, ixp_last, first)
 
-        # lower and upper bounding indexes in x direction
+        # lower and upper bounding indexes
         x_lb = xp[ix_lb]
         x_ub = xp[ix_lb + 1]
 
@@ -56,21 +61,23 @@ cdef int _interp1d_linear_vec(double[:] x0, double[:] xp,
     return 0
 
 
-cdef int _interp1d_linear(double x, double[:] xp, double[:] fp, double *out):
+cdef int _interp1d_linear(real_t x, real_t[:] xp, real_t[:] fp, real_t *out):
 
-    cdef double[:] xmv
-    cdef double[:] outmv
+    cdef real_t[:] xmv
+    cdef real_t[:] outmv
 
-    xmv = <double[:1]>&x
-    outmv = <double[:1]>out
+    xmv = <real_t[:1]>&x
+    outmv = <real_t[:1]>out
 
     return _interp1d_linear_vec(xmv, xp, fp, outmv)
 
 
-def interp1d_linear(x, xp, fp):
+def interp1d_linear(real_t[:] x, real_t[:] xp, real_t[:] fp,
+        real_t[:] out=None):
 
-    x = np.atleast_1d(x)
-    out = np.empty_like(x)
+    cdef unsigned long nx = x.shape[0]
+    if out is None:
+        out = make_ndarray(1, nx, <real_t>x[0])
 
     retval = _interp1d_linear_vec(x, xp, fp, out)
     if retval == -1:
@@ -78,9 +85,9 @@ def interp1d_linear(x, xp, fp):
     elif retval == -2:
         raise ValueError('Arrays xp must contain at least 2 points!')
     elif retval == -3:
-        raise ValueError('Dimensions of x0 and output array not '
+        raise ValueError('Dimensions of x and output array not '
                          'conformable!')
 
-    return out
+    return np.asarray(out)
 
 
