@@ -5,4 +5,5 @@ setup(name='pydynopt',
       packages=['pydynopt.common', 'pydynopt.utils', 'pydynopt.interpolate'],
       ext_modules=cythonize(['pydynopt/common/*.pyx',
             'pydynopt/utils/*.pyx',
-            'pydynopt/interpolate/*.pyx']))
+            'pydynopt/interpolate/*.pyx'],
+                            exclude=['scratch/*', 'pydynopt/utils/utils_*']))
