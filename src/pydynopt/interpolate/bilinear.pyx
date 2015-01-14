@@ -10,7 +10,7 @@ from ..common.ndarray_wrappers cimport make_ndarray
 @boundscheck(False)
 @wraparound(False)
 @cdivision(True)
-cdef int _interp2d_bilinear_vec(real_t[:] x0, real_t[:] y0,
+cdef int _interp2d_bilinear(real_t[:] x0, real_t[:] y0,
         real_t[:] x, real_t[:] y,
         real_t[:, :] fval, real_t[:] out) nogil:
 
@@ -86,19 +86,6 @@ cdef inline real_t _interp2d_bilinear_impl(real_t x, real_t y, real_t[:] xp,
     return (1-ywgt) * fx1 + ywgt * fx2
 
 
-cdef int _interp2d_bilinear(real_t x0, real_t y0, real_t[:] x, real_t[:] y,
-        real_t[:, :] fval, real_t *out):
-
-    cdef real_t[:] xmv, ymv
-    cdef real_t[:] outmv
-
-    xmv = <real_t[:1]>&x0
-    ymv = <real_t[:1]>&y0
-    outmv = <real_t[:1]>out
-
-    return _interp2d_bilinear_vec(xmv, ymv, x, y, fval, outmv)
-
-
 def interp2d_bilinear(real_t[:] x0, real_t[:] y0, real_t[:] x, real_t[:] y,
                       real_t[:,:] fval, real_t[:] out=None):
 
@@ -107,7 +94,7 @@ def interp2d_bilinear(real_t[:] x0, real_t[:] y0, real_t[:] x, real_t[:] y,
     if out is None:
         out = make_ndarray(1, nx, <real_t>x0[0])
 
-    retval = _interp2d_bilinear_vec(x0, y0, x, y, fval, out)
+    retval = _interp2d_bilinear(x0, y0, x, y, fval, out)
     if retval == -1:
         raise ValueError('Dimensions of x, y and fval not conformable')
     elif retval == -2:

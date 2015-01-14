@@ -11,7 +11,7 @@ from ..common.ndarray_wrappers cimport make_ndarray
 @boundscheck(False)
 @wraparound(False)
 @cdivision(True)
-cpdef int _interp1d_linear_vec(real_t[:] x, real_t[:] xp,
+cpdef int _interp1d_linear(real_t[:] x, real_t[:] xp,
         real_t[:] fp, real_t[:] out) nogil:
 
     # Some sanity checks: make sure dimension of input and output arrays 
@@ -41,37 +41,24 @@ cpdef inline real_t _interp1d_linear_impl(real_t x, real_t[:] xp,
                                          real_t[:] fp) nogil:
 
     cdef long ixp_last = xp.shape[0] - 1
-    cdef real_t fx, x_lb, x_ub
-    cdef long ix_lb
+    cdef real_t fx, x_lb
+    cdef long ixp_lb, ixp_ub
     # interpolation weight
-    cdef real_t wgt
+    cdef real_t slope
 
     if x <= xp[0]:
-        ix_lb = 0
+        ixp_lb = 0
     elif x >= xp[ixp_last]:
-        ix_lb = ixp_last - 1
+        ixp_lb = ixp_last - 1
     else:
-        ix_lb = _bsearch(xp, x)
+        ixp_lb = _bsearch(xp, x)
 
-    # lower and upper bounding indexes
-    x_lb = xp[ix_lb]
-    x_ub = xp[ix_lb + 1]
+    ixp_ub = ixp_lb + 1
 
-    wgt = (x - x_lb) / (x_ub - x_lb)
-    fx = (1-wgt) * fp[ix_lb] + wgt * fp[ix_lb + 1]
+    slope = (x - xp[ixp_lb]) / (xp[ixp_ub] - xp[ixp_lb])
+    fx = (1 - slope) * fp[ixp_lb] + slope * fp[ixp_ub]
 
     return fx
-
-
-cdef int _interp1d_linear(real_t x, real_t[:] xp, real_t[:] fp, real_t *out):
-
-    cdef real_t[:] xmv
-    cdef real_t[:] outmv
-
-    xmv = <real_t[:1]>&x
-    outmv = <real_t[:1]>out
-
-    return _interp1d_linear_vec(xmv, xp, fp, outmv)
 
 
 def interp1d_linear(real_t[:] x, real_t[:] xp, real_t[:] fp,
@@ -87,7 +74,7 @@ def interp1d_linear(real_t[:] x, real_t[:] xp, real_t[:] fp,
     if out is None:
         out = make_ndarray(1, nx, <real_t>x[0])
 
-    retval = _interp1d_linear_vec(x, xp, fp, out)
+    retval = _interp1d_linear(x, xp, fp, out)
     if retval == -1:
         raise ValueError('Dimensions of xp and fp not conformable!')
     elif retval == -2:
