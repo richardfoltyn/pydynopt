@@ -14,6 +14,12 @@ from ..common.types cimport int_real_t
 @cdivision(True)
 cpdef long _bsearch_eq(int_real_t[:] arr, int_real_t key,
                               bint first) nogil:
+    """
+    Implementation of binary search that returns the index i such that
+    arr[i] <= key. If arr contains a sequence of several arr[i] == key,
+    then the min {i | arr[i] == key} is returned, otherwise
+    max {i | arr[i] == key}.
+    """
 
     if arr[0] > key:
         return -1
@@ -58,6 +64,13 @@ cpdef long _bsearch_eq(int_real_t[:] arr, int_real_t key,
 @wraparound(False)
 @cdivision(True)
 cpdef long _bsearch(int_real_t[:] arr, int_real_t key) nogil:
+    """
+    Returns index i such that arr[i] <= key < arr[i+1].
+    Boundary conditions are handled as follows:
+        1) if key < arr[0]  then _bsearch(arr, key) == -1
+        2) if key = arr[-1] then _bsearch(arr, key) == arr.shape[0] - 1
+        3) if key > arr[-1] then _bsearch(arr, key) == arr.shape[0]
+    """
 
 
     cdef long lb = 0, ub = arr.shape[0]
