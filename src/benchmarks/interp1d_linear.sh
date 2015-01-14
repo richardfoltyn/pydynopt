@@ -8,6 +8,7 @@ PDO_ROOT=$HOME/repos/pydynopt/src
 
 SETUP="
 import numpy as np
+from cython import double
 from pydynopt.interpolate import _interp1d_linear_impl
 xp = np.linspace(0, 10, 100)
 fp = np.exp(xp)/10 + np.sin(xp)
@@ -18,5 +19,5 @@ STMT="np.interp(x, xp, fp)"
 python3 -m timeit -s "${SETUP}" "${STMT}"
 
 
-STMT="_interp1d_linear_impl(x, xp, fp)"
+STMT="_interp1d_linear_impl[double](x, xp, fp)"
 python3 -m timeit -s "${SETUP}" "${STMT}"
