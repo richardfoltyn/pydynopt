@@ -1,7 +1,9 @@
+# cython: profile = False
+
 __author__ = 'Richard Foltyn'
 
 from enum import IntEnum
-import numpy as np
+
 
 from cython import boundscheck, wraparound, cdivision
 
@@ -10,35 +12,69 @@ from ..common.types cimport int_real_t
 @boundscheck(False)
 @wraparound(False)
 @cdivision(True)
-cdef unsigned long _bsearch_impl(int_real_t[:] arr, int_real_t key,
-                            unsigned long lb, unsigned long ub,
-                            bint first) nogil:
+cpdef long _bsearch_eq(int_real_t[:] arr, int_real_t key,
+                              bint first) nogil:
 
     if arr[0] > key:
         return -1
 
-    if ub - lb <= 1:
-        if arr[lb] != arr[ub]:
-            return ub if arr[ub] <= key else lb
+    cdef long lb = 0, ub = arr.shape[0] - 1
+
+    if ub == 0:
+        return 0
+
+    cdef long midx
+
+    # Algorithm: first get us into the correct 2-element segment of the array
+    # by iterating until only two elements are left. Then pick whichever is
+    # the right one according to the value of 'first'.
+    if first:
+        while ub - lb > 1:
+            midx = (ub + lb) // 2
+            if key > arr[midx]:
+                lb = midx
+            else:
+                ub = midx
+
+        if arr[lb] == arr[ub]:
+            return lb
         else:
-            return lb if first else ub
-
-
-    cdef unsigned long midx = (ub + lb) // 2
-    cdef int_real_t mval = arr[midx]
-
-    if (key > mval and first) or (key >= mval and not first):
-        return _bsearch_impl(arr, key, midx, ub, first)
+            return ub if arr[ub] <= key else lb
     else:
-        return _bsearch_impl(arr, key, lb, midx, first)
+        while ub - lb > 1:
+            midx = (ub + lb) // 2
+            if key >= arr[midx]:
+                lb = midx
+            else:
+                ub = midx
+
+        if arr[lb] == arr[ub]:
+            return ub
+        else:
+            return ub if arr[ub] <= key else lb
 
 
-cpdef unsigned long _bsearch(int_real_t[:] arr, int_real_t key,
-                             bint first) nogil:
+@boundscheck(False)
+@wraparound(False)
+@cdivision(True)
+cpdef long _bsearch(int_real_t[:] arr, int_real_t key) nogil:
 
-    cdef unsigned long ifrom = 0, ito = arr.shape[0] - 1
 
-    return _bsearch_impl(arr, key, ifrom, ito, first)
+    cdef long lb = 0, ub = arr.shape[0]
+    cdef long midx
+
+    if key > arr[ub-1]:
+        return ub
+
+    while lb < ub:
+        midx = (ub + lb) // 2
+        if key >= arr[midx]:
+            lb = midx + 1
+        else:
+            ub = midx
+
+    return lb - 1
+
 
 
 class BSearchFlag(IntEnum):
@@ -50,6 +86,4 @@ def bsearch(int_real_t[:] arr, int_real_t key, which=BSearchFlag.first):
     if arr[0] > key:
         raise ValueError('arr[0] <= key required!')
 
-    cdef unsigned long ifrom = 0, ito = arr.shape[0] - 1
-
-    return _bsearch_impl(arr, key, ifrom, ito, <bint>bool(which))
+    return _bsearch_eq(arr, key, <bint>bool(which))

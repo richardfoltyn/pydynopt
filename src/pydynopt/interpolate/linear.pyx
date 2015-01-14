@@ -4,14 +4,9 @@ from cython import boundscheck, wraparound, cdivision
 import numpy as np
 
 from ..common.types cimport real_t
-from ..utils.bsearch cimport _bsearch_impl
+from ..utils.bsearch cimport _bsearch
 
 from ..common.ndarray_wrappers cimport make_ndarray
-
-# define additional parameters for _bsearch_impl: starting index and
-# first=1 so that the first index with arr[idx] <= key is returned.
-DEF BSEARCH_START_IDX = 0
-DEF BSEARCH_FIRST = 0
 
 @boundscheck(False)
 @wraparound(False)
@@ -45,9 +40,9 @@ cpdef int _interp1d_linear_vec(real_t[:] x, real_t[:] xp,
 cpdef inline real_t _interp1d_linear_impl(real_t x, real_t[:] xp,
                                          real_t[:] fp) nogil:
 
-    cdef unsigned long ixp_last = xp.shape[0] - 1
+    cdef long ixp_last = xp.shape[0] - 1
     cdef real_t fx, x_lb, x_ub
-    cdef unsigned long ix_lb
+    cdef long ix_lb
     # interpolation weight
     cdef real_t wgt
 
@@ -56,7 +51,7 @@ cpdef inline real_t _interp1d_linear_impl(real_t x, real_t[:] xp,
     elif x >= xp[ixp_last]:
         ix_lb = ixp_last - 1
     else:
-        ix_lb = _bsearch_impl(xp, x, BSEARCH_START_IDX, ixp_last, BSEARCH_FIRST)
+        ix_lb = _bsearch(xp, x)
 
     # lower and upper bounding indexes
     x_lb = xp[ix_lb]
@@ -81,6 +76,12 @@ cdef int _interp1d_linear(real_t x, real_t[:] xp, real_t[:] fp, real_t *out):
 
 def interp1d_linear(real_t[:] x, real_t[:] xp, real_t[:] fp,
         real_t[:] out=None):
+    """
+    Compute the linearly interpolated values as x, given interpolations nodes xp
+    with function values fp.
+
+    Python-friendly wrapper for _interp1d_linear_vec()
+    """
 
     cdef unsigned long nx = x.shape[0]
     if out is None:

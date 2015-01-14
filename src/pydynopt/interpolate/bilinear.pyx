@@ -3,14 +3,9 @@ from cython import boundscheck, wraparound, cdivision
 
 import numpy as np
 
-from ..utils.bsearch cimport _bsearch_impl
+from ..utils.bsearch cimport _bsearch
 from ..common.types cimport real_t
 from ..common.ndarray_wrappers cimport make_ndarray
-
-# define additional parameters for _bsearch_impl: starting index and
-# first=1 so that the first index with arr[idx] <= key is returned.
-DEF BSEARCH_START_IDX = 0
-DEF BSEARCH_FIRST = 0
 
 @boundscheck(False)
 @wraparound(False)
@@ -50,10 +45,10 @@ cdef inline real_t _interp2d_bilinear_impl(real_t x, real_t y, real_t[:] xp,
             real_t[:] yp, real_t[:, :] fval) nogil:
     
     # store last valid indexes in x and y direction
-    cdef unsigned long ix_last = xp.shape[0] - 1, iy_last = yp.shape[0] - 1
+    cdef long ix_last = xp.shape[0] - 1, iy_last = yp.shape[0] - 1
 
     cdef real_t x_lb, x_ub, y_lb, y_ub
-    cdef unsigned long ix_lb, iy_lb
+    cdef long ix_lb, iy_lb
 
     # interpolation weights in x and y direction
     cdef real_t xwgt, ywgt
@@ -65,8 +60,7 @@ cdef inline real_t _interp2d_bilinear_impl(real_t x, real_t y, real_t[:] xp,
     elif x >= xp[ix_last]:
         ix_lb = ix_last - 1
     else:
-        ix_lb = _bsearch_impl(xp, x, BSEARCH_START_IDX, ix_last,
-                              BSEARCH_FIRST)
+        ix_lb = _bsearch(xp, x)
 
     # lower and upper bounding indexes in x direction
     x_lb = xp[ix_lb]
@@ -77,8 +71,7 @@ cdef inline real_t _interp2d_bilinear_impl(real_t x, real_t y, real_t[:] xp,
     elif y >= yp[iy_last]:
         iy_lb = iy_last - 1
     else:
-        iy_lb = _bsearch_impl(yp, y, BSEARCH_START_IDX, iy_last,
-                              BSEARCH_FIRST)
+        iy_lb = _bsearch(yp, y)
 
     # lower and upper bounding indexes in y direction
     y_lb = yp[iy_lb]
