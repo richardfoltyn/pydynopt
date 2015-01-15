@@ -1,9 +1,15 @@
 from distutils.core import setup, Extension
 from Cython.Build import cythonize
 
+
+files = ['pydynopt/common/*.pyx', 'pydynopt/utils/*.pyx',
+         'pydynopt/interpolate/*.pyx', 'pydynopt/optimize/*.pyx']
+
+exclude = ['scratch/*', 'pydynopt/utils/utils_*']
+packages = ['pydynopt.common', 'pydynopt.utils', 'pydynopt.interpolate',
+            'pydynopt.optimize']
+
+
 setup(name='pydynopt',
-      packages=['pydynopt.common', 'pydynopt.utils', 'pydynopt.interpolate'],
-      ext_modules=cythonize(['pydynopt/common/*.pyx',
-            'pydynopt/utils/*.pyx',
-            'pydynopt/interpolate/*.pyx'],
-                            exclude=['scratch/*', 'pydynopt/utils/utils_*']))
+      packages=packages,
+      ext_modules=cythonize(files, exclude=exclude))
