@@ -5,7 +5,7 @@ from Cython.Build import cythonize
 files = ['pydynopt/common/*.pyx', 'pydynopt/utils/*.pyx',
          'pydynopt/interpolate/*.pyx', 'pydynopt/optimize/*.pyx']
 
-exclude = ['scratch/*', 'pydynopt/utils/utils_*']
+exclude = ['scratch/*', 'pydynopt/utils/utils_*', '**/test.pyx']
 packages = ['pydynopt.common', 'pydynopt.utils', 'pydynopt.interpolate',
             'pydynopt.optimize']
 
