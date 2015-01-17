@@ -11,6 +11,36 @@ from ..common.types cimport real_t
 from ..utils.bsearch cimport _bsearch
 from ..common.ndarray_wrappers cimport make_ndarray
 
+################################################################################
+
+cdef inline long _find_lb(real_t x, real_t[:] xp) nogil:
+    """
+    Find lower bound index i on xp such that x <= xp[i] when x is in the
+    interval [xp[0],xp[-1])
+
+    Boundary behavior:
+        if x <= xp[0], return 0
+        if x >= xp[-1], return xp.shape[0] - 2
+
+    In both cases this is the desired behavior as then we need to
+    extrapolate, and the slope for extrapolation is given by
+        (fp[i+1]-fp[i])/(xp[i+1] - xp[i])
+    """
+
+    cdef long ixp_last = xp.shape[0] - 1
+
+    if x <= xp[0]:
+        ixp_lb = 0
+    elif x >= xp[ixp_last]:
+        ixp_lb = ixp_last - 1
+    else:
+        ixp_lb = _bsearch(xp, x)
+
+    return ixp_lb
+
+
+################################################################################
+# 1D linear interpolation
 
 cpdef int _interp1d_linear(real_t[:] x, real_t[:] xp,
         real_t[:] fp, real_t[:] out) nogil:
@@ -45,13 +75,7 @@ cpdef inline real_t _interp1d_linear_impl(real_t x, real_t[:] xp,
     # interpolation weight
     cdef real_t slope
 
-    if x <= xp[0]:
-        ixp_lb = 0
-    elif x >= xp[ixp_last]:
-        ixp_lb = ixp_last - 1
-    else:
-        ixp_lb = _bsearch(xp, x)
-
+    ixp_lb = _find_lb(x, xp)
     ixp_ub = ixp_lb + 1
 
     slope = (x - xp[ixp_lb]) / (xp[ixp_ub] - xp[ixp_lb])
@@ -119,23 +143,12 @@ cdef inline real_t _interp2d_bilinear_impl(real_t x, real_t y, real_t[:] xp,
     # interpolants in x direction evaluated at lower and upper y
     cdef real_t fx1, fx2
 
-    if x <= xp[0]:
-        ix_lb = 0
-    elif x >= xp[ix_last]:
-        ix_lb = ix_last - 1
-    else:
-        ix_lb = _bsearch(xp, x)
+    ix_lb = _find_lb(x, xp)
+    iy_lb = _find_lb(y, yp)
 
     # lower and upper bounding indexes in x direction
     x_lb = xp[ix_lb]
     x_ub = xp[ix_lb + 1]
-
-    if y <= yp[0]:
-        iy_lb = 0
-    elif y >= yp[iy_last]:
-        iy_lb = iy_last - 1
-    else:
-        iy_lb = _bsearch(yp, y)
 
     # lower and upper bounding indexes in y direction
     y_lb = yp[iy_lb]
