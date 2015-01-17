@@ -166,6 +166,7 @@ cdef inline real_t _interp2d_bilinear_impl(real_t x, real_t y, real_t[:] xp,
 ################################################################################
 # Python-callable convenience functions
 
+@boundscheck(True)
 def interp1d_linear(real_t[:] x, real_t[:] xp, real_t[:] fp,
         real_t[:] out=None):
     """
@@ -190,7 +191,7 @@ def interp1d_linear(real_t[:] x, real_t[:] xp, real_t[:] fp,
 
     return np.asarray(out)
 
-
+@boundscheck(True)
 def interp2d_bilinear(real_t[:] x0, real_t[:] y0, real_t[:] x, real_t[:] y,
                       real_t[:,:] fval, real_t[:] out=None):
 
