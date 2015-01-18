@@ -3,7 +3,8 @@ __author__ = 'Richard Foltyn'
 import numpy as np
 from numpy import linspace
 
-import unittest as ut
+import pytest
+
 from collections import Iterable
 
 
@@ -21,6 +22,39 @@ def ascontainer(x, container=tuple):
         return container(x)
     else:
         return container((x,))
+
+
+def initiliaze_xp(n, length=10):
+    res = []
+    for i in range(n):
+        arr = np.sort(np.random.randn(length) * 10)
+        res.append(arr)
+    return res
+
+
+def initialize_x(xp, length=100):
+    res = []
+    xp_list = list(xp)
+    for xpi in xp_list:
+        x = np.linspace(np.min(xpi), np.max(xpi), length)
+        res.append(x)
+
+    if not isinstance(xp, (list, tuple)) and len(res) == 1:
+        res = res[0]
+
+    return res
+
+
+def get_margins(ndim, excluded):
+    """
+    Return tuple of non-excluded margins given that we have ndim dimensions.
+    Excluded margins are zero-based!
+    :param ndim:
+    :param excluded:
+    :return:
+    """
+    excluded = ascontainer(excluded)
+    return tuple(np.sort(tuple(set(range(ndim)) - set(excluded))))
 
 
 def extend(array_like, by_frac=0.4, add_n=None):
@@ -57,95 +91,97 @@ def extend(array_like, by_frac=0.4, add_n=None):
     return arr_extended
 
 
-class AbstractTest(ut.TestCase):
+def test_dimensions(f_interp, f, xp, length=(1, 2, 10, 100, 1001)):
+    """
+    Verify that dimensions of input and output arrays are conformable,
+    and that appropriate exceptions are raised when non-conformable
+    arrays are passed as arguments.
+    """
 
-    def _test_dimensions(self, f_interp, f, xp, length=(1, 2, 10, 100, 1001)):
-        """
-        Verify that dimensions of input and output arrays are conformable,
-        and that appropriate exceptions are raised when non-conformable
-        arrays are passed as arguments.
-        """
+    xp = list(xp)
+    fp = f_array(f, *xp)
 
-        xp = list(xp)
-        fp = f_array(f, *xp)
-
-        for n in length:
-            x = [linspace(np.min(z), np.max(z), n) for z in xp]
-            args = x + xp + [fp]
-            fx = f_interp(*args)
-
-            self.assertTrue(x[0].shape == fx.shape)
-
-            # skip this for n=1 arrays, as truncating arrays will result in
-            # zero-length buffers, and we do not bother to catch this error
-            if n == 1:
-                continue
-
-            if len(x) > 1:
-                for i in range(len(x)):
-                    x_new = x.copy()
-                    xi = x[i].copy()
-                    x_new[i] = xi[:-1]
-                    args = x_new + xp + [fp]
-
-                    self.assertRaises(ValueError, f_interp, *args)
-
-            for i in range(len(xp)):
-                xp_new = xp.copy()
-                xpi = xp[i].copy()
-                xp_new[i] = xpi[:-1]
-
-                args = x + xp_new + [fp]
-                self.assertRaises(ValueError, f_interp, *args)
-
-    def _test_equality(self, f_interp, f, xp, x, tol=1e-12):
-        """
-        Verify that interpolated values are almost equal (i.e. abs.
-        difference between actual and interpolated values is smaller than tol).
-        """
-
-        xp = tuple(xp)
-        x = tuple(x)
-
-        fp = f_array(f, *xp)
-        args = x + xp + (fp, )
-        fx_hat = f_interp(*args)
-
-        # True values
-        fx = f(*x)
-
-        self.assertTrue(np.max(np.abs(fx-fx_hat)) < tol)
-
-    def _test_margin(self, f_interp, f, xp, x, marg,
-                     f_interp_marg, f_marg, tol=1e-12):
-        """
-        Verify that 'marginal' interpolation works, i.e. keeping one or two
-        margins constant and effectively testing on a lower-dimensional
-        function (f is assumed to be lower-dimensional).
-        """
-
-        xp = ascontainer(xp)
-        x = ascontainer(x)
-        marg = ascontainer(marg)
-
-        # check that we are actually testing lower-dimensional interpolation
-        assert len(marg) < len(xp)
-
-        xp_marg = list()
-        x_marg = list()
-        for i in marg:
-            xp_marg.append(xp[i])
-            x_marg.append(x[i])
-
-        fp = f_array(f, *xp)
-        args = x + xp + (fp, )
+    for n in length:
+        x = [linspace(np.min(z), np.max(z), n) for z in xp]
+        args = x + xp + [fp]
         fx = f_interp(*args)
 
-        fp_marg = f_array(f_marg, *xp_marg)
-        # interpolate using lower-dimensional function
-        args = x_marg + xp_marg + [fp_marg]
-        fx_marg = f_interp_marg(*args)
+        assert x[0].shape == fx.shape
 
-        self.assertTrue(np.max(np.abs(fx - fx_marg)) < tol)
+        # skip this for n=1 arrays, as truncating arrays will result in
+        # zero-length buffers, and we do not bother to catch this error
+        if n == 1:
+            continue
+
+        if len(x) > 1:
+            for i in range(len(x)):
+                x_new = x.copy()
+                xi = x[i].copy()
+                x_new[i] = xi[:-1]
+                args = x_new + xp + [fp]
+
+                with pytest.raises(ValueError):
+                    f_interp(*args)
+
+        for i in range(len(xp)):
+            xp_new = xp.copy()
+            xpi = xp[i].copy()
+            xp_new[i] = xpi[:-1]
+
+            args = x + xp_new + [fp]
+            with pytest.raises(ValueError):
+                f_interp(*args)
+
+
+def test_equality(f_interp, f, xp, x, tol=1e-10):
+    """
+    Verify that interpolated values are almost equal (i.e. abs.
+    difference between actual and interpolated values is smaller than tol).
+    """
+
+    xp = tuple(xp)
+    x = tuple(x)
+
+    fp = f_array(f, *xp)
+    args = x + xp + (fp, )
+    fx_hat = f_interp(*args)
+
+    # True values
+    fx = f(*x)
+
+    assert np.max(np.abs(fx-fx_hat)) < tol
+
+
+def test_margin(f_interp, f, xp, x, marg,
+                 f_interp_marg, f_marg, tol=1e-10):
+    """
+    Verify that 'marginal' interpolation works, i.e. keeping one or two
+    margins constant and effectively testing on a lower-dimensional
+    function (f is assumed to be lower-dimensional).
+    """
+
+    xp = ascontainer(xp)
+    x = ascontainer(x)
+    marg = ascontainer(marg)
+
+    # check that we are actually testing lower-dimensional interpolation
+    assert len(marg) < len(xp)
+
+    xp_marg = list()
+    x_marg = list()
+    for i in marg:
+        xp_marg.append(xp[i])
+        x_marg.append(x[i])
+
+    fp = f_array(f, *xp)
+    args = x + xp + (fp, )
+    fx = f_interp(*args)
+
+    fp_marg = f_array(f_marg, *xp_marg)
+    # interpolate using lower-dimensional function
+    args = x_marg + xp_marg + [fp_marg]
+    fx_marg = f_interp_marg(*args)
+
+    assert np.max(np.abs(fx - fx_marg)) < tol
 
 

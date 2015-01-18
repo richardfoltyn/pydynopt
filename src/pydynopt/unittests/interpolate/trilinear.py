@@ -1,142 +1,146 @@
 __author__ = 'Richard Foltyn'
 
-
 import numpy as np
+import pytest
 
 from pydynopt.interpolate import interp3d_trilinear, interp1d_linear, \
     interp2d_bilinear
 
-from pydynopt.unittests.interpolate.common import AbstractTest, extend
+import pydynopt.unittests.interpolate.common as common
 
-# create arrays of knots this long
-xp_len = 5
-# Length of arrays of points where to interpolate
-x_len = 10
+NDIM = 3
 
 
-class TrilinearTest(AbstractTest):
+@pytest.fixture(scope='module', params=[2, 11, 100])
+def data(request):
+    xp = common.initiliaze_xp(NDIM, request.param)
+    x = common.initialize_x(xp)
 
-    def setUp(self):
-        self.xp1 = np.sort(np.random.randn(xp_len) * 10)
-        self.xp2 = np.sort(np.random.randn(xp_len) * 10)
-        self.xp3 = np.sort(np.random.randn(xp_len) * 10)
+    return xp, x
 
-        self.xp = (self.xp1, self.xp2, self.xp3)
+@pytest.fixture(scope='module')
+def f_interp():
+    return interp3d_trilinear
 
-        self.x1 = np.linspace(np.min(self.xp1), np.max(self.xp1), x_len)
-        self.x2 = np.linspace(np.min(self.xp2), np.max(self.xp2), x_len)
-        self.x3 = np.linspace(np.min(self.xp3), np.max(self.xp3), x_len)
 
-        self.x = (self.x1, self.x2, self.x3)
+def test_dimensions(data, f_interp):
+    """
+    Test whether array dimensions of return array is conformable, and whether
+    exceptions are raised if input dimensions are non-conformable.
+    """
+    xp, _ = data
 
-    def test_dimensions(self):
-        f = lambda x, y, z: np.zeros_like(x)
-        self._test_dimensions(interp3d_trilinear, f, self.xp)
+    f = lambda u, v, w: np.zeros_like(u)
+    common.test_dimensions(f_interp, f, xp)
 
-    def test_identity(self):
-        """
-        Test whether interpolating exactly at interpolation nodes gives
-        correct result.
-        """
 
-        f = lambda x, y, z: np.exp(x/10) + np.cos(y) + np.log(np.abs(z))
+def test_identity(data, f_interp):
+    """
+    Test whether interpolating exactly at interpolation nodes gives
+    correct result.
+    """
 
-        self._test_equality(interp3d_trilinear, f, self.xp, self.xp)
+    xp, x = data
 
-    def test_constant(self):
+    f = lambda x, y, z: np.exp(x/10) + np.cos(y) + np.log(np.abs(z))
+    common.test_equality(f_interp, f, xp, xp)
 
-        const_val = np.asscalar(np.random.randn(1))
-        f = lambda x, y, z: np.ones_like(x) * const_val
-        
-        self._test_equality(interp3d_trilinear, f, self.xp, self.x)
 
-    def test_margins_1d(self):
-        """
-        Verify that interpolation and extrapolation for linear 'marginal'
-        functions works exactly.
-        """
+def test_constant(data, f_interp):
+    xp, x = data
 
-        coefs = np.random.randn(2)
+    const_val = np.asscalar(np.random.randn(1))
 
-        fm = lambda v: coefs[0] * v + coefs[1]
+    f = lambda u, v, w: np.ones_like(v) * const_val
+    common.test_equality(f_interp, f, xp, x)
 
-        x1 = extend(self.x1)
-        x2 = extend(self.x2)
-        x3 = extend(self.x3)
 
-        x = (x1, x2, x3)
+def test_margins_1d(data, f_interp):
+    """
+    Verify that interpolation and extrapolation for linear 'marginal'
+    functions works exactly.
+    """
 
-        assert x1.shape == x2.shape == x3.shape
+    coefs = np.random.randn(2)
+    fm = lambda v: coefs[0] * v + coefs[1]
 
-        ndim = len(self.xp)
-        for i in range(ndim):
-            f = lambda *x: fm(x[i])
-            # test against np.interp, without extrapolation
-            self._test_margin(interp3d_trilinear, f, self.xp, self.x,
-                              marg=i, f_interp_marg=np.interp, f_marg=fm)
+    xp, x = data
+    # extend beyond interval defined by xp to text extrapolation
+    x_ext = common.extend(x)
 
-            # test 1d linear extrapolation too, using our own interp1d
-            self._test_margin(interp3d_trilinear, f, self.xp, x,
-                              marg=i, f_interp_marg=interp1d_linear, f_marg=fm)
+    for i in range(NDIM):
+        f = lambda *x: fm(x[i])
+        # test against np.interp, without extrapolation
+        common.test_margin(f_interp, f, xp, x,
+                           marg=i, f_interp_marg=np.interp, f_marg=fm)
 
-    def test_margins_2d(self):
-        """
-        Verify that interpolation and extrapolation for linear 'marginal'
-        functions works exactly.
-        """
+        # test 1d linear extrapolation too, using our own interp1d
+        common.test_margin(f_interp, f, xp, x_ext,
+                           marg=i, f_interp_marg=interp1d_linear, f_marg=fm)
 
-        # Test linear function
-        coefs = np.random.randn(3)
-        fm = lambda v, w: coefs[0] * v + coefs[1] * w + coefs[2]
 
-        x = extend(self.x)
+def test_margins_2d(data, f_interp):
+    """
+    Verify that interpolation and extrapolation for linear 'marginal'
+    functions works exactly.
+    """
 
-        ndim = len(self.xp)
+    # Test linear function
+    coefs = np.random.randn(3)
+    fm = lambda v, w: coefs[0] * v + coefs[1] * w + coefs[2]
 
-        for i in range(ndim):
-            m1, m2 = np.sort(tuple(set(range(ndim)) - set((i, ))))
-            f = lambda *x: fm(x[m1], x[m2])
-            # test against interp2d_bilinear for both inter- and extrapolation
-            self._test_margin(interp3d_trilinear, f, self.xp, x,
-                              marg=(m1, m2), f_marg=fm,
-                              f_interp_marg=interp2d_bilinear)
+    xp, x = data
+    x_ext = common.extend(x)
 
-        # Bilinear interpolation of a marginal function of the form
-        # f(u, v) = a * u + b * v + c * u * v + d
-        # should work exactly too.
+    for i in range(NDIM):
+        m1, m2 = common.get_margins(NDIM, i)
+        f = lambda *x: fm(x[m1], x[m2])
+        # test against interp2d_bilinear for both inter- and extrapolation
+        common.test_margin(f_interp, f, xp, x_ext,
+                           marg=(m1, m2), f_marg=fm,
+                           f_interp_marg=interp2d_bilinear, tol=1e-9)
 
-        coefs = np.random.randn(4)
-        fm = lambda v, w: coefs[0] * v + coefs[1] * w + coefs[2]*w*v + coefs[3]
+    # Bilinear interpolation of a marginal function of the form
+    # f(u, v) = a * u + b * v + c * u * v + d
+    # should work exactly too.
 
-        for i in range(ndim):
-            m1, m2 = np.sort(tuple(set(range(ndim)) - set((i, ))))
-            f = lambda *x: fm(x[m1], x[m2])
-            # test against interp2d_bilinear for both inter- and extrapolation
-            self._test_margin(interp3d_trilinear, f, self.xp, x,
-                              marg=(m1, m2), f_marg=fm,
-                              f_interp_marg=interp2d_bilinear)
+    coefs = np.random.randn(4)
+    fm = lambda v, w: coefs[0] * v + coefs[1] * w + coefs[2]*w*v + coefs[3]
 
-    def test_extrapolate(self):
-        """
-        Verify that linear 3D functions are extrapolated exactly.
-        """
-        x = extend(self.x)
+    for i in range(NDIM):
+        m1, m2 = common.get_margins(NDIM, i)
+        f = lambda *x: fm(x[m1], x[m2])
+        # test against interp2d_bilinear for both inter- and extrapolation
+        common.test_margin(f_interp, f, xp, x_ext,
+                           marg=(m1, m2), f_marg=fm,
+                           f_interp_marg=interp2d_bilinear)
 
-        for i in range(10):
-            c = np.random.randn(4)
-            f = lambda u, v, w: c[0] * u + c[1] * v + c[2] * w + c[3]
 
-            self._test_equality(interp3d_trilinear, f, self.xp, x)
+def test_extrapolate(data, f_interp):
+    """
+    Verify that linear 3D functions are extrapolated exactly.
+    """
+    xp, x = data
+    x_ext = common.extend(x)
 
-    def test_interpolate(self):
-        """
-        Check whether functions of the form f(u,v,w) = ... with all interactions
-        are intrapolated exactly.
-        """
+    for i in range(10):
+        c = np.random.randn(4)
+        f = lambda u, v, w: c[0] * u + c[1] * v + c[2] * w + c[3]
 
-        for i in range(10):
-            c = np.random.randn(7)
-            f = lambda u, v, w: c[0] * u + c[1] * v + c[2] * w + \
-                    c[3]*u*v + c[4]*u*w + c[4]*v*w + c[5]*u*v*w + c[6]
+        common.test_equality(f_interp, f, xp, x_ext, tol=1e-9)
 
-            self._test_equality(interp3d_trilinear, f, self.xp, self.x)
+
+def test_interpolate(data, f_interp):
+    """
+    Check whether functions of the form f(u,v,w) = ... with all interactions
+    are intrapolated exactly.
+    """
+
+    xp, x = data
+
+    for i in range(10):
+        c = np.random.randn(7)
+        f = lambda u, v, w: c[0] * u + c[1] * v + c[2] * w + \
+                c[3]*u*v + c[4]*u*w + c[4]*v*w + c[5]*u*v*w + c[6]
+
+        common.test_equality(f_interp, f, xp, x)
