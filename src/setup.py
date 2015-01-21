@@ -1,15 +1,35 @@
-from distutils.core import setup, Extension
+from distutils.core import setup
 from Cython.Build import cythonize
+from Cython.Distutils import Extension, build_ext
 
+import numpy as np
 
-files = ['pydynopt/common/*.pyx', 'pydynopt/utils/*.pyx',
-         'pydynopt/interpolate/*.pyx', 'pydynopt/optimize/*.pyx']
+cdirectives_default = {
+    'wraparound': False,
+    'cdivision': True
+}
 
-exclude = ['scratch/*', 'pydynopt/utils/utils_*', '**/test.pyx']
+cdirectives_debug = {
+    'boundscheck': True,
+    'overflowcheck': True,
+    'nonecheck': True
+}
+cdirectives_debug.update(cdirectives_default)
+
+cdirectives_profile = {
+    'linetrace': True
+}
+
+exclude = ['scratch/*', 'pydynopt/utils/utils_*', '**/test*.pyx']
 packages = ['pydynopt.common', 'pydynopt.utils', 'pydynopt.interpolate',
             'pydynopt.optimize']
 
+ext = [Extension('*', ['**/*.pyx'],
+                 cython_directives=cdirectives_debug)]
+
+gdb = False
 
 setup(name='pydynopt',
       packages=packages,
-      ext_modules=cythonize(files, exclude=exclude))
+      ext_modules=cythonize(ext, exclude=exclude, gdb_debug=gdb,
+                            include_path=[np.get_include()]))
