@@ -1,5 +1,5 @@
 
-from ..common.types cimport real_t
+from pydynopt.common.types cimport real_t
 
 cdef inline long _find_lb(real_t *xp, real_t x, unsigned long length) nogil
 

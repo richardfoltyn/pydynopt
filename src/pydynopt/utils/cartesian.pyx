@@ -1,15 +1,13 @@
-from cython import boundscheck, wraparound, cdivision
+# cython: boundscheck = False
+# cython: wraparound = False
+# cython: cdivision = True
+# cython: profile = False
+
+from cython import boundscheck
 
 cimport numpy as cnp
 import numpy as np
-from cython cimport numeric
-from ..common.ndarray_wrappers cimport make_ndarray
 
-from ..common.types cimport num_arr2d_t, num_arr1d_t, int_real_t
-
-@boundscheck(False)
-@wraparound(False)
-@cdivision(True)
 cpdef int _cartesian2d(num_arr2d_t a, num_arr2d_t b, num_arr2d_t out) nogil:
     """
     Create cartesian product of two arrays by repeating array `a`
@@ -55,8 +53,6 @@ cpdef int _cartesian2d(num_arr2d_t a, num_arr2d_t b, num_arr2d_t out) nogil:
     return 0
 
 
-@boundscheck(False)
-@wraparound(False)
 def cartesian2d(num_arr2d_t a, num_arr2d_t b, num_arr2d_t out=None):
 
     cdef unsigned int nr_a, nr_b, nc_a, nc_b, nr_out, nc_out
@@ -81,6 +77,7 @@ def cartesian2d(num_arr2d_t a, num_arr2d_t b, num_arr2d_t out=None):
     else:
         return out
 
+@boundscheck(True)
 def cartesian(num_arr1d_t a, num_arr1d_t b, num_arr2d_t out=None):
 
     return cartesian2d(<num_arr2d_t>a[None, :], <num_arr2d_t>b[None, :], out)

@@ -1,17 +1,14 @@
+# cython: boundscheck = False
+# cython: wraparound = False
+# cython: cdivision = True
 # cython: profile = False
 
 __author__ = 'Richard Foltyn'
 
 from enum import IntEnum
+from cython import boundscheck
 
 
-from cython import boundscheck, wraparound, cdivision
-
-from ..common.types cimport int_real_t
-
-@boundscheck(False)
-@wraparound(False)
-@cdivision(True)
 cpdef long _bsearch_eq(int_real_t[:] arr, int_real_t key,
                               bint first) nogil:
     """
@@ -59,11 +56,7 @@ cpdef long _bsearch_eq(int_real_t[:] arr, int_real_t key,
         else:
             return ub if arr[ub] <= key else lb
 
-
-@boundscheck(False)
-@wraparound(False)
-@cdivision(True)
-cpdef long _bsearch(int_real_t[:] arr, int_real_t key) nogil:
+cdef long _bsearch(int_real_t *arr, int_real_t key, unsigned long length) nogil:
     """
     Returns index i such that arr[i] <= key < arr[i+1].
     Boundary conditions are handled as follows:
@@ -72,8 +65,7 @@ cpdef long _bsearch(int_real_t[:] arr, int_real_t key) nogil:
         3) if key > arr[-1] then _bsearch(arr, key) == arr.shape[0]
     """
 
-
-    cdef long lb = 0, ub = arr.shape[0]
+    cdef long lb = 0, ub = length
     cdef long midx
 
     if key > arr[ub-1]:
@@ -89,14 +81,18 @@ cpdef long _bsearch(int_real_t[:] arr, int_real_t key) nogil:
     return lb - 1
 
 
-
 class BSearchFlag(IntEnum):
     first = 1
     last = 0
 
 
-def bsearch(int_real_t[:] arr, int_real_t key, which=BSearchFlag.first):
+@boundscheck(True)
+def bsearch_eq(int_real_t[:] arr, int_real_t key, which=BSearchFlag.first):
     if arr[0] > key:
         raise ValueError('arr[0] <= key required!')
 
     return _bsearch_eq(arr, key, <bint>bool(which))
+
+@boundscheck(True)
+def bsearch(int_real_t[:] arr, int_real_t key):
+    return _bsearch(&(arr[0]), key, arr.shape[0])
