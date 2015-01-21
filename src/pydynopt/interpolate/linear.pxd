@@ -1,6 +1,8 @@
 
 from ..common.types cimport real_t
 
+cdef inline long _find_lb(real_t *xp, real_t x, unsigned long length) nogil
+
 cpdef inline real_t _interp1d_linear_impl(real_t x, real_t[:] xp,
                                           real_t[:] fp) nogil
 

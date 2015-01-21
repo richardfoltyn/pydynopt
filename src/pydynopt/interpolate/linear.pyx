@@ -13,7 +13,7 @@ from ..common.ndarray_wrappers cimport make_ndarray
 
 ################################################################################
 
-cdef inline long _find_lb(real_t x, real_t[:] xp) nogil:
+cdef inline long _find_lb(real_t *xp, real_t x, unsigned long length) nogil:
     """
     Find lower bound index i on xp such that x <= xp[i] when x is in the
     interval [xp[0],xp[-1])
@@ -27,14 +27,12 @@ cdef inline long _find_lb(real_t x, real_t[:] xp) nogil:
         (fp[i+1]-fp[i])/(xp[i+1] - xp[i])
     """
 
-    cdef long ixp_last = xp.shape[0] - 1
-
     if x <= xp[0]:
         ixp_lb = 0
-    elif x >= xp[ixp_last]:
-        ixp_lb = ixp_last - 1
+    elif x >= xp[length - 1]:
+        ixp_lb = length - 2
     else:
-        ixp_lb = _bsearch(xp, x)
+        ixp_lb = _bsearch(xp, x, length)
 
     return ixp_lb
 
@@ -74,7 +72,7 @@ cpdef inline real_t _interp1d_linear_impl(real_t x, real_t[:] xp,
     # interpolation weight
     cdef real_t slope
 
-    ixp_lb = _find_lb(x, xp)
+    ixp_lb = _find_lb(&(xp[0]), x, xp.shape[0])
     ixp_ub = ixp_lb + 1
 
     slope = (x - xp[ixp_lb]) / (xp[ixp_ub] - xp[ixp_lb])
@@ -139,8 +137,8 @@ cdef inline real_t _interp2d_bilinear_impl(real_t x, real_t y, real_t[:] xp,
     # interpolants in x direction evaluated at lower and upper y
     cdef real_t fx1, fx2
 
-    ix_lb = _find_lb(x, xp)
-    iy_lb = _find_lb(y, yp)
+    ix_lb = _find_lb(&(xp[0]), x, xp.shape[0])
+    iy_lb = _find_lb(&(yp[0]), y, yp.shape[0])
 
     # lower and upper bounding indexes in x direction
     x_lb = xp[ix_lb]
@@ -183,9 +181,9 @@ cdef inline real_t _interp3d_trilinear_impl(real_t x, real_t y, real_t z,
     # interpolated function value in all directions
     cdef real_t fxyz
 
-    ix_lb = _find_lb(x, xp)
-    iy_lb = _find_lb(y, yp)
-    iz_lb = _find_lb(z, zp)
+    ix_lb = _find_lb(&(xp[0]), x, xp.shape[0])
+    iy_lb = _find_lb(&(yp[0]), y, yp.shape[0])
+    iz_lb = _find_lb(&(zp[0]), z, yp.shape[0])
 
     # interpolating in x dimension
     slope_x = (x - xp[ix_lb]) / (xp[ix_lb + 1] - xp[ix_lb])
