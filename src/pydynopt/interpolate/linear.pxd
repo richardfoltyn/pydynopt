@@ -1,5 +1,8 @@
 
 from pydynopt.common.types cimport real_t
+from pydynopt.common.ndarray_wrappers cimport make_ndarray
+from pydynopt.utils.bsearch cimport _bsearch
+
 
 cdef inline long _find_lb(real_t *xp, real_t x, unsigned long length) nogil
 

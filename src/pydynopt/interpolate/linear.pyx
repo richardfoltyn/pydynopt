@@ -7,10 +7,6 @@ from cython import boundscheck
 
 import numpy as np
 
-from ..common.types cimport real_t
-from ..utils.bsearch cimport _bsearch
-from ..common.ndarray_wrappers cimport make_ndarray
-
 ################################################################################
 
 cdef inline long _find_lb(real_t *xp, real_t x, unsigned long length) nogil:
