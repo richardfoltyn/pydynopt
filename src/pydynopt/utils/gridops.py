@@ -6,22 +6,6 @@ from math import log
 
 from scipy.optimize import root
 
-from .utils_cimpl import makegrid_mirrored_cimpl
-from .utils_cimpl import interp_grid_prob_cimpl
-
-
-def interp_grid_prob(vals, grid):
-    ll = vals.shape[0]
-    il = np.empty(ll, dtype=np.int_)
-    ih = np.empty(ll, dtype=np.int_)
-    pl = np.empty(ll, dtype=np.float_)
-    ph = np.empty(ll, dtype=np.float_)
-
-    interp_grid_prob_cimpl(vals, grid, il, ih, pl, ph)
-
-    vs = vals.shape
-    return il.reshape(vs), ih.reshape(vs), pl.reshape(vs), ph.reshape(vs)
-
 
 def cartesian_op(a_tup, axis=0, op=None, dtype=None):
     # assert axis <= 1
@@ -57,24 +41,6 @@ def cartesian_op(a_tup, axis=0, op=None, dtype=None):
         out = op(out, axis=axis)
 
     return out
-
-
-def cartesian_prod(arrays, axis=0, op=None):
-    broadcastable = np.ix_(*arrays)
-    broadcasted = np.broadcast_arrays(*broadcastable)
-    rows, cols = reduce(np.multiply, broadcasted[0].shape), len(broadcasted)
-    out = np.empty(rows * cols, dtype=broadcasted[0].dtype)
-    start, end = 0, rows
-    for a in broadcasted:
-        out[start:end] = a.reshape(-1)
-        start, end = end, end + rows
-
-    res = out.reshape(cols, rows)
-
-    if op is not None:
-        res = op(res, axis=axis)
-
-    return res
 
 
 def makegrid(start, stop, num, logs=True, insert_vals=None, log_shift=0,
@@ -115,20 +81,5 @@ def makegrid(start, stop, num, logs=True, insert_vals=None, log_shift=0,
     grid[-1] = stop
 
     return grid
-
-
-def makegrid_mirrored(start, stop, around, num, endpoint=True, logs=False,
-                       log_shift=1, retaround=False):
-
-    assert start <= around <= stop and start < stop
-    out = np.empty(num, dtype=np.float_)
-
-    around_idx = makegrid_mirrored_cimpl(start, stop, around, out, endpoint,
-                                         logs, log_shift)
-
-    if retaround:
-        return out, around_idx
-    else:
-        return out
 
 
