@@ -5,7 +5,6 @@
 
 __author__ = 'Richard Foltyn'
 
-from enum import IntEnum
 from cython import boundscheck
 
 
@@ -81,17 +80,14 @@ cdef long _bsearch(int_real_t *arr, int_real_t key, unsigned long length) nogil:
     return lb - 1
 
 
-class BSearchFlag(IntEnum):
-    first = 1
-    last = 0
-
-
 @boundscheck(True)
-def bsearch_eq(int_real_t[:] arr, int_real_t key, which=BSearchFlag.first):
+def bsearch_eq(int_real_t[:] arr, int_real_t key, first=True):
     if arr[0] > key:
         raise ValueError('arr[0] <= key required!')
 
-    return _bsearch_eq(arr, key, <bint>bool(which))
+    cdef bint cfirst = 1 if first else 0
+
+    return _bsearch_eq(arr, key, cfirst)
 
 @boundscheck(True)
 def bsearch(int_real_t[:] arr, int_real_t key):

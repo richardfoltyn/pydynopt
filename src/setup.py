@@ -20,14 +20,14 @@ cdirectives_profile = {
     'linetrace': True
 }
 
-exclude = ['scratch/*', 'pydynopt/utils/utils_*', '**/test*.pyx']
+exclude = ['scratch/*', '**/test*.pyx']
 packages = ['pydynopt.common', 'pydynopt.utils', 'pydynopt.interpolate',
             'pydynopt.optimize']
 
 ext = [Extension('*', ['**/*.pyx'],
                  cython_directives=cdirectives_debug)]
 
-gdb = False
+gdb = True
 
 setup(name='pydynopt',
       packages=packages,

@@ -2,9 +2,9 @@ from __future__ import division, absolute_import, print_function
 __author__ = 'Richard Foltyn'
 
 import numpy as np
-import unittest2 as ut
+import unittest as ut
 
-from pydynopt.utils import bsearch, BSearchFlag, bsearch_eq
+from pydynopt.utils import bsearch, bsearch_eq
 
 
 class BSearchTest(ut.TestCase):
@@ -32,11 +32,11 @@ class BSearchTest(ut.TestCase):
                     idx = np.random.randint(low=0, high=arr.shape[0] - 1, size=(10, ))
 
                 for key in arr[idx]:
-                    i = bsearch_eq(arr, key, BSearchFlag.first)
+                    i = bsearch_eq(arr, key, first=True)
                     j = np.min(np.where(np.logical_and(arr <= key, arr >= key))[0])
                     self.assertEqual(i, j)
 
-                    i = bsearch_eq(arr, key, BSearchFlag.last)
+                    i = bsearch_eq(arr, key, first=False)
                     j = np.max(np.where(np.logical_and(arr <= key, arr >= key))[0])
                     self.assertEqual(i, j)
 
@@ -46,18 +46,18 @@ class BSearchTest(ut.TestCase):
         values in array are unique.
         """
         for n in (1, 2, 3, 10, 101):
-            arr = np.arange(n)
+            arr = np.arange(n, dtype=np.float)
 
             # Exact matches
             for key in arr:
-                first = bsearch_eq(arr, key, BSearchFlag.first)
-                last = bsearch_eq(arr, key, BSearchFlag.last)
+                first = bsearch_eq(arr, key, first=True)
+                last = bsearch_eq(arr, key, first=False)
                 self.assertEqual(first, last)
 
             # < matches
             for key in (1.5, 2.5, 10.5):
-                first = bsearch_eq(arr, key, BSearchFlag.first)
-                last = bsearch_eq(arr, key, BSearchFlag.last)
+                first = bsearch_eq(arr, key, first=True)
+                last = bsearch_eq(arr, key, first=False)
                 self.assertEqual(first, last)
 
     def test_value_error(self):
@@ -73,10 +73,10 @@ class BSearchTest(ut.TestCase):
         for n in (1, 2, 3, 10, 101):
             arr = np.ones((n,), dtype=np.float)
 
-            i = bsearch_eq(arr, 1.0, BSearchFlag.first)
+            i = bsearch_eq(arr, 1.0, first=True)
             self.assertEqual(i, 0)
 
-            i = bsearch_eq(arr, 1.0, BSearchFlag.last)
+            i = bsearch_eq(arr, 1.0, first=False)
             self.assertEqual(i, n - 1)
 
     def test_bsearch_last_random(self):
