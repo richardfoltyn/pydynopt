@@ -1,7 +1,3 @@
-# cython: boundscheck = True
-# cython: wraparound = False
-# cython: cdivision = True
-# cython: profile = False
 
 from libc.math cimport sqrt, fabs
 

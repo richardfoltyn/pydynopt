@@ -1,7 +1,3 @@
-# cython: boundscheck = False
-# cython: wraparound = False
-# cython: cdivision = True
-# cython: profile = False
 
 from cython import boundscheck
 
