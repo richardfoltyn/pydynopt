@@ -4,32 +4,39 @@ from Cython.Distutils import Extension, build_ext
 
 import numpy as np
 
-cdirectives_default = {
+cdir_default = {
     'wraparound': False,
-    'cdivision': True
+    'cdivision': True,
+    'boundscheck': False
 }
 
-cdirectives_debug = {
+cdir_debug = {
     'boundscheck': True,
     'overflowcheck': True,
+    'wraparound': False,
+    'cdivision': True,
     'nonecheck': True
 }
-cdirectives_debug.update(cdirectives_default)
 
-cdirectives_profile = {
-    'linetrace': True
+
+cdir_profile = {
+    # 'linetrace': True
+    'profile': True,
+    'wraparound': False,
+    'cdivision': False,
+    'boundscheck': False
 }
 
 exclude = ['scratch/*', '**/test*.pyx']
 packages = ['pydynopt.common', 'pydynopt.utils', 'pydynopt.interpolate',
             'pydynopt.optimize']
 
-ext = [Extension('*', ['**/*.pyx'],
-                 cython_directives=cdirectives_debug)]
+ext = [Extension('*', ['**/*.pyx'])]
 
-gdb = True
+gdb = False
 
 setup(name='pydynopt',
       packages=packages,
       ext_modules=cythonize(ext, exclude=exclude, gdb_debug=gdb,
-                            include_path=[np.get_include()]))
+                            include_path=[np.get_include()],
+                            compiler_directives=cdir_default))
