@@ -5,7 +5,7 @@ cdef class OptResult:
     cdef public double x_opt
     cdef public int flag
 
-ctypedef double (*objective_t)(double)
+ctypedef double (*objective_t)(double) nogil
 
 cdef class Optimizer:
     cdef double objective(Optimizer self, double val) nogil
