@@ -23,7 +23,7 @@ cdir_profile = {
     # 'linetrace': True
     'profile': True,
     'wraparound': False,
-    'cdivision': False,
+    'cdivision': True,
     'boundscheck': False
 }
 
