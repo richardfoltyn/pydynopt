@@ -7,7 +7,7 @@ from pydynopt.interpolate import interp3d_trilinear, interp1d_linear, \
     interp2d_bilinear
 
 import common
-import bilinear
+import test_bilinear as bilinear
 
 
 class TestTrilinear(bilinear.TestBilinear):
