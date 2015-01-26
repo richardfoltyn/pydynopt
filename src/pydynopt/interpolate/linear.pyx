@@ -28,6 +28,16 @@ cdef inline long _find_lb(real_t *xp, real_t x, unsigned long length) nogil:
 
     return ixp_lb
 
+def find_lb(real_t[:] xp, real_t x, unsigned long length):
+    """
+    Python-callable wrapper for _find_lb
+    :param xp:
+    :param x:
+    :param length:
+    :return:
+    """
+    return _find_lb(&(xp[0]), x, length)
+
 
 ################################################################################
 # 1D linear interpolation
