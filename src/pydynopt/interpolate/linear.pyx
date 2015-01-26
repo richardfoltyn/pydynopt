@@ -185,7 +185,7 @@ cdef inline real_t _interp3d_trilinear_impl(real_t x, real_t y, real_t z,
 
     ix_lb = _find_lb(&(xp[0]), x, xp.shape[0])
     iy_lb = _find_lb(&(yp[0]), y, yp.shape[0])
-    iz_lb = _find_lb(&(zp[0]), z, yp.shape[0])
+    iz_lb = _find_lb(&(zp[0]), z, zp.shape[0])
 
     # interpolating in x dimension
     slope_x = (x - xp[ix_lb]) / (xp[ix_lb + 1] - xp[ix_lb])
