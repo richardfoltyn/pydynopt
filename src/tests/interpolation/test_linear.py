@@ -28,19 +28,3 @@ class TestLinear(common.TestBase):
         else:
             return lambda u: np.power(np.abs(u), 1/2) * np.sin(u)
 
-
-# class Request:
-#     pass
-#
-# if __name__ == '__main__':
-#
-#     request = Request()
-#     test = TestLinear()
-#     ndim = test.ndim()
-#
-#     f_interp = test.f_interp()
-#
-#     for l in (2, 11, 101):
-#         request.param = l
-#         data = test.data(request, ndim)
-#         test.test_extrapolate(data, f_interp, ndim)

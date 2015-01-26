@@ -59,19 +59,3 @@ class TestBilinear(common.TestBase):
                 common.test_margin(f_interp, f, xp, x_ext,
                                    marg=j, f_interp_marg=interp1d_linear,
                                    f_marg=fm)
-
-
-# class Request:
-#     pass
-# if __name__ == '__main__':
-#
-#     request = Request()
-#     test = TestBilinear()
-#     ndim = test.ndim()
-#
-#     f_interp = test.f_interp()
-#
-#     for l in (2, 11, 101):
-#         request.param = l
-#         data = test.data(request, ndim)
-#         test.test_margins_1d(data, f_interp, ndim)

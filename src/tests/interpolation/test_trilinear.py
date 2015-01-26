@@ -54,19 +54,3 @@ class TestTrilinear(bilinear.TestBilinear):
                 common.test_margin(f_interp, f, xp, x_ext,
                                    marg=(m1, m2), f_marg=fm,
                                    f_interp_marg=interp2d_bilinear, tol=1e-9)
-
-
-# class Request:
-#     pass
-# if __name__ == '__main__':
-#
-#     request = Request()
-#     test = TestTrilinear()
-#     ndim = test.ndim()
-#
-#     f_interp = test.f_interp()
-#
-#     for l in (2, 11, 101):
-#         request.param = l
-#         data = test.data(request, ndim)
-#         test.test_margins_2d(data, f_interp, ndim)
