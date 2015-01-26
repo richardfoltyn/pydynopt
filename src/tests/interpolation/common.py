@@ -131,9 +131,14 @@ class TestBase:
             return np.ones_like(args[0]) * c
         return f
 
-    @pytest.fixture(params=[2, 11, 100])
-    def data(self, request, ndim):
-        xp = tuple(np.sort(np.random.randn(ndim, request.param), axis=1))
+    @pytest.fixture
+    def data_shape(self):
+        raise NotImplementedError()
+
+    @pytest.fixture
+    def data(self, data_shape):
+
+        xp = tuple(np.sort(np.random.randn(s)) for s in data_shape)
         x = tuple([linspace(np.min(z), np.max(z), 5) for z in xp])
 
         return xp, x
@@ -153,8 +158,15 @@ class TestBase:
         correct result.
         """
 
-        xp, x = data
-        test_equality(f_interp, f_nonlinear, xp, xp)
+        xp, _ = data
+        # we need to do this on a cartesian product of dimensions in xp,
+        # as the vectors in xp might be of different length (if we have
+        # different number of knots in each dimension.
+
+        cart = np.meshgrid(*xp, indexing='ij')
+        cart = tuple(arr.reshape(-1) for arr in cart)
+
+        test_equality(f_interp, f_nonlinear, xp, cart)
 
     def test_constant(self, data, f_interp, f_const):
         xp, x = data

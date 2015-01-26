@@ -1,11 +1,19 @@
 __author__ = 'Richard Foltyn'
 
 import numpy as np
+from numpy import linspace
 import pytest
+from itertools import permutations
+from random import randint
 
 from pydynopt.interpolate import interp1d_linear, interp2d_bilinear
 
 import common
+
+# dimensions of equal length
+shapes = tuple((x, x) for x in (2, 11, 100))
+# add some random-length dimensions
+shapes += tuple(permutations(randint(2, 100) for x in range(2)))
 
 
 class TestBilinear(common.TestBase):
@@ -17,6 +25,11 @@ class TestBilinear(common.TestBase):
     @pytest.fixture
     def ndim(self):
         return 2
+
+    @pytest.fixture(scope='module', params=shapes)
+    def data_shape(self, request):
+        return request.param
+
 
     @pytest.fixture(scope='module', params=range(3))
     def f_nonlinear(self, request):

@@ -19,6 +19,10 @@ class TestLinear(common.TestBase):
     def ndim(self):
         return 1
 
+    @pytest.fixture(params=((2,), (11,), (100,)))
+    def data_shape(self, request):
+        return request.param
+
     @pytest.fixture(scope='module', params=range(3))
     def f_nonlinear(self, request):
         if request.param == 0:

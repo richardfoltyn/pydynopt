@@ -1,6 +1,8 @@
 __author__ = 'Richard Foltyn'
 
 import numpy as np
+from random import randint
+from itertools import permutations
 import pytest
 
 from pydynopt.interpolate import interp3d_trilinear, interp1d_linear, \
@@ -8,6 +10,11 @@ from pydynopt.interpolate import interp3d_trilinear, interp1d_linear, \
 
 import common
 import test_bilinear as bilinear
+
+# dimensions of equal length
+shapes = tuple((x, ) * 3 for x in (2, 11, 100))
+# add some random-length dimensions
+shapes += tuple(permutations(randint(2, 100) for x in range(3)))
 
 
 class TestTrilinear(bilinear.TestBilinear):
@@ -19,6 +26,10 @@ class TestTrilinear(bilinear.TestBilinear):
     @pytest.fixture
     def ndim(self):
         return 3
+
+    @pytest.fixture(scope='module', params=shapes)
+    def data_shape(self, request):
+        return request.param
 
     @pytest.fixture(scope='module', params=range(3))
     def f_nonlinear(self, request):
