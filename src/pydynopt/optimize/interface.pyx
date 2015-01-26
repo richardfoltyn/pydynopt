@@ -5,6 +5,12 @@ cdef class Optimizer:
     cdef double objective(Optimizer self, double val) nogil:
         pass
 
+cdef class OptResult:
+    """
+    Include empty definition, otherwise this extension type is not accessible
+    from Python.
+    """
+    pass
 
 cdef class OptimizerWrapper(Optimizer):
 
