@@ -107,7 +107,7 @@ cpdef double fminbound(Optimizer opt, double x1, double x2, OptResult res,
             flag = FLAG_NOT_CONVERGED
             break
 
-    res.flag = flag
+    res.flags = flag
     res.fx_opt = fx
     res.x_opt = xf
 

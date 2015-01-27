@@ -24,3 +24,6 @@ ctypedef fused real_t:
 
 ctypedef int_real_t[:, ::1] num_arr2d_t
 ctypedef int_real_t[::1] num_arr1d_t
+
+# TODO: This should be cimported from to have a portable type
+ctypedef unsigned int uint32_t

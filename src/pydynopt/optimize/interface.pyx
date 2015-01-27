@@ -9,7 +9,7 @@ cdef class OptResult:
 
     def __cinit__(self):
         # initialize to zero, the default flag when no errors are encountered.
-        self.flag = 0x0
+        self.flags = 0x0
 
 cdef class OptimizerWrapper(Optimizer):
 
