@@ -6,11 +6,10 @@ cdef class Optimizer:
         pass
 
 cdef class OptResult:
-    """
-    Include empty definition, otherwise this extension type is not accessible
-    from Python.
-    """
-    pass
+
+    def __cinit__(self):
+        # initialize to zero, the default flag when no errors are encountered.
+        self.flag = 0x0
 
 cdef class OptimizerWrapper(Optimizer):
 
