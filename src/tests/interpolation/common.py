@@ -163,10 +163,13 @@ class TestBase:
         # as the vectors in xp might be of different length (if we have
         # different number of knots in each dimension.
 
-        cart = np.meshgrid(*xp, indexing='ij')
-        cart = tuple(arr.reshape(-1) for arr in cart)
+        if len(xp) > 1:
+            x = np.meshgrid(*xp, indexing='ij')
+            x = tuple(arr.reshape(-1) for arr in x)
+        else:
+            x = xp
 
-        test_equality(f_interp, f_nonlinear, xp, cart)
+        test_equality(f_interp, f_nonlinear, xp, x)
 
     def test_constant(self, data, f_interp, f_const):
         xp, x = data
