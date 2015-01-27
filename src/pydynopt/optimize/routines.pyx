@@ -1,4 +1,6 @@
 
+include "cdefs.pxi"
+
 from libc.math cimport sqrt, fabs
 
 cdef inline int sign(double x) nogil:
@@ -102,7 +104,7 @@ cpdef double fminbound(Optimizer opt, double x1, double x2, OptResult res,
         tol2 = 2.0 * tol1
 
         if num >= maxfun:
-            flag = 1
+            flag = FLAG_NOT_CONVERGED
             break
 
     res.flag = flag
