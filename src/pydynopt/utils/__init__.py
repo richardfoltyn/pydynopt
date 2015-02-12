@@ -8,3 +8,5 @@ from .cartesian import cartesian, cartesian2d, _cartesian2d
 from .bsearch import bsearch, bsearch_eq
 
 from .gridops import makegrid
+
+from .norms import matrix_supnorm
