@@ -275,12 +275,17 @@ class NDArrayLattice(object):
 
         self.layers = pl
 
+    def map_xaxis(self, dim=None, at_idx=None, at_val=None, values=None):
+        self.xaxis = PlotDimension(dim=dim, at_idx=at_idx, at_val=at_val,
+                                   values=values)
+
     def set_fixed_dims(self, dim, at_idx):
         self.fixed_dims = np.atleast_1d(dim)
         self.fixed_idx = np.atleast_1d(at_idx)
 
     def reset_fixed_dims(self):
         self.fixed_dims = None
+        self.fixed_idx = None
 
     def reset_layers(self):
         self.layers = PlotLayer()
@@ -291,9 +296,9 @@ class NDArrayLattice(object):
     def reset_cols(self):
         self.cols = PlotDimension()
 
-    def set_xaxis(self, dim=None, at_idx=None, at_val=None, values=None):
-        self.xaxis = PlotDimension(dim=dim, at_idx=at_idx, at_val=at_val,
-                                   values=values)
+    def reset_xaxis(self):
+        self.xaxis = PlotDimension()
+
 
     @property
     def ndim(self):
