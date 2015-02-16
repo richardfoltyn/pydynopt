@@ -16,7 +16,7 @@ def plot_grid(fun, nrow=1, ncol=1,
               sharex=True, sharey=True,
               xlabel=None, ylabel=None, xlim=None, ylim=None,
               legend_at=(0, 0), legend_loc='upper left', legend=False,
-              outfile=None, style=DefaultStyle, *args, **kwargs):
+              outfile=None, style=None, *args, **kwargs):
 
     if column_title is None:
         column_title = np.ndarray((0,), dtype=object)
@@ -27,48 +27,51 @@ def plot_grid(fun, nrow=1, ncol=1,
         legend_at = np.array(legend_at, dtype=np.int)
         assert legend_at.shape[0] == 2
 
-    stl = style()
-    stl.figure.update({'figsize': (stl.cell_size * ncol, stl.cell_size * nrow)})
+    if style is None:
+        style = DefaultStyle()
+
+    fig_kw = {'figsize': (style.cell_size * ncol, style.cell_size * nrow)}
+    fig_kw.update(style.figure)
 
     if figure_kw is not None:
-        stl.figure.update(figure_kw)
+        style.figure.update(figure_kw)
 
     if subplot_kw is not None:
-        stl.subplot.update(subplot_kw)
+        style.subplot.update(subplot_kw)
 
-    fig, axes = plt.subplots(nrow, ncol, subplot_kw=stl.subplot,
+    fig, axes = plt.subplots(nrow, ncol, subplot_kw=style.subplot,
                              sharex=sharex, sharey=sharey, squeeze=False,
-                             **stl.figure)
+                             **fig_kw)
 
     for i in range(nrow):
         for j in range(ncol):
             if j == 0:
                 if i < column_title.shape[0] and column_title[i, j]:
-                    axes[i, j].set_title(column_title[i, j], **stl.title)
+                    axes[i, j].set_title(column_title[i, j], **style.title)
 
             if xlim is not None:
                 axes[i, j].set_xlim(xlim)
             if ylim is not None:
                 axes[i, j].set_ylim(ylim)
 
-            if stl.grid:
-                axes[i, j].grid(**stl.grid)
+            if style.grid:
+                axes[i, j].grid(**style.grid)
 
             fun(axes[i, j], (i, j), *args, **kwargs)
 
     if xlabel is not None:
         for j in range(ncol):
-            axes[-1, j].set_xlabel(xlabel, **stl.xlabel)
+            axes[-1, j].set_xlabel(xlabel, **style.xlabel)
 
     if ylabel is not None:
         for i in range(nrow):
-            axes[i, 0].set_ylabel(ylabel, **stl.ylabel)
+            axes[i, 0].set_ylabel(ylabel, **style.ylabel)
 
     if legend and legend_loc is not None and legend_at is not None:
-        axes[legend_at[0], legend_at[1]].legend(loc=legend_loc, **stl.legend)
+        axes[legend_at[0], legend_at[1]].legend(loc=legend_loc, **style.legend)
 
     if suptitle is not None and suptitle:
-        fig.suptitle(suptitle, **stl.suptitle)
+        fig.suptitle(suptitle, **style.suptitle)
 
     render(fig, outfile)
 

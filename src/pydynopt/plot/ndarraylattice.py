@@ -5,7 +5,7 @@ __author__ = 'Richard Foltyn'
 from .styles import DefaultStyle
 import numpy as np
 
-import collections
+from collections import Callable
 import itertools as it
 
 from .baseplots import plot_grid
@@ -14,18 +14,29 @@ from .baseplots import plot_grid
 class PlotDimension(object):
 
     def __init__(self, dim=None, at_idx=None, at_val=None, values=None,
-                 label_fmt=None, label=None, label_loc='lower right',
-                 label_fun=None):
+                 label=None, label_fmt=None, label_fun=None,
+                 label_loc='lower right'):
 
         self.dim = dim
         self.label_fmt = label_fmt
         self.label_loc = label_loc
         self.label = label
+
+        if label_fun is not None and not isinstance(label_fun, Callable):
+            raise ValueError('Argument label_fun not callable')
         self.label_fun = label_fun
 
         if at_val is not None and values is None:
             raise ValueError('Argument values must not be None if at_val '
                              'specified')
+
+        if at_val is not None and at_idx is not None and values is not None:
+            try:
+                values = np.atleast_1d(values)
+                at_val2 = values[np.atleast_1d(at_idx)]
+                assert np.all(np.atleast_1d(at_val) == at_val2)
+            except:
+                raise ValueError('Arguments at_val and at_idx not compatible')
 
         if dim is not None:
             if values is not None:
@@ -66,82 +77,87 @@ class PlotDimension(object):
     def __iter__(self):
         return zip(self.at_idx, self.at_val)
 
+    def get_label(self, largs):
+        if self.label_fun is not None:
+            lbl = self.label_fun(largs)
+        elif self.label_fmt:
+            lbl = self.label_fmt.format(largs)
+        elif self.label:
+            lbl = self.label
+        else:
+            lbl = None
+
+        return lbl
+
 
 class PlotLayer(PlotDimension):
 
     def __init__(self, dim=None, at_idx=None, at_val=None, values=None,
-                 label=None, label_fmt=None, label_loc=None, label_fun=None,
+                 label=None, label_fmt=None, label_fun=None,
                  **kwargs):
 
         super(PlotLayer, self).__init__(dim=dim, at_idx=at_idx, at_val=at_val,
                                         values=values, label=label,
                                         label_fmt=label_fmt,
-                                        label_loc=label_loc,
                                         label_fun=label_fun)
         self.plot_kw = kwargs
 
 
 class PlotMap(object):
 
-    IDX_XAXIS = 0
-    IDX_ROW = 1
-    IDX_COL = 2
-    IDX_LAYER = 3
+    IDX_ROW = 0
+    IDX_COL = 1
+    IDX_LAYER = 2
 
-    def __init__(self, xaxis, rows=None, cols=None, layers=None):
+    def __init__(self, xaxis, rows=None, cols=None, layers=None, template=None):
 
         rows = rows if rows is not None else PlotDimension()
         cols = cols if cols is not None else PlotDimension()
-        layers = layers if layers is not None else (PlotLayer(), )
+        layers = layers if layers is not None else PlotLayer()
 
         for arg in (xaxis, rows, cols):
             if not isinstance(arg, PlotDimension):
                 raise ValueError('Argument must be of type PlotDimension')
 
-        if isinstance(layers, PlotLayer):
-            layers = (layers, )
-        else:
-            layers = tuple(layers)
-
         self.rows, self.cols, self.layers, self.xaxis = rows, cols, layers, xaxis
         nrow, ncol, nlyr = len(rows), len(cols), len(layers)
 
-        arr_slices = np.ndarray((nrow, ncol, nlyr), dtype=object)
-        arr_values = np.ndarray((nrow, ncol, nlyr), dtype=object)
+        slices = np.ndarray((nrow, ncol, nlyr), dtype=object)
+        values = np.ndarray((nrow, ncol, nlyr), dtype=object)
+        indexes = np.ndarray((nrow, ncol, nlyr), dtype=object)
 
-        ndim = 0
-        for z in (self.rows, self.cols, self.xaxis):
-            if z.dim is not None:
-                ndim = max(ndim, z.dim)
-        for z in self.layers:
-            if z.dim_max is not None:
-                ndim = max(ndim, z.dim_max)
-        ndim += 1
+        if template is None:
+            ndim = 0
+            for z in (self.rows, self.cols, self.xaxis, self.layers):
+                if z.dim is not None:
+                    ndim = max(ndim, z.dim)
+            ndim += 1
+            template = [0] * ndim
+        else:
+            template = list(template)
+            ndim = len(template)
 
         for i, (ridx, rval) in enumerate(self.rows):
             for j, (cidx, cval) in enumerate(self.cols):
-                for k, layer in enumerate(self.layers):
-                    lst = [0] * ndim
+                for k, (lidx, lval) in enumerate(self.layers):
+                    lst = template.copy()
                     if ridx is not None:
                         lst[self.rows.dim] = ridx
                     if cidx is not None:
                         lst[self.cols.dim] = cidx
-
-                    for ldim, lidx, _ in layer:
-                        lst[ldim] = lidx
-
+                    if lidx is not None:
+                        lst[self.layers.dim] = lidx
                     if self.xaxis.dim is not None:
                         lst[self.xaxis.dim] = self.xaxis.at
 
-                    arr_slices[i, j, k] = tuple(lst)
-                    arr_values[i, j, k] = rval, cval, layer.values
+                    indexes[i, j, k] = ridx, cidx, lidx
+                    slices[i, j, k] = tuple(lst)
+                    values[i, j, k] = rval, cval, lval
 
-        self.slices = arr_slices
-        self.values = arr_values
-
-    @property
-    def shape(self):
-        return self.slices.shape
+        self.slices = slices
+        self.indexes = indexes
+        self.values = values
+        self.ndim = ndim
 
     @property
     def nrow(self):
@@ -163,13 +179,6 @@ class PlotMap(object):
     @property
     def xvalues(self):
         return self.xaxis.values
-
-    def values(self, idx):
-        if len(idx) != 3:
-            raise IndexError('Need 3-tuple index')
-        idx = tuple(idx)
-
-        return self.values[idx]
 
 
 loc_map = {'upper': 2, 'lower': 0, 'left': 0, 'right': 2, 'center': 1}
@@ -222,6 +231,15 @@ def plot_identity(ax, xmin, xmax, extend=1):
     ax.plot(xx, xx, ls=':', color='black', alpha=0.6, lw=1, zorder=-500)
 
 
+class LabelArgs:
+    def __init__(self, row, col, layer, idx=None, val=None):
+        self.row = row
+        self.col = col
+        self.layer = layer
+        self.idx = idx
+        self.val = val
+
+
 class NDArrayLattice(object):
 
     def __init__(self):
@@ -229,25 +247,43 @@ class NDArrayLattice(object):
         self.cols = PlotDimension()
         self.xaxis = PlotDimension()
         self.layers = PlotLayer()
+        self.fixed_dims = None
+        self.fixed_idx = None
 
-    def map_rows(self, dim, at=None, values=None, label=None, label_fmt=None,
+    def map_rows(self, dim, at_idx=None, at_val=None, values=None,
+                 label=None, label_fmt=None, label_fun=None,
                  label_loc='lower left'):
-        self.rows = PlotDimension(dim=dim, at=at, label=label, values=values,
-                                  label_fmt=label_fmt, label_loc=label_loc)
 
-    def map_columns(self, dim, at=None, values=None, label=None, label_fmt=None,
-                 label_loc='lower left'):
-        self.cols = PlotDimension(dim=dim, at=at, label=label, values=values,
-                                  label_fmt=label_fmt, label_loc=label_loc)
+        pd = PlotDimension(dim, at_idx, at_val, values, label, label_fmt,
+                           label_fun, label_loc)
 
-    def map_layers(self, dim, at=None, values=None, label=None,
-                   label_fmt=None, **kwargs):
-        self.layers.append(PlotLayer(dim=dim, at=at, values=values,
-                                     label=label, label_fmt=label_fmt,
-                                     **kwargs))
+        self.rows = pd
+
+    def map_columns(self, dim, at_idx=None, at_val=None, values=None,
+                    label=None, label_fmt=None, label_fun=None,
+                    label_loc='lower left'):
+
+        pd = PlotDimension(dim, at_idx, at_val, values, label, label_fmt,
+                           label_fun, label_loc)
+        self.cols = pd
+
+    def map_layers(self, dim, at_idx=None, at_val=None, values=None,
+                   label=None, label_fmt=None, label_fun=None, **kwargs):
+
+        pl = PlotLayer(dim, at_idx, at_val, values, label, label_fmt,
+                       label_fun, **kwargs)
+
+        self.layers = pl
+
+    def set_fixed_dims(self, dim, at_idx):
+        self.fixed_dims = np.atleast_1d(dim)
+        self.fixed_idx = np.atleast_1d(at_idx)
+
+    def reset_fixed_dims(self):
+        self.fixed_dims = None
 
     def reset_layers(self):
-        self.layers = list()
+        self.layers = PlotLayer()
 
     def reset_rows(self):
         self.rows = PlotDimension()
@@ -255,25 +291,45 @@ class NDArrayLattice(object):
     def reset_cols(self):
         self.cols = PlotDimension()
 
-    def set_xaxis(self, dim=None, at=None, values=None):
-        self.xaxis = PlotDimension(dim=dim, at=at, values=values)
+    def set_xaxis(self, dim=None, at_idx=None, at_val=None, values=None):
+        self.xaxis = PlotDimension(dim=dim, at_idx=at_idx, at_val=at_val,
+                                   values=values)
+
+    @property
+    def ndim(self):
+        ndim = 0
+        for z in (self.rows, self.cols, self.xaxis, self.layers):
+            if z.dim is not None:
+                ndim = max(ndim, z.dim)
+
+        if self.fixed_dims is not None:
+            ndim = max(np.max(self.fixed_dims), ndim)
+
+        ndim += 1
+        return ndim
 
     def get_plot_map(self):
-        layers = self.layers if self.layers else PlotLayer()
+
+        template = None
+        if self.fixed_dims is not None:
+            template = [0] * self.ndim
+            for dim, idx in zip(self.fixed_dims, self.fixed_idx):
+                template[dim] = idx
 
         pm = PlotMap(xaxis=self.xaxis, rows=self.rows, cols=self.cols,
-                     layers=layers)
+                     layers=self.layers, template=template)
         return pm
 
-    def plot(self, data, style=DefaultStyle, trim_iqr=2, ylim=None,
+    def plot(self, data, style=None, trim_iqr=2, ylim=None,
              xlim=None, extend_by=0, identity=False, **kwargs):
+
         NDArrayLattice._plot(self, data, style, trim_iqr, ylim, xlim,
                              extend_by, identity=identity, **kwargs)
 
 
 
     @staticmethod
-    def _plot(nda, data, style=DefaultStyle, trim_iqr=2, ylim=None,
+    def _plot(nda, data, style=None, trim_iqr=2, ylim=None,
               xlim=None, extend_by=0, identity=False,
               **kwargs):
 
@@ -298,11 +354,12 @@ class NDArrayLattice(object):
         yy = []
         trim_iqr = float(trim_iqr)
 
-        stl = style()
-        colors = stl.color_seq(nlayer)
-        lstyle = stl.lstyle_seq(nlayer)
-        alphas = stl.alpha_seq(nlayer)
-        lwidth = stl.lwidth_seq(nlayer)
+        if style is None:
+            style = DefaultStyle()
+        colors = style.color_seq(nlayer)
+        lstyle = style.lstyle_seq(nlayer)
+        alphas = style.alpha_seq(nlayer)
+        lwidth = style.lwidth_seq(nlayer)
 
         def func(ax, idx):
             i, j = idx
@@ -313,11 +370,11 @@ class NDArrayLattice(object):
 
             for idx_dat, (dat, pm) in enumerate(zip(data, pmaps)):
                 if i < pm.nrow and j < pm.ncol:
-                    for k, sl_k in enumerate(pm[i, j]):
+                    for k, sl_k in enumerate(pm.slices[i, j]):
                         idx_plt = idx + (k, )
-                        # ix, irow, icol, iplt = sl.indices(plt_idx)
                         vals = pm.values[idx_plt]
-                        layer = pm.layers[k]
+                        aidx = pm.indexes[idx_plt]
+                        layer = pm.layers
 
                         y = dat[sl_k].squeeze()
                         if ylim is None or trim_iqr is not None:
@@ -330,11 +387,9 @@ class NDArrayLattice(object):
                             xmin = min(np.min(xvals), xmin)
                             xmax = max(np.max(xvals), xmax)
 
-                        if layer.label_fmt:
-                            lbl = layer.label_fmt.format(row=i, col=j,
-                                                         values=vals)
-                        else:
-                            lbl = layer.label if layer.label else None
+                        larg = LabelArgs(i, j, k, aidx[PlotMap.IDX_LAYER],
+                                         vals[PlotMap.IDX_LAYER])
+                        lbl = pm.layers.get_label(larg)
 
                         plot_kw = {'ls': lstyle[k], 'lw': lwidth[k],
                                    'c': colors[k], 'alpha': alphas[k]}
@@ -344,17 +399,13 @@ class NDArrayLattice(object):
                         ax.plot(xvals, y, label=lbl, **plot_kw)
 
                         if k == 0:
-                            if pm.rows.label_fmt:
-                                rtxt = pm.rows.label_fmt.format(row=i, col=j,
-                                                                values=vals)
-                            else:
-                                rtxt = pm.rows.label if pm.rows.label else ''
+                            larg = LabelArgs(i, j, k, aidx[PlotMap.IDX_ROW],
+                                             vals[PlotMap.IDX_ROW])
+                            rtxt = pm.rows.get_label(larg)
 
-                            if pm.cols.label_fmt:
-                                ctxt = pm.cols.label_fmt.format(row=i, col=j,
-                                                               values=vals)
-                            else:
-                                ctxt = pm.cols.label if pm.cols.label else ''
+                            larg.val = vals[PlotMap.IDX_COL]
+                            larg.idx = aidx[PlotMap.IDX_COL]
+                            ctxt = pm.cols.get_label(larg)
 
                             lst = []
                             if rtxt or ctxt:
@@ -380,6 +431,7 @@ class NDArrayLattice(object):
                     lst = annotations[ii, jj]
                     if lst:
                         txt_kwargs = loc_kwargs[ii, jj].copy()
+                        txt_kwargs.update(style.text)
                         y = txt_kwargs['y']
                         dy = 1 if y < 0.5 else -1
                         txt_kwargs['transform'] = ax.transAxes
@@ -416,4 +468,4 @@ class NDArrayLattice(object):
 
                     ax.set_ylim(ymin, ymax)
 
-        plot_grid(func, nrow=nrow, ncol=ncol, **kwargs)
+        plot_grid(func, nrow=nrow, ncol=ncol, style=style, **kwargs)
