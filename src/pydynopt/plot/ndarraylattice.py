@@ -235,12 +235,39 @@ def plot_identity(ax, xmin, xmax, extend=1):
 
 
 class LabelArgs:
-    def __init__(self, row, col, layer, idx=None, val=None):
+    """
+    Class to hold arguments passed to labor formatting functions.
+
+    The following attributes can be used either in a str.format() string,
+    or in a custom callback function which will be called with an instance of
+    LabelArgs as the only argument:
+
+    Attributes
+    ----------
+
+    row : int
+        Current row's index on plot grid
+
+    col : int
+        Current column's index on plot grid
+
+    layer : int
+        Current layer's index on plot grid
+
+    index : int
+        Current data array index along dimension `dim` that is mapped to row
+        / column / layer. (None if not mapped)
+
+    value : float
+        Current value corresponding to `index` (None if not mapped)
+
+    """
+    def __init__(self, row, col, layer, index=None, value=None):
         self.row = row
         self.col = col
         self.layer = layer
-        self.index = idx
-        self.value = val
+        self.index = index
+        self.value = value
 
 
 class NDArrayLattice(object):
