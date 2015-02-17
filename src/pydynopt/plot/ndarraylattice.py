@@ -53,6 +53,9 @@ class PlotDimension(object):
             if values is not None:
                 if at_val is not None:
                     at_idx = np.searchsorted(values, at_val)
+                    if not np.all(values[at_idx] == at_val):
+                        raise ValueError('Items in at_val cannot be matched '
+                                         'to indexes in values array.')
                 elif at_idx is not None:
                     at_val = values[at_idx]
                 else:
@@ -148,7 +151,7 @@ class PlotMap(object):
                     if lidx is not None:
                         lst[self.layers.dim] = lidx
                     if self.xaxis.dim is not None:
-                        lst[self.xaxis.dim] = self.xaxis.at
+                        lst[self.xaxis.dim] = tuple(self.xaxis.at_idx)
 
                     indexes[i, j, k] = ridx, cidx, lidx
                     slices[i, j, k] = tuple(lst)
@@ -236,11 +239,15 @@ class LabelArgs:
         self.row = row
         self.col = col
         self.layer = layer
-        self.idx = idx
-        self.val = val
+        self.index = idx
+        self.value = val
 
 
 class NDArrayLattice(object):
+    """
+    Mapping from N-dimensional array to 3-dimensional grid of plots (
+    rows/columns/layers).
+    """
 
     def __init__(self):
         self.rows = PlotDimension()
@@ -253,6 +260,53 @@ class NDArrayLattice(object):
     def map_rows(self, dim, at_idx=None, at_val=None, values=None,
                  label=None, label_fmt=None, label_fun=None,
                  label_loc='lower left'):
+        """
+        Map data array dimension `dim` to rows on plot grid. Rows will be
+        plotted at array indexes given by `at_idx' along dimension `dim`.
+
+        Alternatively, indexes to be plotted can be selected by specifying the
+        desired values using `at_val`. The corresponding indexes will be
+        imputed from `values'.
+
+        Either `at_idx` or both `at_val` and `values` must be specified.
+
+        Parameters
+        ----------
+
+        dim : int
+            Data array dimension to be mapped to rows.
+
+        at_idx: array_like
+            Indexes along `dim' to be plotted row-wise. (optional)
+
+        at_val: array_like
+            Values corresponding to indexes along `dim' to be plotted
+            row-wise. (optional)
+
+        values: array_like
+            Values corresponding to indexes on `dim'
+
+        label: str
+            String specifying a static label (optional)
+
+        label_fmt: str
+            String format. If not None, str.format(larg) will be applied,
+            passing LabelArgs as unnamed argument. (optional)
+
+        label_fun: callable
+            Callback function that returns string to be used as label. Will
+            be passed an instance of LabelArgs. (optional)
+
+        label_loc: str
+            Location on subplot where label will be placed. Valid values are
+            the same as for Matplotlib legend's `loc` argument.
+
+        Returns
+        -------
+
+        Nothing
+
+        """
 
         pd = PlotDimension(dim, at_idx, at_val, values, label, label_fmt,
                            label_fun, label_loc)
@@ -280,8 +334,14 @@ class NDArrayLattice(object):
                                    values=values)
 
     def set_fixed_dims(self, dim, at_idx):
-        self.fixed_dims = np.atleast_1d(dim)
-        self.fixed_idx = np.atleast_1d(at_idx)
+        dim = np.atleast_1d(dim)
+        at_idx = np.atleast_1d(at_idx)
+
+        if dim.shape != at_idx.shape:
+            raise ValueError('Arguments dim and at_idx must be of equal shape')
+
+        self.fixed_dims = dim
+        self.fixed_idx = at_idx
 
     def reset_fixed_dims(self):
         self.fixed_dims = None
@@ -327,6 +387,22 @@ class NDArrayLattice(object):
 
     def plot(self, data, style=None, trim_iqr=2, ylim=None,
              xlim=None, extend_by=0, identity=False, **kwargs):
+
+        # construct the minimum required shape of array that supports the
+        # specified mapping.
+
+        min_shape = np.zeros((self.ndim, ), dtype=np.int)
+
+        for pd in (self.rows, self.cols, self.xaxis, self.layers):
+            if pd.dim is not None:
+                min_shape[pd.dim] = np.max(pd.at_idx) + 1
+        if self.fixed_dims is not None:
+            for dim, idx in zip(self.fixed_dims, self.fixed_idx):
+                min_shape[dim] = idx + 1
+
+        if not np.all(min_shape <= data.shape):
+            raise ValueError('Expected minimum array shape {:s}, '
+                             'got {:s}'.format(tuple(min_shape), data.shape))
 
         NDArrayLattice._plot(self, data, style, trim_iqr, ylim, xlim,
                              extend_by, identity=identity, **kwargs)
@@ -408,8 +484,8 @@ class NDArrayLattice(object):
                                              vals[PlotMap.IDX_ROW])
                             rtxt = pm.rows.get_label(larg)
 
-                            larg.val = vals[PlotMap.IDX_COL]
-                            larg.idx = aidx[PlotMap.IDX_COL]
+                            larg.value = vals[PlotMap.IDX_COL]
+                            larg.index = aidx[PlotMap.IDX_COL]
                             ctxt = pm.cols.get_label(larg)
 
                             lst = []
