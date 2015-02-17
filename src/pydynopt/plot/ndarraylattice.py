@@ -284,7 +284,7 @@ class NDArrayLattice(object):
             row-wise. (optional)
 
         values: array_like
-            Values corresponding to indexes on `dim'
+            Values corresponding to indexes on `dim' (optional)
 
         label: str
             String specifying a static label (optional)
@@ -330,10 +330,58 @@ class NDArrayLattice(object):
         self.layers = pl
 
     def map_xaxis(self, dim=None, at_idx=None, at_val=None, values=None):
+        """
+        Map data array dimension `dim` to x-axis, using `values` as labels.
+        Indexes to be shown on x-axis can optionally be restricted using
+        `at_idx` or `at_val`.
+
+        Parameters
+        ----------
+
+        dim : int
+            Data array dimension to be mapped to rows.
+
+        at_idx: array_like
+            Indexes along `dim` to be plotted on x-axis. (optional)
+
+        at_val: array_like
+            Values corresponding to indexes along `dim' to be plotted
+            on x-axis. (optional)
+
+        values: array_like
+            Values corresponding to indexes on `dim' (optional)
+
+        Returns
+        -------
+
+        Nothing
+
+        """
         self.xaxis = PlotDimension(dim=dim, at_idx=at_idx, at_val=at_val,
                                    values=values)
 
     def set_fixed_dims(self, dim, at_idx):
+        """
+        Fix data array dimensions to specific indexes. This is useful for
+        high-dimensional arrays that can or should not be mapped to
+        rows/columns/layers. The specified dimensions are fixed across all
+        plots on grid.
+
+        Parameters
+        ----------
+        dim : array_like
+            Data array dimension to fix
+
+        at_idx : array_like
+            Indexes at which dimensions given in `dim` should be held fixed,
+            one for each element given in `dim`
+
+        Returns
+        -------
+
+        Nothing
+
+        """
         dim = np.atleast_1d(dim)
         at_idx = np.atleast_1d(at_idx)
 
@@ -385,8 +433,45 @@ class NDArrayLattice(object):
                      layers=self.layers, template=template)
         return pm
 
-    def plot(self, data, style=None, trim_iqr=2, ylim=None,
-             xlim=None, extend_by=0, identity=False, **kwargs):
+    def plot(self, data, style=None, trim_iqr=2.0, ylim=None,
+             xlim=None, extend_by=0.0, identity=False, **kwargs):
+        """
+        Plot data array using mappings specified prior to calling this method.
+
+        Parameters
+        ----------
+        data: ndarray
+            Data array
+
+        style: pydynopt.plot.styles.AbstractStyle
+            Style to be applied to plot (optional)
+
+        trim_iqr: float
+            If not None, all observations outside of the interval
+            defined by the median +/- `trim_iqr` * IQR will not be plotted. (optional)
+
+        ylim: tuple
+            Plot limits along y-axis (optional)
+
+        xlim: tuple
+            Plot limits along x-axis (optional)
+
+        extend_by: float
+            if not None, limits of x- and y-axis will be extended by a fraction
+            `extend_by' of the limits obtained from the data array. (optional)
+
+        identity: bool
+            Add identity function (45° line) to plot background. (optional)
+
+        kwargs: dict
+            Parameters passed to plot_grid.
+
+        Returns
+        -------
+
+        Nothing
+
+        """
 
         # construct the minimum required shape of array that supports the
         # specified mapping.
@@ -404,15 +489,14 @@ class NDArrayLattice(object):
             raise ValueError('Expected minimum array shape {:s}, '
                              'got {:s}'.format(tuple(min_shape), data.shape))
 
-        NDArrayLattice._plot(self, data, style, trim_iqr, ylim, xlim,
+        NDArrayLattice.plot_arrays(self, data, style, trim_iqr, ylim, xlim,
                              extend_by, identity=identity, **kwargs)
 
 
-
     @staticmethod
-    def _plot(nda, data, style=None, trim_iqr=2, ylim=None,
-              xlim=None, extend_by=0, identity=False,
-              **kwargs):
+    def plot_arrays(nda, data, style=None, trim_iqr=2, ylim=None,
+                    xlim=None, extend_by=0, identity=False,
+                    **kwargs):
 
         if not isinstance(data, (tuple, list)):
             data = (data, )
@@ -541,7 +625,8 @@ class NDArrayLattice(object):
                     ax.set_ylim(ylim)
                 else:
                     yy = np.hstack(tuple(yy))
-                    ymin, ymax = bnd_extend((np.min(yy), np.max(yy)), by=extend_by)
+                    ymin, ymax = bnd_extend((np.min(yy), np.max(yy)),
+                                            by=extend_by)
                     if trim_iqr is not None:
                         q25, q50, q75 = np.percentile(yy, (25, 50, 100))
                         ymin = max(ymin, q50 - trim_iqr * (q75-q25))
