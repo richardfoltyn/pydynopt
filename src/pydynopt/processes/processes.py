@@ -26,7 +26,8 @@ def rouwenhorst(n, mu, rho, sigma):
     return z, Pi
 
 
-def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True, mu0=None):
+def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
+                        mu0=None, inverse=False):
 
     # This function should also work for sparse matrices from scipy.sparse,
     # so do not use .T to get the transpose.
@@ -35,22 +36,32 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True, mu0=No
 
     assert np.all(np.abs(transm.sum(axis=0) - 1) < 1e-12)
 
-    if mu0 is None:
-        # start out with uniform distribution
-        mu0 = np.ones((transm.shape[0], ), dtype=np.float64)/transm.shape[0]
+    if not inverse:
+        if mu0 is None:
+            # start out with uniform distribution
+            mu0 = np.ones((transm.shape[0], ), dtype=np.float64)/transm.shape[0]
 
-    for it in range(maxiter):
-        mu1 = transm.dot(mu0)
+        for it in range(maxiter):
+            mu1 = transm.dot(mu0)
 
-        dv = np.max(np.abs(mu0 - mu1))
-        if dv < tol:
-            return mu1/(np.sum(mu1))
+            dv = np.max(np.abs(mu0 - mu1))
+            if dv < tol:
+                return mu1/(np.sum(mu1))
+            else:
+                mu0 = mu1
         else:
-            mu0 = mu1
+            print('Failed to converge after %d iterations (delta = %e)' %
+                  (it, dv))
+            raise ConvergenceError(it, dv)
     else:
-        print('Failed to converge after %d iterations (delta = %e)' %
-              (it, dv))
-        raise ConvergenceError(it, dv)
+        m = transm - np.identity(transm.shape[0])
+        m[-1] = 1
+        m = np.linalg.inv(m)
+        mu = np.ascontiguousarray(m[:, -1])
+        assert np.abs(np.sum(mu) - 1) < 1e-9
+        mu /= np.sum(mu)
+
+        return mu
 
 
 def markov_moments(states, transm, ergodic_dist=None):
