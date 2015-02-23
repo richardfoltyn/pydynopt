@@ -7,7 +7,7 @@ from brewer2mpl import qualitative
 import itertools as it
 
 
-COLORS = ['#d7191c', '#2b83ba', '#1a9641', '#404040', '#ff7f00']
+# COLORS = ['#d7191c', '#2b83ba', '#1a9641', '#404040', '#ff7f00']
 
 LEG_KWARGS = {'prop': FontProperties(family='serif'), 'framealpha': .7}
 LBL_KWARGS = {'fontproperties': FontProperties(family='serif', size=12)}

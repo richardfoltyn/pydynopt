@@ -11,6 +11,57 @@ import itertools as it
 from .baseplots import plot_grid
 
 
+class PlotAxis(object):
+
+    def __init__(self, dim=None, at_idx=slice(None, None, 1), at_val=None,
+                 values=None):
+
+        self.dim = dim
+
+        if at_val is not None and values is None:
+            raise ValueError('Argument values must not be None if at_val '
+                             'specified')
+
+        if at_val is not None and at_idx is not None and values is not None:
+            try:
+                values = np.atleast_1d(values)
+                at_val2 = np.atleast_1d(values[at_idx])
+                assert np.all(np.atleast_1d(at_val) == at_val2)
+            except:
+                raise ValueError('Arguments at_val and at_idx not compatible')
+
+        if values is not None:
+            values = np.sort(np.atleast_1d(values))
+        if at_idx is not None and not isinstance(at_idx, slice):
+            at_idx = np.atleast_1d(at_idx)
+        if at_val is not None:
+            at_val = np.atleast_1d(at_val)
+
+        if values is not None:
+            if at_val is not None:
+                at_idx = np.searchsorted(values, at_val)
+                if not np.all(values[at_idx] == at_val):
+                    raise ValueError('Items in at_val cannot be matched '
+                                     'to indexes in values array.')
+            elif at_idx is not None:
+                at_val = values[at_idx]
+            else:
+                at_idx = np.arange(len(values))
+                at_val = values
+
+        if at_idx is None:
+            raise ValueError('Insufficient information to construct array '
+                             'indices')
+
+        # Store this as tuple, so we can use simple indexing with numpy arrays.
+        if not isinstance(at_idx, slice):
+            self.at_idx = tuple(at_idx)
+        else:
+            self.at_idx = at_idx
+        self.at_val = at_val
+        self.values = values
+
+
 class PlotDimension(object):
 
     def __init__(self, dim=None, at_idx=None, at_val=None, values=None,
@@ -33,7 +84,7 @@ class PlotDimension(object):
         if at_val is not None and at_idx is not None and values is not None:
             try:
                 values = np.atleast_1d(values)
-                at_val2 = values[np.atleast_1d(at_idx)]
+                at_val2 = np.atleast_1d(values[at_idx])
                 assert np.all(np.atleast_1d(at_val) == at_val2)
             except:
                 raise ValueError('Arguments at_val and at_idx not compatible')
@@ -122,9 +173,13 @@ class PlotMap(object):
         cols = cols if cols is not None else PlotDimension()
         layers = layers if layers is not None else PlotLayer()
 
-        for arg in (xaxis, rows, cols):
+        for arg in (rows, cols):
             if not isinstance(arg, PlotDimension):
                 raise ValueError('Argument must be of type PlotDimension')
+        if not isinstance(layers, PlotLayer):
+            raise ValueError('\'layer\' argument must be of type PlotLayer')
+        if not isinstance(xaxis, PlotAxis):
+            raise ValueError('\'xaxis\' argument must be of type PlotAxis')
 
         self.rows, self.cols, self.layers, self.xaxis = rows, cols, layers, xaxis
         nrow, ncol, nlyr = len(rows), len(cols), len(layers)
@@ -147,21 +202,23 @@ class PlotMap(object):
         for i, (ridx, rval) in enumerate(self.rows):
             for j, (cidx, cval) in enumerate(self.cols):
                 for k, (lidx, lval) in enumerate(self.layers):
-                    lst = template.copy()
+                    slice_ijk = template.copy()
                     if ridx is not None:
-                        lst[self.rows.dim] = ridx
+                        slice_ijk[self.rows.dim] = ridx
                     if cidx is not None:
-                        lst[self.cols.dim] = cidx
+                        slice_ijk[self.cols.dim] = cidx
                     if lidx is not None:
-                        lst[self.layers.dim] = lidx
+                        slice_ijk[self.layers.dim] = lidx
                     if self.xaxis.dim is not None:
-                        lst[self.xaxis.dim] = tuple(self.xaxis.at_idx)
+                        slice_ijk[self.xaxis.dim] = self.xaxis.at_idx
 
-                    if lst == [0] and self.xaxis.at_idx is not None:
-                        lst = tuple(self.xaxis.at_idx)
+                    if ndim != 1:
+                        slice_ijk = tuple(slice_ijk)
+                    else:
+                        slice_ijk = self.xaxis.at_idx
 
                     indexes[i, j, k] = ridx, cidx, lidx
-                    slices[i, j, k] = tuple(lst)
+                    slices[i, j, k] = slice_ijk
                     values[i, j, k] = rval, cval, lval
 
         self.slices = slices
@@ -291,7 +348,7 @@ class NDArrayLattice(object):
         self.fixed_dims = None
         self.fixed_idx = None
 
-    def map_rows(self, dim, at_idx=None, at_val=None, values=None,
+    def map_rows(self, dim=None, at_idx=None, at_val=None, values=None,
                  label=None, label_fmt=None, label_fun=None,
                  label_loc='lower left'):
         """
@@ -363,7 +420,8 @@ class NDArrayLattice(object):
 
         self.layers = pl
 
-    def map_xaxis(self, dim=None, at_idx=None, at_val=None, values=None):
+    def map_xaxis(self, dim=None, at_idx=slice(None, None, 1), at_val=None,
+                  values=None):
         """
         Map data array dimension `dim` to x-axis, using `values` as labels.
         Indexes to be shown on x-axis can optionally be restricted using
@@ -391,8 +449,8 @@ class NDArrayLattice(object):
         Nothing
 
         """
-        self.xaxis = PlotDimension(dim=dim, at_idx=at_idx, at_val=at_val,
-                                   values=values)
+        self.xaxis = PlotAxis(dim=dim, at_idx=at_idx, at_val=at_val,
+                              values=values)
 
     def set_fixed_dims(self, dim, at_idx):
         """
@@ -439,7 +497,7 @@ class NDArrayLattice(object):
         self.cols = PlotDimension()
 
     def reset_xaxis(self):
-        self.xaxis = PlotDimension()
+        self.xaxis = PlotAxis()
 
 
     @property
@@ -512,9 +570,12 @@ class NDArrayLattice(object):
 
         min_shape = np.zeros((self.ndim, ), dtype=np.int)
 
-        for pd in (self.rows, self.cols, self.xaxis, self.layers):
+        for pd in (self.rows, self.cols, self.layers):
             if pd.dim is not None:
                 min_shape[pd.dim] = np.max(pd.at_idx) + 1
+        x = self.xaxis
+        if x.dim is not None and not isinstance(x.at_idx, slice):
+            min_shape[x.dim] = np.max(x.at_idx)
         if self.fixed_dims is not None:
             for dim, idx in zip(self.fixed_dims, self.fixed_idx):
                 min_shape[dim] = idx + 1
