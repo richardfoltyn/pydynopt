@@ -38,47 +38,51 @@ class PlotDimension(object):
             except:
                 raise ValueError('Arguments at_val and at_idx not compatible')
 
-        if dim is not None:
-            if values is not None:
-                values = np.sort(np.atleast_1d(values))
-            if at_idx is not None:
-                if isinstance(at_idx, slice):
-                    step = at_idx.step
-                    at_idx = np.arange(at_idx.start, at_idx.stop, step)
-                else:
-                    at_idx = np.atleast_1d(at_idx)
+        if values is not None:
+            values = np.sort(np.atleast_1d(values))
+        if at_idx is not None:
+            if isinstance(at_idx, slice):
+                step = at_idx.step
+                at_idx = np.arange(at_idx.start, at_idx.stop, step)
+            else:
+                at_idx = np.atleast_1d(at_idx)
+        if at_val is not None:
+            at_val = np.atleast_1d(at_val)
+
+        if values is not None:
             if at_val is not None:
-                at_val = np.atleast_1d(at_val)
+                at_idx = np.searchsorted(values, at_val)
+                if not np.all(values[at_idx] == at_val):
+                    raise ValueError('Items in at_val cannot be matched '
+                                     'to indexes in values array.')
+            elif at_idx is not None:
+                at_val = values[at_idx]
+            else:
+                at_idx = np.arange(len(values))
+                at_val = values
 
-            if values is not None:
-                if at_val is not None:
-                    at_idx = np.searchsorted(values, at_val)
-                    if not np.all(values[at_idx] == at_val):
-                        raise ValueError('Items in at_val cannot be matched '
-                                         'to indexes in values array.')
-                elif at_idx is not None:
-                    at_val = values[at_idx]
-                else:
-                    at_idx = np.arange(len(values))
-                    at_val = values
-
-            if at_idx is None:
-                raise ValueError('Insufficient information to obtain array '
-                                 'indices for dimension {:d}'.format(dim))
-        else:
-            at_idx = (None, )
-            at_val = (None, )
-            values = (None, )
+        if dim is not None and at_idx is None:
+            raise ValueError('Insufficient information to obtain array '
+                             'indices for dimension {:d}'.format(dim))
 
         self.at_idx = at_idx
         self.at_val = at_val
         self.values = values
 
     def __len__(self):
-        return len(self.at_idx)
+        if self.at_idx is None:
+            # Length is as least implicitly 1, even if nothing is specified,
+            # since each plot must have at least one row, one column, one layer
+            # and a point on the x-axis.
+            return 1
+        else:
+            return len(self.at_idx)
 
     def __iter__(self):
-        return zip(self.at_idx, self.at_val)
+        if self.at_idx is None:
+            return zip((None, ), (None, ))
+        else:
+            return zip(self.at_idx, self.at_val)
 
     def get_label(self, largs):
         if self.label_fun is not None:
@@ -152,6 +156,9 @@ class PlotMap(object):
                         lst[self.layers.dim] = lidx
                     if self.xaxis.dim is not None:
                         lst[self.xaxis.dim] = tuple(self.xaxis.at_idx)
+
+                    if lst == [0] and self.xaxis.at_idx is not None:
+                        lst = tuple(self.xaxis.at_idx)
 
                     indexes[i, j, k] = ridx, cidx, lidx
                     slices[i, j, k] = tuple(lst)
@@ -348,7 +355,7 @@ class NDArrayLattice(object):
                            label_fun, label_loc)
         self.cols = pd
 
-    def map_layers(self, dim, at_idx=None, at_val=None, values=None,
+    def map_layers(self, dim=None, at_idx=None, at_val=None, values=None,
                    label=None, label_fmt=None, label_fun=None, **kwargs):
 
         pl = PlotLayer(dim, at_idx, at_val, values, label, label_fmt,

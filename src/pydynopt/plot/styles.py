@@ -45,7 +45,7 @@ class AbstractStyle(object):
 
 class DefaultStyle(AbstractStyle):
 
-    LINESTYLES = ['-', '--', '-', '--', '-.']
+    LINESTYLES = ['-', '--', '-', '--']
     ALPHAS = [.7, 0.9, 0.7, 1.0]
 
     def __init__(self):
