@@ -70,8 +70,9 @@ class PlotDimension(object):
 
         self.dim = dim
         self.label_fmt = label_fmt
-        self.label_loc = label_loc
         self.label = label
+        self.label_loc = label_loc if label or label_fmt or label_fun else None
+
 
         if label_fun is not None and not isinstance(label_fun, Callable):
             raise ValueError('Argument label_fun not callable')
@@ -100,6 +101,11 @@ class PlotDimension(object):
         if at_val is not None:
             at_val = np.atleast_1d(at_val)
 
+        if at_val is not None and at_idx is not None:
+            if len(at_val) != len(at_idx):
+                raise ValueError('Arguments at_idx and at_val must be of same '
+                                 'length!')
+
         if values is not None:
             if at_val is not None:
                 at_idx = np.searchsorted(values, at_val)
@@ -111,6 +117,15 @@ class PlotDimension(object):
             else:
                 at_idx = np.arange(len(values))
                 at_val = values
+        else:
+            if at_val is not None:
+                values = at_val
+            elif at_idx is not None:
+                values = np.arange(len(at_idx))
+
+        if at_val is None:
+            if at_idx is not None:
+                at_val = np.arange(len(at_idx))
 
         if dim is not None and at_idx is None:
             raise ValueError('Insufficient information to obtain array '
@@ -312,7 +327,7 @@ class LabelArgs:
     row : int
         Current row's index on plot grid
 
-    col : int
+    column : int
         Current column's index on plot grid
 
     layer : int
@@ -326,9 +341,9 @@ class LabelArgs:
         Current value corresponding to `index` (None if not mapped)
 
     """
-    def __init__(self, row, col, layer, index=None, value=None):
+    def __init__(self, row, column, layer, index=None, value=None):
         self.row = row
-        self.col = col
+        self.column = column
         self.layer = layer
         self.index = index
         self.value = value
@@ -343,7 +358,7 @@ class NDArrayLattice(object):
     def __init__(self):
         self.rows = PlotDimension()
         self.cols = PlotDimension()
-        self.xaxis = PlotDimension()
+        self.xaxis = PlotAxis()
         self.layers = PlotLayer()
         self.fixed_dims = None
         self.fixed_idx = None
