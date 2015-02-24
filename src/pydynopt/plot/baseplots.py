@@ -4,8 +4,6 @@ __author__ = 'Richard Foltyn'
 
 import numpy as np
 import matplotlib.pyplot as plt
-import collections
-import itertools as it
 
 from .styles import DefaultStyle
 
@@ -19,7 +17,7 @@ def plot_grid(fun, nrow=1, ncol=1,
               outfile=None, style=None, *args, **kwargs):
 
     if column_title is None:
-        column_title = np.ndarray((0,), dtype=object)
+        column_title = np.ndarray((nrow, ), dtype=object)
 
     column_title = np.atleast_1d(column_title)
 
@@ -45,9 +43,9 @@ def plot_grid(fun, nrow=1, ncol=1,
 
     for i in range(nrow):
         for j in range(ncol):
-            if j == 0:
-                if i < column_title.shape[0] and column_title[i, j]:
-                    axes[i, j].set_title(column_title[i, j], **style.title)
+            if i == 0:
+                if j < column_title.shape[0] and column_title[j]:
+                    axes[i, j].set_title(column_title[j], **style.title)
 
             if xlim is not None:
                 axes[i, j].set_xlim(xlim)
