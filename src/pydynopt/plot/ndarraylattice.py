@@ -150,13 +150,19 @@ class PlotDimension(object):
         else:
             return zip(self.at_idx, self.at_val)
 
-    def get_label(self, largs):
+    def get_label(self, largs, idx):
         if self.label_fun is not None:
             lbl = self.label_fun(largs)
         elif self.label_fmt:
             lbl = self.label_fmt.format(largs)
         elif self.label:
-            lbl = self.label
+            if isinstance(self.label, str):
+                lbl = self.label
+            else:
+                try:
+                    lbl = self.label[idx]
+                except (TypeError, IndexError):
+                    pass
         else:
             lbl = None
 
@@ -596,8 +602,8 @@ class NDArrayLattice(object):
                 min_shape[dim] = idx + 1
 
         if not np.all(min_shape <= data.shape):
-            raise ValueError('Expected minimum array shape {:s}, '
-                             'got {:s}'.format(tuple(min_shape), data.shape))
+            raise ValueError('Expected minimum array shape {}, '
+                             'got {}'.format(tuple(min_shape), data.shape))
 
         NDArrayLattice.plot_arrays(self, data, style, trim_iqr, ylim, xlim,
                              extend_by, identity=identity, **kwargs)
@@ -664,7 +670,7 @@ class NDArrayLattice(object):
 
                         larg = LabelArgs(i, j, k, aidx[PlotMap.IDX_LAYER],
                                          vals[PlotMap.IDX_LAYER])
-                        lbl = pm.layers.get_label(larg)
+                        lbl = pm.layers.get_label(larg, k)
 
                         plot_kw = {'ls': lstyle[k], 'lw': lwidth[k],
                                    'c': colors[k], 'alpha': alphas[k]}
@@ -676,11 +682,11 @@ class NDArrayLattice(object):
                         if k == 0:
                             larg = LabelArgs(i, j, k, aidx[PlotMap.IDX_ROW],
                                              vals[PlotMap.IDX_ROW])
-                            rtxt = pm.rows.get_label(larg)
+                            rtxt = pm.rows.get_label(larg, i)
 
                             larg.value = vals[PlotMap.IDX_COL]
                             larg.index = aidx[PlotMap.IDX_COL]
-                            ctxt = pm.cols.get_label(larg)
+                            ctxt = pm.cols.get_label(larg, j)
 
                             lst = []
                             if rtxt or ctxt:
