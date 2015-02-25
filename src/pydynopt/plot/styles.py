@@ -64,12 +64,15 @@ class DefaultStyle(AbstractStyle):
         self.ylabel = LBL_KWARGS
         self.figure = {'tight_layout': True}
 
+        self.linestyles = DefaultStyle.LINESTYLES
+        self.alphas = DefaultStyle.ALPHAS
+
     def color_seq(self, num):
         nn = max(3, num)
         return tuple(qualitative.Set1[nn].hex_colors[:num])
 
     def lstyle_seq(self, num):
-        ls = it.cycle(DefaultStyle.LINESTYLES)
+        ls = it.cycle(self.linestyles)
         return tuple(next(ls) for x in range(num))
 
     def lwidth_seq(self, num):
@@ -77,5 +80,5 @@ class DefaultStyle(AbstractStyle):
         return tuple(next(lw) for x in range(num))
 
     def alpha_seq(self, num):
-        alph = it.cycle(DefaultStyle.ALPHAS)
+        alph = it.cycle(self.alphas)
         return tuple(next(alph) for x in range(num))

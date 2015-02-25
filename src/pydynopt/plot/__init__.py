@@ -5,3 +5,4 @@ __author__ = 'Richard Foltyn'
 from .baseplots import plot_grid
 
 from .ndarraylattice import NDArrayLattice
+from .styles import DefaultStyle
