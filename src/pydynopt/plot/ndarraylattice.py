@@ -7,6 +7,7 @@ import numpy as np
 
 from collections import Callable
 import itertools as it
+from copy import copy
 
 from .baseplots import plot_grid
 
@@ -16,50 +17,52 @@ class PlotAxis(object):
     def __init__(self, dim=None, at_idx=slice(None, None, 1), at_val=None,
                  values=None):
 
+        self.indexes = None
+        self.values = None
         self.dim = dim
 
-        if at_val is not None and values is None:
-            raise ValueError('Argument values must not be None if at_val '
-                             'specified')
+        self.update(at_idx, at_val, values)
 
-        if at_val is not None and at_idx is not None and values is not None:
-            try:
-                values = np.atleast_1d(values)
-                at_val2 = np.atleast_1d(values[at_idx])
-                assert np.all(np.atleast_1d(at_val) == at_val2)
-            except:
-                raise ValueError('Arguments at_val and at_idx not compatible')
+    def update(self, at_idx=slice(None, None, 1), at_val=None, values=None):
+        """
 
-        if values is not None:
-            values = np.sort(np.atleast_1d(values))
-        if at_idx is not None and not isinstance(at_idx, slice):
-            at_idx = np.atleast_1d(at_idx)
+        Initialization procedure:
+
+        The same as for PlotDimension, except that we do not expand at_idx if it
+        is a slice instance.
+        """
+
         if at_val is not None:
             at_val = np.atleast_1d(at_val)
-
         if values is not None:
-            if at_val is not None:
+            values = np.atleast_1d(values)
+        if at_idx is not None:
+            if not isinstance(at_idx, slice):
+                at_idx = np.atleast_1d(at_idx)
+
+        if at_val is not None:
+            if at_idx is not None:
+                if not isinstance(at_idx, slice) and \
+                        (at_val.shape != at_idx.shape):
+                    raise ValueError('Arguments at_val and at_idx not '
+                                     'compatible')
+            elif values is not None:
                 at_idx = np.searchsorted(values, at_val)
-                if not np.all(values[at_idx] == at_val):
-                    raise ValueError('Items in at_val cannot be matched '
-                                     'to indexes in values array.')
-            elif at_idx is not None:
-                at_val = values[at_idx]
             else:
-                at_idx = np.arange(len(values))
-                at_val = values
+                at_idx = np.arange(len(at_val))
+        elif at_idx is not None:
+            if values is not None:
+                at_val = values[at_idx]
+        elif values is not None:
+            at_val = values
+            at_idx = np.arange(len(values))
 
-        if at_idx is None:
-            raise ValueError('Insufficient information to construct array '
-                             'indices')
+        if self.dim is not None and at_idx is None:
+            raise ValueError('Insufficient information to obtain array '
+                             'indices for dimension {:d}'.format(self.dim))
 
-        # Store this as tuple, so we can use simple indexing with numpy arrays.
-        if not isinstance(at_idx, slice):
-            self.at_idx = tuple(at_idx)
-        else:
-            self.at_idx = at_idx
-        self.at_val = at_val
-        self.values = values
+        self.indexes = at_idx
+        self.values = at_val
 
 
 class PlotDimension(object):
@@ -68,89 +71,90 @@ class PlotDimension(object):
                  label=None, label_fmt=None, label_fun=None,
                  label_loc='lower right'):
 
-        self.dim = dim
         self.label_fmt = label_fmt
         self.label = label
         self.label_loc = label_loc if label or label_fmt or label_fun else None
-
 
         if label_fun is not None and not isinstance(label_fun, Callable):
             raise ValueError('Argument label_fun not callable')
         self.label_fun = label_fun
 
-        if at_val is not None and values is None:
-            raise ValueError('Argument values must not be None if at_val '
-                             'specified')
+        self.dim = dim
+        self.values = None
+        self.indexes = None
 
-        if at_val is not None and at_idx is not None and values is not None:
-            try:
-                values = np.atleast_1d(values)
-                at_val2 = np.atleast_1d(values[at_idx])
-                assert np.all(np.atleast_1d(at_val) == at_val2)
-            except:
-                raise ValueError('Arguments at_val and at_idx not compatible')
+        self.update(at_idx, at_val, values)
 
+    def update(self, at_idx=None, at_val=None, values=None):
+        """
+
+        Initialization procedure:
+
+        1) at_val takes highest precedence. If specified:
+            - `values` argument is ignored
+            - if at_idx given -> check for consistency
+            - if at_idx not given but values given -> impute from values
+            - if neither at_idx nor values given -> at_idx is sequence along
+                    at_val
+        2) at_idx specified, at_val not specified:
+            - if values not given -> ignore
+            - if values given: let at_val = values[at_idx]
+        3) `values` specified, at_idx and at_val not specified:
+            - set at_val = values and at_idx = range(len(values))
+        """
+
+        if at_val is not None:
+            at_val = np.atleast_1d(at_val)
         if values is not None:
-            values = np.sort(np.atleast_1d(values))
+            values = np.atleast_1d(values)
         if at_idx is not None:
             if isinstance(at_idx, slice):
+                if at_idx.start is None or at_idx.stop is None:
+                    raise ValueError('at_idx does not support slices without '
+                                     'start/stop values!')
                 step = at_idx.step
                 at_idx = np.arange(at_idx.start, at_idx.stop, step)
             else:
                 at_idx = np.atleast_1d(at_idx)
+
         if at_val is not None:
-            at_val = np.atleast_1d(at_val)
-
-        if at_val is not None and at_idx is not None:
-            if len(at_val) != len(at_idx):
-                raise ValueError('Arguments at_idx and at_val must be of same '
-                                 'length!')
-
-        if values is not None:
-            if at_val is not None:
+            if at_idx is not None:
+                if at_val.shape != at_idx.shape:
+                    raise ValueError('Arguments at_val and at_idx not '
+                                     'compatible')
+            elif values is not None:
                 at_idx = np.searchsorted(values, at_val)
-                if not np.all(values[at_idx] == at_val):
-                    raise ValueError('Items in at_val cannot be matched '
-                                     'to indexes in values array.')
-            elif at_idx is not None:
+            else:
+                at_idx = np.arange(len(at_val))
+        elif at_idx is not None:
+            if values is not None:
                 at_val = values[at_idx]
             else:
-                at_idx = np.arange(len(values))
-                at_val = values
-        else:
-            if at_val is not None:
-                values = at_val
-            elif at_idx is not None:
-                values = np.arange(len(at_idx))
+                at_val = tuple([None] * len(at_idx))
+        elif values is not None:
+            at_val = values
+            at_idx = np.arange(len(values))
 
-        if at_val is None:
-            if at_idx is not None:
-                at_val = np.arange(len(at_idx))
-
-        if dim is not None and at_idx is None:
-            raise ValueError('Insufficient information to obtain array '
-                             'indices for dimension {:d}'.format(dim))
-
-        self.at_idx = at_idx
-        self.at_val = at_val
-        self.values = values
+        self.indexes = at_idx
+        self.values = at_val
 
     def __len__(self):
-        if self.at_idx is None:
+        if self.indexes is None:
             # Length is as least implicitly 1, even if nothing is specified,
             # since each plot must have at least one row, one column, one layer
             # and a point on the x-axis.
             return 1
         else:
-            return len(self.at_idx)
+            return len(self.indexes)
 
     def __iter__(self):
-        if self.at_idx is None:
+        if self.indexes is None:
             return zip((None, ), (None, ))
         else:
-            return zip(self.at_idx, self.at_val)
+            return zip(self.indexes, self.values)
 
     def get_label(self, largs, idx):
+        lbl = None
         if self.label_fun is not None:
             lbl = self.label_fun(largs)
         elif self.label_fmt:
@@ -163,8 +167,6 @@ class PlotDimension(object):
                     lbl = self.label[idx]
                 except (TypeError, IndexError):
                     pass
-        else:
-            lbl = None
 
         return lbl
 
@@ -231,12 +233,12 @@ class PlotMap(object):
                     if lidx is not None:
                         slice_ijk[self.layers.dim] = lidx
                     if self.xaxis.dim is not None:
-                        slice_ijk[self.xaxis.dim] = self.xaxis.at_idx
+                        slice_ijk[self.xaxis.dim] = self.xaxis.indexes
 
                     if ndim != 1:
                         slice_ijk = tuple(slice_ijk)
                     else:
-                        slice_ijk = self.xaxis.at_idx
+                        slice_ijk = self.xaxis.indexes
 
                     indexes[i, j, k] = ridx, cidx, lidx
                     slices[i, j, k] = slice_ijk
@@ -520,12 +522,11 @@ class NDArrayLattice(object):
     def reset_xaxis(self):
         self.xaxis = None
 
-
     @property
     def ndim(self):
         ndim = 0
         for z in (self.rows, self.cols, self.xaxis, self.layers):
-            if z.dim is not None:
+            if z and z.dim is not None:
                 ndim = max(ndim, z.dim)
 
         if self.fixed_dims is not None:
@@ -541,8 +542,28 @@ class NDArrayLattice(object):
             for dim, idx in zip(self.fixed_dims, self.fixed_idx):
                 template[dim] = idx
 
-        pm = PlotMap(xaxis=self.xaxis, rows=self.rows, cols=self.cols,
-                     layers=self.layers, template=template)
+        xaxis = self.xaxis if self.xaxis is not None else PlotAxis()
+        rows = self.rows if self.rows is not None else PlotDimension()
+        cols = self.cols if self.cols is not None else PlotDimension()
+        layers = self.layers if self.layers is not None else PlotLayer()
+
+        if rows.dim is not None:
+            if rows.indexes is None:
+                rows = copy(rows)
+                rows.update(at_idx=np.arange(data.shape[rows.dim]))
+
+        if cols.dim is not None:
+            if cols.indexes is None:
+                cols = copy(cols)
+                cols.update(at_idx=np.arange(data.shape[cols.dim]))
+
+        if layers.dim is not None:
+            if layers.indexes is None:
+                layers = copy(layers)
+                layers.update(at_idx=np.arange(data.shape[layers.dim]))
+
+        pm = PlotMap(xaxis=xaxis, rows=rows, cols=cols, layers=layers,
+                     template=template)
         return pm
 
     def plot(self, data, style=None, trim_iqr=2.0, ylim=None,
@@ -591,11 +612,15 @@ class NDArrayLattice(object):
         min_shape = np.zeros((self.ndim, ), dtype=np.int)
 
         for pd in (self.rows, self.cols, self.layers):
-            if pd.dim is not None:
-                min_shape[pd.dim] = np.max(pd.at_idx) + 1
+            if pd and pd.dim is not None and pd.indexes is not None:
+                min_shape[pd.dim] = np.max(pd.indexes) + 1
         x = self.xaxis
-        if x.dim is not None and not isinstance(x.at_idx, slice):
-            min_shape[x.dim] = np.max(x.at_idx)
+        if x and x.dim is not None:
+            if isinstance(x.indexes, slice):
+                if x.indexes.stop is not None:
+                    min_shape[x.dim] = x.indexes.stop
+            else:
+                min_shape[x.dim] = np.max(x.indexes)
         if self.fixed_dims is not None:
             for dim, idx in zip(self.fixed_dims, self.fixed_idx):
                 min_shape[dim] = idx + 1
