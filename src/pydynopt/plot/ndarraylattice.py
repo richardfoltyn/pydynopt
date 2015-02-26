@@ -362,14 +362,14 @@ class NDArrayLattice(object):
     """
 
     def __init__(self):
-        self.rows = PlotDimension()
-        self.cols = PlotDimension()
-        self.xaxis = PlotAxis()
-        self.layers = PlotLayer()
+        self.rows = None
+        self.cols = None
+        self.xaxis = None
+        self.layers = None
         self.fixed_dims = None
         self.fixed_idx = None
 
-    def map_rows(self, dim=None, at_idx=None, at_val=None, values=None,
+    def map_rows(self, dim, at_idx=None, at_val=None, values=None,
                  label=None, label_fmt=None, label_fun=None,
                  label_loc='lower left'):
         """
@@ -509,16 +509,16 @@ class NDArrayLattice(object):
         self.fixed_idx = None
 
     def reset_layers(self):
-        self.layers = PlotLayer()
+        self.layers = None
 
     def reset_rows(self):
-        self.rows = PlotDimension()
+        self.rows = None
 
     def reset_cols(self):
-        self.cols = PlotDimension()
+        self.cols = None
 
     def reset_xaxis(self):
-        self.xaxis = PlotAxis()
+        self.xaxis = None
 
 
     @property
@@ -534,11 +534,10 @@ class NDArrayLattice(object):
         ndim += 1
         return ndim
 
-    def get_plot_map(self):
+    def get_plot_map(self, data):
 
-        template = None
+        template = [0] * max(1, data.ndim)
         if self.fixed_dims is not None:
-            template = [0] * self.ndim
             for dim, idx in zip(self.fixed_dims, self.fixed_idx):
                 template[dim] = idx
 
@@ -619,7 +618,7 @@ class NDArrayLattice(object):
 
         ndat = len(data)
         nda = tuple(np.atleast_1d(nda))
-        pmaps = tuple(z.get_plot_map() for z in nda)
+        pmaps = tuple(z.get_plot_map(d) for z, d in zip(nda, data))
         if ndat > 1:
             if len(pmaps) == 1:
                 pmaps = tuple(it.repeat(pmaps[0], ndat))
