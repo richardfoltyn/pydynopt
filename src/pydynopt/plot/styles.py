@@ -5,6 +5,7 @@ __author__ = 'Richard Foltyn'
 from matplotlib.font_manager import FontProperties
 from brewer2mpl import qualitative
 import itertools as it
+import numpy as np
 
 
 # COLORS = ['#d7191c', '#2b83ba', '#1a9641', '#404040', '#ff7f00']
@@ -22,6 +23,54 @@ GRID_KWARGS = {'color': 'black', 'alpha': 0.6, 'zorder': -1000}
 TEXT_KWARGS = {'fontsize': 14, 'alpha': 1.0, 'backgroundcolor': 'white',
                'zorder': -5,
                'fontproperties': FontProperties(family='serif')}
+
+
+class Colors(object):
+    def __init__(self, colors=None):
+        self.colors = colors
+        self.cache = None
+
+    def __getitem__(self, item):
+        if not self.cache or item >= len(self.cache):
+            nn = max(3, item + 1)
+            self.cache = tuple(qualitative.Set1[nn].hex_colors[:item + 1])
+        return self.cache[item]
+
+
+class LineStyle(object):
+    def __init__(self, linestyles):
+        self.linestyles = linestyles
+        self.cache = None
+
+    def __getitem__(self, item):
+        if not self.cache or item >= len(self.cache):
+            ls = it.cycle(self.linestyles)
+            self.cache = tuple(next(ls) for x in range(item + 1))
+        return self.cache[item]
+
+
+class LineWidth(object):
+    def __init__(self, linewidths):
+        self.linewidths = linewidths
+        self.cache = None
+
+    def __getitem__(self, item):
+        if not self.cache or item >= len(self.cache):
+            lw = it.cycle(self.linewidths)
+            self.cache = tuple(next(lw) for x in range(item + 1))
+        return self.cache[item]
+
+
+class Transparency(object):
+    def __init__(self, alphas):
+        self.alphas = alphas
+        self.cache = None
+
+    def __getitem__(self, item):
+        if not self.cache or item >= len(self.cache):
+            alph = it.cycle(self.alphas)
+            self.cache = tuple(next(alph) for x in range(item + 1))
+        return self.cache[item]
 
 
 class AbstractStyle(object):
@@ -47,12 +96,12 @@ class DefaultStyle(AbstractStyle):
 
     LINESTYLES = ['-', '--', '-', '--']
     ALPHAS = [.7, 0.9, 0.7, 1.0]
+    LINEWIDTH = [2]
 
     def __init__(self):
 
         super(DefaultStyle, self).__init__()
 
-        self.linewidth = 2
         self.cell_size = 6
 
         self.grid = GRID_KWARGS
@@ -64,21 +113,55 @@ class DefaultStyle(AbstractStyle):
         self.ylabel = LBL_KWARGS
         self.figure = {'tight_layout': True}
 
-        self.linestyles = DefaultStyle.LINESTYLES
-        self.alphas = DefaultStyle.ALPHAS
+        self._color = None
+        self._linewidth = None
+        self._linestyle = None
+        self._alpha = None
 
-    def color_seq(self, num):
-        nn = max(3, num)
-        return tuple(qualitative.Set1[nn].hex_colors[:num])
+    @property
+    def color(self):
+        if self._color is None:
+            self._color = Colors()
+        return self._color
 
-    def lstyle_seq(self, num):
-        ls = it.cycle(self.linestyles)
-        return tuple(next(ls) for x in range(num))
+    @property
+    def linewidth(self):
+        if self._linewidth is None:
+            self._linewidth = LineWidth(DefaultStyle.LINEWIDTH)
+        return self._linewidth
 
-    def lwidth_seq(self, num):
-        lw = it.cycle([self.linewidth])
-        return tuple(next(lw) for x in range(num))
+    @linewidth.setter
+    def linewidth(self, value):
+        if np.isscalar(value):
+            value = (value, )
+        else:
+            value = tuple(value)
+        self._linewidth = LineWidth(value)
 
-    def alpha_seq(self, num):
-        alph = it.cycle(self.alphas)
-        return tuple(next(alph) for x in range(num))
+    @property
+    def linestyle(self):
+        if self._linestyle is None:
+            self._linestyle = LineStyle(DefaultStyle.LINESTYLES)
+        return self._linestyle
+
+    @linestyle.setter
+    def linestyle(self, value):
+        if np.isscalar(value):
+            value = (value, )
+        else:
+            value = tuple(value)
+        self._linestyle = LineStyle(value)
+
+    @property
+    def alpha(self):
+        if self._alpha is None:
+            self._alpha = Transparency(DefaultStyle.ALPHAS)
+        return self._alpha
+
+    @alpha.setter
+    def alpha(self, value):
+        if np.isscalar(value):
+            value = (value, )
+        else:
+            value = tuple(value)
+        self._alpha = Transparency(value)

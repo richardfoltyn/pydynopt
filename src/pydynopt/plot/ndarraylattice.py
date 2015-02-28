@@ -652,7 +652,7 @@ class NDArrayLattice(object):
 
         nrow = max(pm.nrow for pm in pmaps)
         ncol = max(pm.ncol for pm in pmaps)
-        nlayer = max(pm.nlayer for pm in pmaps)
+        nlayer = sum(pm.nlayer for pm in pmaps)
 
         xmin, xmax = np.inf, -np.inf
 
@@ -660,11 +660,16 @@ class NDArrayLattice(object):
         trim_iqr = float(trim_iqr)
 
         if style is None:
-            style = DefaultStyle()
-        colors = style.color_seq(nlayer)
-        lstyle = style.lstyle_seq(nlayer)
-        alphas = style.alpha_seq(nlayer)
-        lwidth = style.lwidth_seq(nlayer)
+            style = (DefaultStyle(), )
+        else:
+            style = tuple(np.array(style))
+
+        if len(style) != ndat:
+            if len(style) == 1:
+                style *= ndat
+            else:
+                raise ValueError('style parameter cannot be broadcast to '
+                                 'match length of data arrays.')
 
         def func(ax, idx):
             i, j = idx
@@ -673,7 +678,7 @@ class NDArrayLattice(object):
 
             annotations = np.ndarray((3, 3), dtype=object)
 
-            for idx_dat, (dat, pm) in enumerate(zip(data, pmaps)):
+            for idx_dat, (dat, pm, st) in enumerate(zip(data, pmaps, style)):
                 if i < pm.nrow and j < pm.ncol:
                     for k, sl_k in enumerate(pm.slices[i, j]):
                         idx_plt = idx + (k, )
@@ -696,8 +701,10 @@ class NDArrayLattice(object):
                                          vals[PlotMap.IDX_LAYER])
                         lbl = pm.layers.get_label(larg, k)
 
-                        plot_kw = {'ls': lstyle[k], 'lw': lwidth[k],
-                                   'c': colors[k], 'alpha': alphas[k]}
+                        plot_kw = {'ls': st.linestyle[k],
+                                   'lw': st.linewidth[k],
+                                   'c': st.color[k],
+                                   'alpha': st.alpha[k]}
                         if layer.plot_kw:
                             plot_kw.update(normalize_plot_args(layer.plot_kw))
 
@@ -736,7 +743,7 @@ class NDArrayLattice(object):
                     lst = annotations[ii, jj]
                     if lst:
                         txt_kwargs = loc_kwargs[ii, jj].copy()
-                        txt_kwargs.update(style.text)
+                        txt_kwargs.update(style[0].text)
                         y = txt_kwargs['y']
                         dy = 1 if y < 0.5 else -1
                         txt_kwargs['transform'] = ax.transAxes
@@ -774,4 +781,4 @@ class NDArrayLattice(object):
 
                     ax.set_ylim(ymin, ymax)
 
-        plot_grid(func, nrow=nrow, ncol=ncol, style=style, **kwargs)
+        plot_grid(func, nrow=nrow, ncol=ncol, style=style[0], **kwargs)
