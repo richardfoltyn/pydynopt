@@ -662,7 +662,7 @@ class NDArrayLattice(object):
         if style is None:
             style = (DefaultStyle(), )
         else:
-            style = tuple(np.array(style))
+            style = tuple(np.atleast_1d(style))
 
         if len(style) != ndat:
             if len(style) == 1:
