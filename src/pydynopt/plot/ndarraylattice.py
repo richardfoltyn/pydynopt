@@ -315,6 +315,20 @@ def bnd_extend(arr, by=0.025):
     return arr[0] - by * diff, arr[1] + by * diff
 
 
+def adj_bounds(arr, extend_by, trim_iqr):
+    ymin, ymax = np.min(arr), np.max(arr)
+
+    if trim_iqr is not None:
+        q25, q50, q75 = np.percentile(arr, (25, 50, 100))
+        ymin = max(ymin, q50 - trim_iqr * (q75 - q25))
+        ymax = min(ymax, q50 + trim_iqr * (q75 - q25))
+
+    if extend_by and extend_by > 0:
+        ymin, ymax = bnd_extend((ymin, ymax), by=extend_by)
+
+    return ymin, ymax
+
+
 def plot_identity(ax, xmin, xmax, extend=1):
     xx = [xmin - extend*(xmax - xmin),
           xmax + extend*(xmax - xmin)]
@@ -567,7 +581,7 @@ class NDArrayLattice(object):
         return pm
 
     def plot(self, data, style=None, trim_iqr=2.0, ylim=None,
-             xlim=None, extend_by=0.0, identity=False, **kwargs):
+             xlim=None, extendy=0.01, extendx=0.01, identity=False, **kwargs):
         """
         Plot data array using mappings specified prior to calling this method.
 
@@ -589,9 +603,9 @@ class NDArrayLattice(object):
         xlim: tuple
             Plot limits along x-axis (optional)
 
-        extend_by: float
+        extendy: float
             if not None, limits of x- and y-axis will be extended by a fraction
-            `extend_by' of the limits obtained from the data array. (optional)
+            `extendy' of the limits obtained from the data array. (optional)
 
         identity: bool
             Add identity function (45° line) to plot background. (optional)
@@ -630,12 +644,15 @@ class NDArrayLattice(object):
                              'got {}'.format(tuple(min_shape), data.shape))
 
         NDArrayLattice.plot_arrays(self, data, style, trim_iqr, ylim, xlim,
-                             extend_by, identity=identity, **kwargs)
+                                   extendy=extendy, extendx=extendx,
+                                   identity=identity,
+                                   **kwargs)
 
 
     @staticmethod
     def plot_arrays(nda, data, style=None, trim_iqr=2, ylim=None,
-                    xlim=None, extend_by=0, identity=False,
+                    xlim=None, extendy=0.01, extendx=0.01,
+                    identity=False, sharey=True,
                     **kwargs):
 
         if not isinstance(data, (tuple, list)):
@@ -656,8 +673,12 @@ class NDArrayLattice(object):
 
         xmin, xmax = np.inf, -np.inf
 
-        yy = []
-        trim_iqr = float(trim_iqr)
+        yy = np.empty((nrow, ncol), dtype=object)
+        for i in range(nrow):
+            for j in range(ncol):
+                yy[i, j] = list()
+
+        trim_iqr = float(trim_iqr) if trim_iqr is not None else trim_iqr
 
         if style is None:
             style = (DefaultStyle(), )
@@ -687,8 +708,9 @@ class NDArrayLattice(object):
                         layer = pm.layers
 
                         y = dat[sl_k].squeeze()
-                        if ylim is None or trim_iqr is not None:
-                            yy.append(y)
+                        if ylim is None:
+                            yy[i, j].append(y)
+
                         xvals = pm.xvalues
                         if xvals is None or len(xvals) == 0:
                             xvals = np.arange(len(y))
@@ -761,24 +783,26 @@ class NDArrayLattice(object):
 
             ax.ticklabel_format(style='sci', axis='both', scilimits=(-2, 3))
 
+            if not sharey and ylim is None:
+                arr = np.hstack(yy[i, j])
+                ymin, ymax = adj_bounds(arr, extendy, trim_iqr)
+
+                ax.set_ylim(ymin, ymax)
+
             if i == (nrow - 1) and j == (ncol - 1):
                 if xlim is not None and len(xlim) == 2:
                     ax.set_xlim(xlim)
                 else:
-                    xmin, xmax = bnd_extend((xmin, xmax), by=extend_by)
+                    xmin, xmax = bnd_extend((xmin, xmax), by=extendx)
                     ax.set_xlim(xmin, xmax)
 
                 if ylim is not None and len(ylim) == 2:
                     ax.set_ylim(ylim)
-                else:
-                    yy = np.hstack(tuple(yy))
-                    ymin, ymax = bnd_extend((np.min(yy), np.max(yy)),
-                                            by=extend_by)
-                    if trim_iqr is not None:
-                        q25, q50, q75 = np.percentile(yy, (25, 50, 100))
-                        ymin = max(ymin, q50 - trim_iqr * (q75-q25))
-                        ymax = min(ymax, q50 + trim_iqr * (q75-q25))
+                elif sharey:
+                    arr = np.hstack(tuple(yy.ravel())).ravel()
+                    ymin, ymax = adj_bounds(arr, extendy, trim_iqr)
 
                     ax.set_ylim(ymin, ymax)
 
-        plot_grid(func, nrow=nrow, ncol=ncol, style=style[0], **kwargs)
+        plot_grid(func, nrow=nrow, ncol=ncol, style=style[0],
+                  sharey=sharey, **kwargs)
