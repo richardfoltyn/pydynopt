@@ -5,7 +5,7 @@ __author__ = 'Richard Foltyn'
 import numpy as np
 
 
-def chunk_sizes(nthreads, ntasks):
+def chunk_sizes(nthreads, ntasks, bounds=False):
 
     nthreads = int(nthreads)
     ntasks = int(ntasks)
@@ -16,9 +16,15 @@ def chunk_sizes(nthreads, ntasks):
     base = ntasks // nthreads
     rest = ntasks % nthreads
 
-    chunks = np.ones((nthreads, ), dtype=np.uint32) * base
+    chunks = np.ones((nthreads, ), dtype=np.uint) * base
     chunks[:rest] += 1
 
     assert np.sum(chunks) == ntasks
 
-    return list(chunks)
+    if not bounds:
+        return chunks
+
+    iend = np.cumsum(chunks)
+    istart = np.hstack((np.array(0, dtype=np.uint), iend[:-1]))
+
+    return chunks, istart, iend
