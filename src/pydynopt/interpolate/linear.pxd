@@ -1,6 +1,6 @@
 
 from pydynopt.common.ndarray_wrappers cimport make_ndarray
-from pydynopt.utils.bsearch cimport _bsearch
+from pydynopt.utils.bsearch cimport cy_bsearch
 
 from numpy cimport ndarray
 

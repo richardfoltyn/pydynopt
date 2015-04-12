@@ -4,7 +4,7 @@ __author__ = 'Richard Foltyn'
 from cython import boundscheck
 
 
-cpdef long _bsearch_eq(int_real_t[:] arr, int_real_t key,
+cpdef long cy_bsearch_eq(int_real_t[:] arr, int_real_t key,
                               bint first) nogil:
     """
     Implementation of binary search that returns the index i such that
@@ -51,13 +51,13 @@ cpdef long _bsearch_eq(int_real_t[:] arr, int_real_t key,
         else:
             return ub if arr[ub] <= key else lb
 
-cdef long _bsearch(int_real_t *arr, int_real_t key, unsigned long length) nogil:
+cdef long cy_bsearch(int_real_t *arr, int_real_t key, unsigned long length) nogil:
     """
     Returns index i such that arr[i] <= key < arr[i+1].
     Boundary conditions are handled as follows:
-        1) if key < arr[0]  then _bsearch(arr, key) == -1
-        2) if key = arr[-1] then _bsearch(arr, key) == arr.shape[0] - 1
-        3) if key > arr[-1] then _bsearch(arr, key) == arr.shape[0]
+        1) if key < arr[0]  then cy_bsearch(arr, key) == -1
+        2) if key = arr[-1] then cy_bsearch(arr, key) == arr.shape[0] - 1
+        3) if key > arr[-1] then cy_bsearch(arr, key) == arr.shape[0]
     """
 
     cdef long lb = 0, ub = length
@@ -83,8 +83,8 @@ def bsearch_eq(int_real_t[:] arr, int_real_t key, first=True):
 
     cdef bint cfirst = 1 if first else 0
 
-    return _bsearch_eq(arr, key, cfirst)
+    return cy_bsearch_eq(arr, key, cfirst)
 
 @boundscheck(True)
 def bsearch(int_real_t[:] arr, int_real_t key):
-    return _bsearch(&(arr[0]), key, arr.shape[0])
+    return cy_bsearch(&(arr[0]), key, arr.shape[0])

@@ -24,7 +24,7 @@ cdef inline long cy_find_lb(double *xp, double x, unsigned long length) nogil:
     elif x >= xp[length - 1]:
         ixp_lb = length - 2
     else:
-        ixp_lb = _bsearch(xp, x, length)
+        ixp_lb = cy_bsearch(xp, x, length)
 
     return ixp_lb
 
