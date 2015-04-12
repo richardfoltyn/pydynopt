@@ -34,9 +34,11 @@ packages = ['pydynopt.common', 'pydynopt.utils', 'pydynopt.interpolate',
 ext = [Extension('*', ['**/*.pyx'])]
 
 gdb = False
+annotate = True
 
 setup(name='pydynopt',
       packages=packages,
       ext_modules=cythonize(ext, exclude=exclude, gdb_debug=gdb,
                             include_path=[np.get_include()],
-                            compiler_directives=cdir_default))
+                            compiler_directives=cdir_default,
+                            annotate=annotate))
