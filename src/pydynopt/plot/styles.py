@@ -28,12 +28,16 @@ TEXT_KWARGS = {'fontsize': 14, 'alpha': 1.0, 'backgroundcolor': 'white',
 class Colors(object):
     def __init__(self, colors=None):
         self.colors = colors
-        self.cache = None
+        self.cache = colors
 
     def __getitem__(self, item):
         if not self.cache or item >= len(self.cache):
-            nn = max(3, item + 1)
-            self.cache = tuple(qualitative.Set1[nn].hex_colors[:item + 1])
+            if not self.colors:
+                nn = max(4, item + 1)
+                self.cache = tuple(qualitative.Set1[nn].hex_colors)
+            else:
+                col = it.cycle(self.colors)
+                self.cache = tuple(next(col) for x in range(item + 1))
         return self.cache[item]
 
 
@@ -123,6 +127,14 @@ class DefaultStyle(AbstractStyle):
         if self._color is None:
             self._color = Colors()
         return self._color
+
+    @color.setter
+    def color(self, value):
+        if np.isscalar(value):
+            value = (value, )
+        else:
+            value = tuple(value)
+        self._color = Colors(colors=value)
 
     @property
     def linewidth(self):

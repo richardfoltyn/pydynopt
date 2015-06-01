@@ -5,7 +5,7 @@ import numpy as np
 
 ################################################################################
 
-cdef inline long _find_lb(real_t *xp, real_t x, unsigned long length) nogil:
+cdef inline long cy_find_lb(double *xp, double x, unsigned long length) nogil:
     """
     Find lower bound index i on xp such that x <= xp[i] when x is in the
     interval [xp[0],xp[-1])
@@ -24,57 +24,33 @@ cdef inline long _find_lb(real_t *xp, real_t x, unsigned long length) nogil:
     elif x >= xp[length - 1]:
         ixp_lb = length - 2
     else:
-        ixp_lb = _bsearch(xp, x, length)
+        ixp_lb = cy_bsearch(xp, x, length)
 
     return ixp_lb
 
-def find_lb(real_t[:] xp, real_t x, unsigned long length):
+def find_lb(double[::1] xp, double x, unsigned long length):
     """
-    Python-callable wrapper for _find_lb
+    Python-callable wrapper for cy_find_lb
     :param xp:
     :param x:
     :param length:
     :return:
     """
-    return _find_lb(&(xp[0]), x, length)
+    return cy_find_lb(&(xp[0]), x, length)
 
 
 ################################################################################
 # 1D linear interpolation
 
-cpdef int _interp1d_linear(real_t[:] x, real_t[:] xp,
-        real_t[:] fp, real_t[:] out) nogil:
+cdef inline double \
+    cy_interp1d_linear(double x, double[::1] xp, double[:] fp) nogil:
 
-    # Some sanity checks: make sure dimension of input and output arrays 
-    # match. We also require at least 2 points in each direction on the 
-    # domain of f().
-    if xp.shape[0] != fp.shape[0]:
-        return -1
-    if xp.shape[0] < 2:
-        return -2
-    if x.shape[0] != out.shape[0]:
-        return -3
-
-    cdef unsigned long i
-    cdef real_t xi
-
-    for i in range(x.shape[0]):
-
-        xi = x[i]
-        out[i] = _interp1d_linear_impl(xi, xp, fp)
-
-    return 0
-
-
-cpdef inline real_t _interp1d_linear_impl(real_t x, real_t[:] xp,
-                                         real_t[:] fp) nogil:
-
-    cdef real_t fx, x_lb
+    cdef double fx, x_lb
     cdef long ixp_lb, ixp_ub
     # interpolation weight
-    cdef real_t slope
+    cdef double slope
 
-    ixp_lb = _find_lb(&(xp[0]), x, xp.shape[0])
+    ixp_lb = cy_find_lb(&(xp[0]), x, xp.shape[0])
     ixp_ub = ixp_lb + 1
 
     slope = (x - xp[ixp_lb]) / (xp[ixp_ub] - xp[ixp_lb])
@@ -82,12 +58,57 @@ cpdef inline real_t _interp1d_linear_impl(real_t x, real_t[:] xp,
 
     return fx
 
+
+def interp1d_linear(x, double[::1] xp, double[:] fp, out=None):
+    """
+    Compute the linearly interpolated values as x, given interpolations nodes xp
+    with function values fp.
+    """
+
+    # Do some input argument error checking
+    if xp.shape[0] != fp.shape[0]:
+        raise ValueError("Non-conformable arguments 'xp' and 'fp'")
+
+    if xp.shape[0] < 2:
+        raise ValueError('Need at least 2 points to interpolate')
+
+    cdef bint return_scalar = True
+    x_arr = np.asarray(x)
+    if isinstance(x, np.ndarray) or out is not None:
+        return_scalar = False
+
+    # ravel() does not copy data if array is C-contiguous (or 1-d),
+    # but otherwise allocated memory!
+    cdef double[::1] mv_x = x_arr.ravel()
+
+    cdef double[::1] mv_out
+    if out is None:
+        out = np.empty(x_arr.shape, dtype=np.float)
+        mv_out = out.ravel()
+    else:
+        if not isinstance(out, np.ndarray):
+            raise ValueError('Argument out must be a ndarray')
+
+        mv_out = out.ravel()
+        if mv_out.shape[0] != mv_x.shape[0]:
+            raise ValueError('Arguments \'x\' and \'out\' not conformable!')
+
+
+    cdef unsigned long i
+    for i in range(mv_x.shape[0]):
+        mv_out[i] = cy_interp1d_linear(mv_x[i], xp, fp)
+
+    if return_scalar:
+        return mv_out[0]
+    else:
+        return out
+
 ################################################################################
 # Bilinear interpolation
 
-cdef int _interp2d_bilinear(real_t[:] x0, real_t[:] y0,
-        real_t[:] x, real_t[:] y,
-        real_t[:, :] fval, real_t[:] out) nogil:
+cdef int _interp2d_bilinear(double[:] x0, double[:] y0,
+        double[::1] x, double[::1] y,
+        double[:, :] fval, double[:] out) nogil:
 
     # Some sanity checks: make sure dimension of input and output arrays
     # match. We also require at least 2 points in each direction on the
@@ -114,8 +135,8 @@ cdef int _interp2d_bilinear(real_t[:] x0, real_t[:] y0,
     return 0
 
 
-cdef inline real_t _interp2d_bilinear_impl(real_t x, real_t y, real_t[:] xp,
-            real_t[:] yp, real_t[:, :] fval) nogil:
+cdef inline double _interp2d_bilinear_impl(double x, double y, double[::1] xp,
+            double[::1] yp, double[:, :] fval) nogil:
     """
 
     Note on implementation: This could alternatively be implemented as a
@@ -131,16 +152,16 @@ cdef inline real_t _interp2d_bilinear_impl(real_t x, real_t y, real_t[:] xp,
     a binary search is performed only once for each dimension.
     """
 
-    cdef real_t x_lb, x_ub, y_lb, y_ub
+    cdef double x_lb, x_ub, y_lb, y_ub
     cdef long ix_lb, iy_lb
 
     # interpolation weights in x and y direction
-    cdef real_t xwgt, ywgt
+    cdef double xwgt, ywgt
     # interpolants in x direction evaluated at lower and upper y
-    cdef real_t fx1, fx2
+    cdef double fx1, fx2
 
-    ix_lb = _find_lb(&(xp[0]), x, xp.shape[0])
-    iy_lb = _find_lb(&(yp[0]), y, yp.shape[0])
+    ix_lb = cy_find_lb(&(xp[0]), x, xp.shape[0])
+    iy_lb = cy_find_lb(&(yp[0]), y, yp.shape[0])
 
     # lower and upper bounding indexes in x direction
     x_lb = xp[ix_lb]
@@ -162,9 +183,9 @@ cdef inline real_t _interp2d_bilinear_impl(real_t x, real_t y, real_t[:] xp,
 ################################################################################
 # Trilinear interpolation
 
-cdef inline real_t _interp3d_trilinear_impl(real_t x, real_t y, real_t z,
-        real_t[:] xp, real_t[:] yp, real_t[:] zp,
-        real_t[:, :, :] fp) nogil:
+cdef inline double _interp3d_trilinear_impl(double x, double y, double z,
+        double[::1] xp, double[::1] yp, double[::1] zp,
+        double[:, :, :] fp) nogil:
 
     """
     Note on implementation: We implement this from scratch instead of using a
@@ -175,17 +196,17 @@ cdef inline real_t _interp3d_trilinear_impl(real_t x, real_t y, real_t z,
     cdef long ix_lb, iy_lb, iz_lb
 
     # slopes in x, y and z direction
-    cdef real_t slope_x, slope_y, slope_z
+    cdef double slope_x, slope_y, slope_z
     # interpolants in x direction evaluated at (y0, z0), ..., (y1, z1)
-    cdef real_t fx00, fx01, fx10, fx11
+    cdef double fx00, fx01, fx10, fx11
     # interpolants in xy direction evaluated at z0 and z1
-    cdef real_t fxy0, fxy1
+    cdef double fxy0, fxy1
     # interpolated function value in all directions
-    cdef real_t fxyz
+    cdef double fxyz
 
-    ix_lb = _find_lb(&(xp[0]), x, xp.shape[0])
-    iy_lb = _find_lb(&(yp[0]), y, yp.shape[0])
-    iz_lb = _find_lb(&(zp[0]), z, zp.shape[0])
+    ix_lb = cy_find_lb(&(xp[0]), x, xp.shape[0])
+    iy_lb = cy_find_lb(&(yp[0]), y, yp.shape[0])
+    iz_lb = cy_find_lb(&(zp[0]), z, zp.shape[0])
 
     # interpolating in x dimension
     slope_x = (x - xp[ix_lb]) / (xp[ix_lb + 1] - xp[ix_lb])
@@ -216,9 +237,9 @@ cdef inline real_t _interp3d_trilinear_impl(real_t x, real_t y, real_t z,
     return fxyz
 
 
-cdef int _interp3d_trilinear(real_t[:] x, real_t[:] y, real_t[:] z,
-        real_t[:] xp, real_t[:] yp, real_t[:] zp,
-        real_t[:, :, :] fp, real_t[:] out) nogil:
+cdef int _interp3d_trilinear(double[:] x, double[:] y, double[:] z,
+        double[::1] xp, double[::1] yp, double[::1] zp,
+        double[:, :, :] fp, double[:] out) nogil:
 
     # Some sanity checks: make sure dimension of input and output arrays
     # match. We also require at least 2 points in each direction on the
@@ -245,38 +266,13 @@ cdef int _interp3d_trilinear(real_t[:] x, real_t[:] y, real_t[:] z,
 # Python-callable convenience functions
 
 @boundscheck(True)
-def interp1d_linear(real_t[:] x, real_t[:] xp, real_t[:] fp,
-        real_t[:] out=None):
-    """
-    Compute the linearly interpolated values as x, given interpolations nodes xp
-    with function values fp.
-
-    Python-friendly wrapper for _interp1d_linear_vec()
-    """
-
-    cdef unsigned long nx = x.shape[0]
-    if out is None:
-        out = make_ndarray(1, nx, <real_t>x[0])
-
-    retval = _interp1d_linear(x, xp, fp, out)
-    if retval == -1:
-        raise ValueError('Dimensions of xp and fp not conformable!')
-    elif retval == -2:
-        raise ValueError('Arrays xp must contain at least 2 points!')
-    elif retval == -3:
-        raise ValueError('Dimensions of x and output array not '
-                         'conformable!')
-
-    return np.asarray(out)
-
-@boundscheck(True)
-def interp2d_bilinear(real_t[:] x0, real_t[:] y0, real_t[:] x, real_t[:] y,
-                      real_t[:,:] fval, real_t[:] out=None):
+def interp2d_bilinear(double[:] x0, double[:] y0, double[::1] x, double[::1] y,
+                      double[:,:] fval, double[:] out=None):
 
 
     cdef unsigned long nx = x0.shape[0]
     if out is None:
-        out = make_ndarray(1, nx, <real_t>x0[0])
+        out = make_ndarray(1, nx, <double>x0[0])
 
     retval = _interp2d_bilinear(x0, y0, x, y, fval, out)
     if retval == -1:
@@ -290,15 +286,15 @@ def interp2d_bilinear(real_t[:] x0, real_t[:] y0, real_t[:] x, real_t[:] y,
     return np.asarray(out)
 
 @boundscheck(True)
-def interp3d_trilinear(real_t[:] x, real_t[:] y, real_t[:] z,
-            real_t[:] xp,  real_t[:] yp, real_t[:] zp,
-            real_t[:,:,:] fp, real_t[:] out=None):
+def interp3d_trilinear(double[:] x, double[:] y, double[:] z,
+            double[::1] xp,  double[::1] yp, double[::1] zp,
+            double[:,:,:] fp, double[:] out=None):
 
 
     cdef unsigned long nx = x.shape[0]
 
     if out is None:
-        out = make_ndarray(1, nx, <real_t>x[0])
+        out = make_ndarray(1, nx, <double>x[0])
 
     retval = _interp3d_trilinear(x, y, z, xp, yp, zp, fp, out)
     if retval == -1:
