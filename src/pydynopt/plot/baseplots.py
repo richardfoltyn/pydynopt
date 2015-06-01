@@ -52,7 +52,7 @@ def plot_grid(fun, nrow=1, ncol=1,
             if ylim is not None:
                 axes[i, j].set_ylim(ylim)
 
-            if style.grid:
+            if style.grid and ('b' not in style.grid or not style.grid['b']):
                 axes[i, j].grid(**style.grid)
 
             fun(axes[i, j], (i, j), *args, **kwargs)
