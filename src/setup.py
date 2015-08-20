@@ -31,7 +31,8 @@ exclude = ['scratch/*', '**/test*.pyx']
 packages = ['pydynopt.common', 'pydynopt.utils', 'pydynopt.interpolate',
             'pydynopt.optimize']
 
-ext = [Extension('*', ['**/*.pyx'])]
+ext = [Extension('*', ['**/*.pyx'],
+                 include_dirs=[np.get_include()])]
 
 gdb = False
 annotate = True
