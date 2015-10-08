@@ -51,7 +51,7 @@ cpdef long cy_bsearch_eq(int_real_t[:] arr, int_real_t key,
         else:
             return ub if arr[ub] <= key else lb
 
-cdef long cy_bsearch(int_real_t *arr, int_real_t key, unsigned long length) nogil:
+cdef long cy_bsearch(int_real_t *arr, int_real_t key, size_t length) nogil:
     """
     Returns index i such that arr[i] <= key < arr[i+1].
     Boundary conditions are handled as follows:
@@ -75,6 +75,42 @@ cdef long cy_bsearch(int_real_t *arr, int_real_t key, unsigned long length) nogi
 
     return lb - 1
 
+cdef long c_bsearch(double[::1] arr, double key) nogil:
+    """
+    Returns index i such that arr[i] <= key < arr[i+1].
+    Boundary conditions are handled as follows:
+        1) if key < arr[0]  then c_bsearch(arr, key) == -1
+        2) if key = arr[-1] then c_bsearch(arr, key) == arr.shape[0] - 1
+        3) if key > arr[-1] then c_bsearch(arr, key) == arr.shape[0]
+    """
+
+    cdef long lb = 0, ub = arr.shape[0]
+    cdef long midx
+
+    if key > arr[ub-1]:
+        return ub
+
+    while lb < ub:
+        midx = (ub + lb) // 2
+        if key >= arr[midx]:
+            lb = midx + 1
+        else:
+            ub = midx
+
+    return lb - 1
+
+cdef inline size_t c_bsearch_lb(double[::1] arr, double key) nogil:
+
+    cdef size_t midx, lb = 0, ub = arr.shape[0] - 1
+
+    while ub > (lb + 1):
+        midx = (ub + lb) // 2
+        if arr[midx] > key:
+            ub = midx
+        else:
+            lb = midx
+
+    return lb
 
 @boundscheck(True)
 def bsearch_eq(int_real_t[:] arr, int_real_t key, first=True):
@@ -88,3 +124,6 @@ def bsearch_eq(int_real_t[:] arr, int_real_t key, first=True):
 @boundscheck(True)
 def bsearch(int_real_t[:] arr, int_real_t key):
     return cy_bsearch(&(arr[0]), key, arr.shape[0])
+
+def bsearch_lb(double[::1] arr, double key):
+    return c_bsearch_lb(arr, key)
