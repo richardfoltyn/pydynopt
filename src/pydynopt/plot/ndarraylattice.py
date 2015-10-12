@@ -799,7 +799,7 @@ class NDArrayLattice(object):
                 if ylim is not None and len(ylim) == 2:
                     ax.set_ylim(ylim)
                 elif sharey:
-                    arr = np.hstack(tuple(yy.ravel())).ravel()
+                    arr = np.hstack([np.hstack(yy_i) for yy_i in yy.ravel()])
                     ymin, ymax = adj_bounds(arr, extendy, trim_iqr)
 
                     ax.set_ylim(ymin, ymax)
