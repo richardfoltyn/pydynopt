@@ -177,3 +177,21 @@ class DefaultStyle(AbstractStyle):
         else:
             value = tuple(value)
         self._alpha = Transparency(value)
+
+
+class Presentation(DefaultStyle):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.cell_size = 5.0
+        # Red, Black, Green, Gray
+
+        colors = ('#4daf4a', '#111111', '#e31a1c', '#4d4d4d')
+        self.color = colors
+        self.linestyle = ('-', '--', '-.', ':')
+        self.linewidth = (2.0, 2.0, 2.0, 2.0)
+        self.alpha = (.8, .8, .8, 1.0)
+
+
