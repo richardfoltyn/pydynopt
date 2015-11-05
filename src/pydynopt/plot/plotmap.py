@@ -7,6 +7,7 @@ Author: Richard Foltyn
 from __future__ import print_function, division, absolute_import
 
 import itertools as it
+import re
 from collections import Callable
 from copy import deepcopy, copy
 
@@ -21,7 +22,8 @@ class PlotDimension(object):
     DEFAULT_LABEL_LOC = 'lower right'
 
     def __init__(self, dim, at_idx=None, at_val=None, values=None, fixed=False,
-                 label=None, label_fmt=None, label_loc='lower right', **kwargs):
+                 label=None, label_fmt=None, label_loc=DEFAULT_LABEL_LOC,
+                 **kwargs):
         """
         Keep **kwargs for compatibility since older code might pass label_fun
         argument.
@@ -36,7 +38,7 @@ class PlotDimension(object):
             del kwargs['label_fun']
 
         self.label = label
-        self.label_loc = label_loc if label or label_fmt else None
+        self.label_loc = label_loc
 
         self.dim = int(dim)
         self.values = None
@@ -109,12 +111,19 @@ class PlotDimension(object):
         else:
             return zip(self.index, self.values)
 
-    def get_label(self, largs, idx):
+    def get_label(self, largs=None, idx=0):
         lbl = None
         if isinstance(self.label, Callable):
             lbl = self.label(largs)
         elif self.label_fmt:
-            lbl = self.label_fmt.format(largs)
+            # For compatibility with old format strings, detect deprecated
+            # format string which contain {.attribute} with a leading dot. If
+            # there is no leading dots, pass a dictionary instead.
+            regex = r'(.*[^{])?[{][^{}]*\.((index)|(value)|(row)|(column)|(layer))'
+            if re.match(regex, self.label_fmt):
+                lbl = self.label_fmt.format(largs)
+            else:
+                lbl = self.label_fmt.format(**largs.to_dict())
         elif self.label:
             if isinstance(self.label, str):
                 lbl = self.label
@@ -441,13 +450,22 @@ class PlotMap(object):
         self.map_generic('rows', dim, at_idx, at_val, values,
                          label=label, label_fmt=label_fmt, label_loc=label_loc)
 
-    def map_columns(self, dim, *args, **kwargs):
-        self.map_generic('cols', dim, *args, **kwargs)
+    def map_columns(self, dim, at_idx=None, at_val=None, values=None,
+                    label=None, label_fmt=None,
+                    label_loc=PlotDimension.DEFAULT_LABEL_LOC):
 
-    def map_layers(self, dim, *args, **kwargs):
-        self.map_generic('layers', dim, *args, **kwargs)
+        self.map_generic('cols', dim, at_idx, at_val, values,
+                         label=label, label_fmt=label_fmt, label_loc=label_loc)
 
-    def map_xaxis(self, dim, *args, **kwargs):
+    def map_layers(self, dim, at_idx=None, at_val=None, values=None,
+                    label=None, label_fmt=None,
+                    label_loc=PlotDimension.DEFAULT_LABEL_LOC):
+
+        self.map_generic('layers', dim, at_idx, at_val, values,
+                         label=label, label_fmt=label_fmt, label_loc=label_loc)
+
+    def map_xaxis(self, dim, at_idx=None, at_val=None, values=None,
+                  label=None):
         """
         Map data array dimension `dim` to x-axis, using `values` as labels.
         Indexes to be shown on x-axis can optionally be restricted using
@@ -475,7 +493,7 @@ class PlotMap(object):
 
         """
 
-        self.map_generic('xaxis', dim, *args, **kwargs)
+        self.map_generic('xaxis', dim, at_idx, at_val, values, label=label)
 
     def map_generic(self, kind, dim, *args, **kwargs):
 
@@ -560,11 +578,61 @@ class LabelArgs:
 
     """
     def __init__(self, row, column, layer, index=None, value=None):
+        # Set integer attributes via properties to ensure that these are
+        # actually Python ints and not some degenerate numpy arrays
+
+        self._row, self._column, self._layer, self._index = \
+            None, None, None, None
+
         self.row = row
         self.column = column
         self.layer = layer
         self.index = index
         self.value = value
+
+    @property
+    def row(self):
+        return self._row
+
+    @row.setter
+    def row(self, value):
+        self._row = int(value)
+
+    @property
+    def column(self):
+        return self._column
+
+    @column.setter
+    def column(self, value):
+        self._column = int(value)
+
+    @property
+    def layer(self):
+        return self._layer
+
+    @layer.setter
+    def layer(self, value):
+        self._layer = int(value) if value is not None else None
+
+    @property
+    def index(self):
+        return self._index
+
+    @index.setter
+    def index(self, value):
+        self._index = int(value) if value is not None else None
+
+    def to_dict(self):
+
+        d = {'row': self.row, 'column': self.column}
+        if self.index is not None:
+            d['index'] = self.index
+        if self.value is not None:
+            d['value'] = self.value
+        if self.layer is not None:
+            d['layer'] = self.layer
+
+        return d
 
 
 def loc_text_to_tuple(text):
@@ -641,16 +709,18 @@ def row_col_labels(nrow, ncol, maps, styles, first_only=True):
             if r and i < len(r.index):
                 largs.index = r.index[i]
                 if r.values is not None:
-                    largs.values = r.values[i]
+                    largs.value = r.values[i]
                 rtxt = r.get_label(largs, i)
-                rloc = loc_text_to_tuple(r.label_loc)
+                if rtxt:
+                    rloc = loc_text_to_tuple(r.label_loc)
 
             if c and j < len(c.index):
-                largs.index = c.index[i]
+                largs.index = c.index[j]
                 if c.values is not None:
-                    largs.values = c.values[i]
-                ctxt = c.get_label(largs, i)
-                cloc = loc_text_to_tuple(c.label_loc)
+                    largs.value = c.values[j]
+                ctxt = c.get_label(largs, j)
+                if ctxt:
+                    cloc = loc_text_to_tuple(c.label_loc)
 
             if rtxt or ctxt:
                 # labels show up in the same spot, merge them into one
@@ -767,7 +837,7 @@ def axis_plot_args(maps, styles):
 
 def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
             xlim=None, extendy=0.01, extendx=0.01, label_first_only=True,
-            identity=False, sharey=True, legend=True, **kwargs):
+            identity=False, sharey=True, legend=True, xlabel=None, **kwargs):
 
     # Convert input arguments to sequences.
     if not isinstance(data, (list, tuple)):
@@ -826,12 +896,17 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
     # and layer
     plot_kwargs = axis_plot_args(maps, styles)
 
-    needs_legend = False
+    # label for x-axis; find label attached to some xaxis object if xlabel
+    # was not passed as an argument.
+    if xlabel is None:
+        for pm in maps:
+            xlabel = pm.xaxis.get_label()
+            # Exit as soon as we found something that is not None, empty etc.
+            if xlabel:
+                break
 
     def subplot(ax, idx):
         i, j = idx
-
-        nonlocal needs_legend
 
         # plot all plot objects sequentially
         for i_m, (p, v, s) in enumerate(zip(maps, values, styles)):
@@ -846,7 +921,6 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
                     # construct label argument for layer k
                     largs = LabelArgs(i, j, k, lidx, lval)
                     txt = p.layers.get_label(largs, k)
-                    needs_legend = True
                 else:
                     txt = None
 
@@ -876,4 +950,4 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
         ax.set_ylim(ylim[i, j])
 
     plot_grid(subplot, nrow=nrow, ncol=ncol, style=style[0], sharey=sharey,
-              legend=(legend and needs_legend), **kwargs)
+              legend=legend, xlabel=xlabel, **kwargs)
