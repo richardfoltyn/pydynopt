@@ -76,7 +76,7 @@ def plot_grid(fun, nrow=1, ncol=1,
 
 def render(fig, outfile=None):
     if not outfile:
-        plt.show()
+        fig.show()
     else:
         fig.savefig(outfile)
         fig.clear()

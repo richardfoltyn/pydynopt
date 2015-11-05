@@ -7,7 +7,6 @@ Author: Richard Foltyn
 from __future__ import print_function, division, absolute_import
 
 import itertools as it
-import sys
 from collections import Callable
 from copy import deepcopy, copy
 
@@ -19,9 +18,10 @@ from pydynopt.plot.baseplots import plot_grid
 
 class PlotDimension(object):
 
-    def __init__(self, dim, at_idx=None, at_val=None, values=None,
-                 label=None, label_fmt=None, label_loc='lower right',
-                 fixed=False, **kwargs):
+    DEFAULT_LABEL_LOC = 'lower right'
+
+    def __init__(self, dim, at_idx=None, at_val=None, values=None, fixed=False,
+                 label=None, label_fmt=None, label_loc='lower right', **kwargs):
         """
         Keep **kwargs for compatibility since older code might pass label_fun
         argument.
@@ -30,8 +30,10 @@ class PlotDimension(object):
         self.label_fmt = label_fmt
 
         # Backward compatibility: use label_fun argument if no label is present
+        kwargs = kwargs.copy()
         if 'label_fun' in kwargs and label is None:
             label = kwargs['label_fun']
+            del kwargs['label_fun']
 
         self.label = label
         self.label_loc = label_loc if label or label_fmt else None
@@ -41,6 +43,8 @@ class PlotDimension(object):
         self.at_val = None
         self.index = None
         self.fixed = fixed
+        # save remaining kwargs to be used when calling axis.plot()
+        self.plot_kwargs = kwargs
 
         self.update(at_idx, at_val, values)
 
@@ -122,6 +126,24 @@ class PlotDimension(object):
 
         return lbl
 
+    def __repr__(self):
+        s = 'PlotDim(dim={:d}, index={:s}, values={:s})'
+        if self.index is None or isinstance(self.index, slice):
+            sidx = "{!r}".format(self.index)
+        else:
+            if len(self.index) > 0:
+                sidx = '...'.join(str(x) for x in self.index[[0, -1]])
+            else:
+                sidx = str(self.index[0])
+        sval = 'None'
+        if self.values is not None:
+            if len(self.values) > 0:
+                sval = '...'.join(str(x) for x in self.values[[0, -1]])
+            else:
+                sval = "{:.3f}".format(self.values[0])
+
+        return s.format(self.dim, sidx, sval)
+
 
 class PlotMap(object):
 
@@ -150,21 +172,57 @@ class PlotMap(object):
                     raise ValueError("Duplicate mapping for single dimension")
                 self.mapped[d.dim] = d
 
-        # To be filled from specific data array
-        self.nrow = None
-        self.ncol = None
-        self.nlayer = None
-        self.ndim = None
-
     @property
     def xvalues(self):
         return self.xaxis.values
+
+    @property
+    def nrow(self):
+        n = 1
+        if self.rows is not None:
+            try:
+                n = len(self.rows.index)
+            except TypeError:
+                m = 'Number of rows not yet determined: need to call apply() first!'
+                raise RuntimeError(m)
+        return n
+
+    @property
+    def ncol(self):
+        n = 1
+        if self.cols is not None:
+            try:
+                n = len(self.cols.index)
+            except TypeError:
+                m = 'Number of columns not yet determined: need to call ' \
+                    'apply() first!'
+                raise RuntimeError(m)
+        return n
+
+    @property
+    def nlayer(self):
+        n = 1
+        if self.layers is not None:
+            try:
+                n = len(self.layers.index)
+            except TypeError:
+                m = 'Number of layers not yet determined: need to call ' \
+                    'apply() first!'
+                raise RuntimeError(m)
+        return n
 
     def apply(self, data):
         """
         Apply mapping to data array, resulting in a 4-dimensional array
         (rows x cols x layers x xaxis). Some dimensions can be of length 1 if you
         mapping was specified for that particular dimension.
+
+        Parameters
+        ----------
+
+        data : array_like
+            Data array to which PlotMap should be applied
+
         """
 
         # create a concrete plot mapping for aligned data array
@@ -252,8 +310,9 @@ class PlotMap(object):
                     dlist[j].dim -= 1
             i += 1
 
-        # swap and insert axis as necessary to obtain an object with shape (
-        # nrows, ncols, nlayers, nxvals, [remaining fixed dims])
+        # Step 3: swap and insert axis as necessary to obtain an array with
+        # shape (nrows, ncols, nlayers, nxvals). If no mapping is provided
+        # for any of {rows, cols, layers}, then a length-1 axis is inserted.
         for i, x in enumerate((pm.rows, pm.cols, pm.layers, pm.xaxis)):
             if x is not None:
                 if x.dim != i:
@@ -306,7 +365,7 @@ class PlotMap(object):
         Fix data array dimensions to specific indexes. This is useful for
         high-dimensional arrays that can or should not be mapped to
         rows/columns/layers. The specified dimensions are fixed across all
-        plot on grid.
+        plots on grid.
 
         Parameters
         ----------
@@ -319,7 +378,6 @@ class PlotMap(object):
 
         Returns
         -------
-
         Nothing
 
         """
@@ -335,7 +393,9 @@ class PlotMap(object):
                                  'already exists!'.format(d))
             self.mapped[d] = PlotDimension(dim=d, at_idx=i, fixed=True)
 
-    def map_rows(self, dim, *args, **kwargs):
+    def map_rows(self, dim, at_idx=None, at_val=None, values=None,
+                 label=None, label_fmt=None,
+                 label_loc=PlotDimension.DEFAULT_LABEL_LOC):
         """
         Map data array dimension `dim` to rows on plot grid. Rows will be
         plotted at array indexes given by `at_idx' along dimension `dim`.
@@ -344,53 +404,48 @@ class PlotMap(object):
         desired values using `at_val`. The corresponding indexes will be
         imputed from `values'.
 
-        Either `at_idx` or both `at_val` and `values` must be specified.
-
         Parameters
         ----------
-
         dim : int
             Data array dimension to be mapped to rows.
 
-        at_idx: array_like
+        at_idx : array_like
             Indexes along `dim' to be plotted row-wise. (optional)
 
-        at_val: array_like
+        at_val : array_like
             Values corresponding to indexes along `dim' to be plotted
             row-wise. (optional)
 
-        values: array_like
+        values : array_like
             Values corresponding to indexes on `dim' (optional)
 
-        label: str
-            String specifying a static label (optional)
+        label : str or callable
+            If string, specifies (static) label that does not change across
+            rows / columns. If callable, will be invoked for each subplot to
+            obtain subplot-specific label.
 
-        label_fmt: str
+        label_fmt : str
             String format. If not None, str.format(larg) will be applied,
             passing LabelArgs as unnamed argument. (optional)
 
-        label_fun: callable
-            Callback function that returns string to be used as label. Will
-            be passed an instance of LabelArgs. (optional)
-
-        label_loc: str
+        label_loc : str
             Location on subplot where label will be placed. Valid values are
             the same as for Matplotlib legend's `loc` argument.
 
         Returns
         -------
-
         Nothing
 
         """
 
-        self.map_generic(dim, 'rows', *args, **kwargs)
+        self.map_generic('rows', dim, at_idx, at_val, values,
+                         label=label, label_fmt=label_fmt, label_loc=label_loc)
 
     def map_columns(self, dim, *args, **kwargs):
-        self.map_generic(dim, 'cols', *args, **kwargs)
+        self.map_generic('cols', dim, *args, **kwargs)
 
     def map_layers(self, dim, *args, **kwargs):
-        self.map_generic(dim, 'layers', *args, **kwargs)
+        self.map_generic('layers', dim, *args, **kwargs)
 
     def map_xaxis(self, dim, *args, **kwargs):
         """
@@ -420,9 +475,9 @@ class PlotMap(object):
 
         """
 
-        self.map_generic(dim, 'xaxis', *args, **kwargs)
+        self.map_generic('xaxis', dim, *args, **kwargs)
 
-    def map_generic(self, dim, kind, *args, **kwargs):
+    def map_generic(self, kind, dim, *args, **kwargs):
 
         if dim in self.mapped:
             raise ValueError('Dimension {:d} already mapped!'.format(dim))
@@ -435,8 +490,8 @@ class PlotMap(object):
         setattr(self, kind, pd)
         self.mapped[pd.dim] = pd
 
-    def plot(self, data, style=None, trim_iqr=2.0, ylim=None,
-             xlim=None, extendy=0.01, extendx=0.01, identity=False, **kwargs):
+    def plot(self, data, **kwargs):
+
         """
         Plot data array using mappings specified prior to calling this method.
 
@@ -470,38 +525,10 @@ class PlotMap(object):
 
         Returns
         -------
-
         Nothing
 
         """
-
-        # construct the minimum required shape of array that supports the
-        # specified mapping.
-
-        min_shape = np.zeros((self.ndim, ), dtype=np.int)
-
-        for pd in (self.rows, self.cols, self.layers):
-            if pd and pd.dim is not None and pd.indexes is not None:
-                min_shape[pd.dim] = np.max(pd.indexes) + 1
-        x = self.xaxis
-        if x and x.dim is not None:
-            if isinstance(x.indexes, slice):
-                if x.indexes.stop is not None:
-                    min_shape[x.dim] = x.indexes.stop
-            else:
-                min_shape[x.dim] = np.max(x.indexes)
-        if self.fixed_dims is not None:
-            for dim, idx in zip(self.fixed_dims, self.fixed_idx):
-                min_shape[dim] = idx + 1
-
-        if not np.all(min_shape <= data.shape):
-            raise ValueError('Expected minimum array shape {}, '
-                             'got {}'.format(tuple(min_shape), data.shape))
-
-        NDArrayLattice.plot_arrays(self, data, style, trim_iqr, ylim, xlim,
-                                   extendy=extendy, extendx=extendx,
-                                   identity=identity,
-                                   **kwargs)
+        plot_pm(self, data, **kwargs)
 
 
 class LabelArgs:
@@ -540,10 +567,8 @@ class LabelArgs:
         self.value = value
 
 
-loc_map = {'upper': 2, 'lower': 0, 'left': 0, 'right': 2, 'center': 1}
-
-
 def loc_text_to_tuple(text):
+    loc_map = {'upper': 0, 'lower': 2, 'left': 0, 'right': 2, 'center': 1}
     tok = text.split()
 
     if len(tok) == 1:
@@ -554,9 +579,6 @@ def loc_text_to_tuple(text):
         hidx = loc_map[tok[1]]
 
     return vidx, hidx
-
-
-loc_kwargs = np.ndarray((3, 3), dtype=object)
 
 
 def bnd_extend(arr, by=0.025):
@@ -584,156 +606,274 @@ def plot_identity(ax, xmin, xmax, extend=1):
     ax.plot(xx, xx, ls=':', color='black', alpha=0.6, lw=1, zorder=-500)
 
 
-def plot_pm(pm, data, style=None, trim_iqr=2, ylim=None,
-                xlim=None, extendy=0.01, extendx=0.01,
-                identity=False, sharey=True,
-                **kwargs):
+def row_col_labels(nrow, ncol, maps, styles, first_only=True):
 
-    if not isinstance(data, (tuple, list)):
-        data = (data, )
+    # Compute row / column labels for each cell on grid; each cell contains
+    # list of locations and labels
+    labels = np.ndarray((nrow, ncol, 3, 3), dtype=object)
+    text_kwargs = np.empty_like(labels)
+    it = np.ix_(*tuple(range(x) for x in labels.shape))
+    # initialize with empty lists so we do no need to check for None all the
+    # time
+    for i, j, iv, ih in np.broadcast(*it):
+        labels[i, j, iv, ih] = list()
+        text_kwargs[i, j, iv, ih] = list()
 
-    ndat = len(data)
-    pm = tuple(np.atleast_1d(pm))
-    pmaps = tuple(z.get_plot_map(d) for z, d in zip(pm, data))
-    if ndat > 1:
-        if len(pmaps) == 1:
-            pmaps = tuple(it.repeat(pmaps[0], ndat))
-        elif len(pmaps) != ndat:
-            raise ValueError('Plot map / data lengths not compatible!')
+    # Map positions without subplot to positional kwargs
+    valign = ['top', 'center', 'bottom']
+    halign = ['left', 'center', 'right']
+    init_y = [0.95, 0.50, 0.05]
+    init_x = [0.05, 0.50, 0.95]
+    # move vertical into this direction when other labels are present,
+    # depending on where label is positioned within subplot
+    direction_y = [-1, -1, 1]
 
-    nrow = max(pm.nrow for pm in pmaps)
-    ncol = max(pm.ncol for pm in pmaps)
-    nlayer = sum(pm.nlayer for pm in pmaps)
+    for i, j in np.broadcast(range(nrow), range(ncol)):
+        largs = LabelArgs(i, j, None)
+        labels_ij = list()
 
-    xmin, xmax = np.inf, -np.inf
+        # for each subplot, collect all the labels that should be plotted
+        for k, pm in enumerate(maps):
+            r, c = pm.rows, pm.cols
 
-    yy = np.empty((nrow, ncol), dtype=object)
-    for i in range(nrow):
-        for j in range(ncol):
-            yy[i, j] = list()
+            rtxt, ctxt, rloc, cloc = None, None, None, None
 
+            if r and i < len(r.index):
+                largs.index = r.index[i]
+                if r.values is not None:
+                    largs.values = r.values[i]
+                rtxt = r.get_label(largs, i)
+                rloc = loc_text_to_tuple(r.label_loc)
+
+            if c and j < len(c.index):
+                largs.index = c.index[i]
+                if c.values is not None:
+                    largs.values = c.values[i]
+                ctxt = c.get_label(largs, i)
+                cloc = loc_text_to_tuple(c.label_loc)
+
+            if rtxt or ctxt:
+                # labels show up in the same spot, merge them into one
+                if rloc and cloc and all(np.array(rloc) == np.array(cloc)):
+                    txt = ', '.join((rtxt, ctxt))
+                    labels_ij.append((rloc, txt))
+                else:
+                    if rtxt:
+                        labels_ij.append((rloc, rtxt))
+                    if ctxt:
+                        labels_ij.append((cloc, ctxt))
+
+            if first_only:
+                break
+
+        # store all accumulated labels in row/col/label loc-specific list
+        for k, (loc, txt) in enumerate(labels_ij):
+            iv, ih = loc
+
+            labels[i, j, iv, ih].append(txt)
+
+            # Append kwargs that will be passed to ax.text()
+            kwargs = {'verticalalignment': valign[iv],
+                      'horizontalalignment': halign[ih],
+                      'y': init_y[iv], 'x': init_x[ih],
+                      's': txt}
+
+            if len(text_kwargs[i, j, iv, ih]) > 0:
+                y_prev = text_kwargs[i, j, iv, ih][-1]['y']
+                # move up or down by 7.5% or axes area from previously
+                # positioned label
+                kwargs['y'] = y_prev + direction_y[iv] * 0.075
+
+            # Add text style definitions
+            kwargs.update(**styles[0].text)
+
+            text_kwargs[i, j, iv, ih].append(kwargs)
+
+    return labels, text_kwargs
+
+
+def get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values):
+    # Determine plot limits for y-axis
+    if ylim is None:
+        if sharey:
+            ymin = min(np.amin(v) for v in values)
+            ymax = max(np.amax(v) for v in values)
+            ylim = ymin, ymax
+            if extendy:
+                ylim = bnd_extend(ylim, extendy)
+            # repeat across all rows / cols
+            ylim = np.tile(ylim, reps=(nrow, ncol, 1))
+
+        else:
+            # Compute ylims for each subplot
+            ylim = np.ndarray((nrow, ncol, 1), dtype=float)
+            for i, j in np.broadcast(range(nrow), range(ncol)):
+                # find all those objects which should be plotted in i, j
+                r = np.array([p.rows and i < len(p.rows) for p in maps])
+                c = np.array([p.cols and j < len(p.cols) for p in maps])
+                use = np.logical_and(r, c)
+                ymin = min(np.amin(v[i, j]) for v in values[use])
+                ymax = max(np.amax(v[i, j]) for v in values[use])
+                ylim[i, j] = (ymin, ymax)
+    else:
+        # User-provided ylim: if it's a simple tuple and sharey, broadcast
+        # across all subplots
+        if sharey:
+            if len(ylim) != 2:
+                raise ValueError('Argument ylim must be a length-2 tuple!')
+            ylim = np.tile(ylim, reps=(nrow, ncol, 1))
+        else:
+            tmp, ylim = ylim, np.ndarray((nrow, ncol, 2))
+            try:
+                rr, cc = np.ix_(range(nrow), range(ncol))
+                for i, j, yl in np.broadcast(rr, cc, tmp):
+                    ylim[i, j] = yl
+            except:
+                raise ValueError('Non-conformable argument ylim!')
+
+    return ylim
+
+
+def axis_plot_args(maps, styles):
+
+    plot_kwargs = list()
+
+    # normalized key names to be used as kwargs to plot()
+    norm_keys = {'color': 'c', 'linewidth': 'lw', 'linestyle': 'ls'}
+
+    for p, s in zip(maps, styles):
+        kwargs_i = list()
+        overrides = dict()
+        if p.layers and p.layers.plot_kwargs:
+            # names that do not need to be normalized
+            ov1 = {k: v for k, v in p.layers.plot_kwargs.items() if
+                   k not in norm_keys}
+            # normalize names
+            ov2 = {norm_keys[k]: v for k, v in p.layers.plot_kwargs.items()
+                   if k in norm_keys}
+            overrides.update(ov1)
+            overrides.update(ov2)
+
+        for k in range(p.nlayer):
+            defaults = {'ls': s.linestyle[k], 'lw': s.linewidth[k],
+                        'c': s.color[k], 'alpha': s.alpha[k]}
+            defaults.update(overrides)
+            kwargs_i.append(defaults)
+
+        plot_kwargs.append(kwargs_i)
+
+    return plot_kwargs
+
+
+def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
+            xlim=None, extendy=0.01, extendx=0.01, label_first_only=True,
+            identity=False, sharey=True, legend=True, **kwargs):
+
+    # Convert input arguments to sequences.
+    if not isinstance(data, (list, tuple)):
+        tmp = (data, )
+    else:
+        tmp = tuple(data)
+
+    # Manually copy this into an object-type ndarray
+    data = np.ndarray((len(tmp), ), dtype=object)
+    for i, d in enumerate(tmp):
+        data[i] = d
+    pm = np.atleast_1d(pm)
+    style = np.atleast_1d(style)
+
+    # Broadcast PlotMaps and data against each to support mapping multiple
+    # arrays using the same PlotMap, or applying different PlotMaps to a
+    # single array.
+    bcast = np.broadcast(pm, data, style)
+    maps = np.empty((bcast.size, ), dtype=object)
+    values = np.empty_like(maps)
+    styles = np.empty_like(maps)
+    for i, (p, v, s) in enumerate(bcast):
+        # extract plot data for given plot map to create specific values array
+        # and PlotMap objects
+        v_s, p_s = p.apply(v)
+        maps[i] = p_s
+        values[i] = v_s
+        styles[i] = s
+
+    # compute number of rows, cols and layers
+    nrow = max(x.nrow for x in maps)
+    ncol = max(x.ncol for x in maps)
+    nlayer = max(x.nlayer for x in maps)
+
+    # Generate labels for all subplots, store them on array with shape
+    # (nrow, ncol, 3, 3) where the last 2 axis specify the label location
+    # within each subplot
+    labels, label_kwargs = row_col_labels(nrow, ncol, maps, styles,
+                                          first_only=label_first_only)
+
+    # Inter-quartile range
     trim_iqr = float(trim_iqr) if trim_iqr is not None else trim_iqr
 
-    if style is None:
-        style = (DefaultStyle(), )
-    else:
-        style = tuple(np.atleast_1d(style))
+    # Determine plot limits for x-axis
+    if xlim is None:
+        xmin = min(x.xaxis.values[0] for x in maps)
+        xmax = max(x.xaxis.values[-1] for x in maps)
+        xlim = (xmin, xmax)
+    if extendx:
+        xlim = bnd_extend(xlim, extendx)
 
-    if len(style) != ndat:
-        if len(style) == 1:
-            style *= ndat
-        else:
-            raise ValueError('style parameter cannot be broadcast to '
-                             'match length of data arrays.')
+    # Determine plot limits for y-axis
+    ylim = get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values)
 
-    def func(ax, idx):
+    # Construct kwargs to be passed to plot() invocation for each plot map
+    # and layer
+    plot_kwargs = axis_plot_args(maps, styles)
+
+    needs_legend = False
+
+    def subplot(ax, idx):
         i, j = idx
 
-        nonlocal yy, xmin, xmax
+        nonlocal needs_legend
 
-        annotations = np.ndarray((3, 3), dtype=object)
+        # plot all plot objects sequentially
+        for i_m, (p, v, s) in enumerate(zip(maps, values, styles)):
+            # True if this is first obj. in sequence, or action should not be
+            # limited to first-only
+            first_or_all = not label_first_only or i_m == 0
 
-        for idx_dat, (dat, pm, st) in enumerate(zip(data, pmaps, style)):
-            if i < pm.nrow and j < pm.ncol:
-                for k, sl_k in enumerate(pm.slices[i, j]):
-                    idx_plt = idx + (k, )
-                    vals = pm.values[idx_plt]
-                    aidx = pm.indexes[idx_plt]
-                    layer = pm.layers
+            for k, yy in enumerate(v[i, j]):
+                if legend and first_or_all and (p.layers and k < p.nlayer):
+                    lidx = p.layers.index[k]
+                    lval = p.layers.values[k]
+                    # construct label argument for layer k
+                    largs = LabelArgs(i, j, k, lidx, lval)
+                    txt = p.layers.get_label(largs, k)
+                    needs_legend = True
+                else:
+                    txt = None
 
-                    y = dat[sl_k].squeeze()
-                    if ylim is None:
-                        yy[i, j].append(y)
+                # kwargs such as color, line style, etc.
+                plot_kw = plot_kwargs[i_m][k]
 
-                    xvals = pm.xvalues
-                    if xvals is None or len(xvals) == 0:
-                        xvals = np.arange(len(y))
+                ax.plot(p.xaxis.values, yy, label=txt, **plot_kw)
 
-                    if xlim is None:
-                        xmin = min(np.min(xvals), xmin)
-                        xmax = max(np.max(xvals), xmax)
+        # iterate over all potential label locations in subplot,
+        # check whether something should be plotted there, at plot it.
+        # There is a possibly empty list in each array cell.
+        for iv, ih in np.broadcast(range(3), range(3)):
+            for lbl in label_kwargs[i, j, iv, ih]:
+                # Add this otherwise position relative to current
+                # axes will not work
+                lbl['transform'] = ax.transAxes
+                ax.text(**lbl)
 
-                    larg = LabelArgs(i, j, k, aidx[PlotMap.IDX_LAYER],
-                                     vals[PlotMap.IDX_LAYER])
-                    lbl = pm.layers.get_label(larg, k)
-
-                    plot_kw = {'ls': st.linestyle[k],
-                               'lw': st.linewidth[k],
-                               'c': st.color[k],
-                               'alpha': st.alpha[k]}
-                    ax.plot(xvals, y, label=lbl, **plot_kw)
-
-                    if k == 0:
-                        larg = LabelArgs(i, j, k, aidx[PlotMap.IDX_ROW],
-                                         vals[PlotMap.IDX_ROW])
-                        rtxt = pm.rows.get_label(larg, i)
-
-                        larg.value = vals[PlotMap.IDX_COL]
-                        larg.index = aidx[PlotMap.IDX_COL]
-                        ctxt = pm.cols.get_label(larg, j)
-
-                        lst = []
-                        if rtxt or ctxt:
-                            if pm.rows.label_loc == pm.cols.label_loc:
-                                lidx = loc_text_to_tuple(pm.rows.label_loc)
-                                txt = ', '.join((rtxt, ctxt))
-                                lst.append((lidx, txt))
-                            else:
-                                if rtxt:
-                                    lidx = loc_text_to_tuple(pm.rows.label_loc)
-                                    lst.append((lidx, rtxt))
-                                if ctxt:
-                                    lidx = loc_text_to_tuple(pm.cols.label_loc)
-                                    lst.append((lidx, ctxt))
-
-                            for lidx, txt in lst:
-                                if not annotations[lidx]:
-                                    annotations[lidx] = list()
-                                annotations[lidx].append(txt)
-
-        for ii in range(3):
-            for jj in range(3):
-                lst = annotations[ii, jj]
-                if lst:
-                    txt_kwargs = loc_kwargs[ii, jj].copy()
-                    txt_kwargs.update(style[0].text)
-                    y = txt_kwargs['y']
-                    dy = 1 if y < 0.5 else -1
-                    txt_kwargs['transform'] = ax.transAxes
-                    for itxt, txt in enumerate(annotations[ii, jj]):
-                        yi = y + dy * itxt * 0.075
-                        txt_kwargs.update({'s': txt, 'y': yi})
-                        ax.text(**txt_kwargs)
-
+        # Plot 45° line if requested
         if identity:
-            if xlim and len(xlim) == 2:
-                xxmin, xxmax = xlim
-            else:
-                xxmin, xxmax = xmin, xmax
-            plot_identity(ax, xxmin, xxmax)
+            plot_identity(ax, xlim[0], xlim[1])
 
         ax.ticklabel_format(style='sci', axis='both', scilimits=(-2, 3))
 
-        if not sharey and ylim is None:
-            arr = np.hstack(yy[i, j])
-            ymin, ymax = adj_bounds(arr, extendy, trim_iqr)
+        # set limits
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim[i, j])
 
-            ax.set_ylim(ymin, ymax)
-
-        if i == (nrow - 1) and j == (ncol - 1):
-            if xlim is not None and len(xlim) == 2:
-                ax.set_xlim(xlim)
-            else:
-                xmin, xmax = bnd_extend((xmin, xmax), by=extendx)
-                ax.set_xlim(xmin, xmax)
-
-            if ylim is not None and len(ylim) == 2:
-                ax.set_ylim(ylim)
-            elif sharey:
-                arr = np.hstack([np.hstack(yy_i) for yy_i in yy.ravel()])
-                ymin, ymax = adj_bounds(arr, extendy, trim_iqr)
-
-                ax.set_ylim(ymin, ymax)
-
-    plot_grid(func, nrow=nrow, ncol=ncol, style=style[0],
-              sharey=sharey, **kwargs)
+    plot_grid(subplot, nrow=nrow, ncol=ncol, style=style[0], sharey=sharey,
+              legend=(legend and needs_legend), **kwargs)
