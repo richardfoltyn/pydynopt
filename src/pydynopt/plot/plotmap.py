@@ -19,7 +19,7 @@ from pydynopt.plot.baseplots import plot_grid
 
 class PlotDimension(object):
 
-    def __init__(self, dim=None, at_idx=None, at_val=None, values=None,
+    def __init__(self, dim, at_idx=None, at_val=None, values=None,
                  label=None, label_fmt=None, label_loc='lower right',
                  fixed=False, **kwargs):
         """
@@ -36,8 +36,9 @@ class PlotDimension(object):
         self.label = label
         self.label_loc = label_loc if label or label_fmt else None
 
-        self.dim = int(dim) if dim is not None else None
+        self.dim = int(dim)
         self.values = None
+        self.at_val = None
         self.index = None
         self.fixed = fixed
 
@@ -63,23 +64,17 @@ class PlotDimension(object):
 
         if at_idx is None:
             if at_val is not None and values is not None:
-                at_idx = tuple(np.searchsorted(values, at_val))
+                at_idx = tuple(np.atleast_1d(np.searchsorted(values, at_val)))
             else:
                 # Plot everything if nothing else was specified
                 at_idx = slice(None)
         elif not isinstance(at_idx, slice):
-            at_idx = tuple(np.atleast_1d(at_idx))
+            at_idx = tuple(np.atleast_1d(np.array(at_idx, dtype=np.int)))
 
-        # ignore values if at_val given
-        if at_val is None and values is not None:
-            at_val = values
-            print('Ignoring \'values\' argument as \'at_val\' was given',
-                  file=sys.stderr)
-
-        # At this point we have a non-missing at_idx and a missing or
-        # non-missing at_val
         if at_val is not None:
             at_val = np.atleast_1d(at_val)
+        if values is not None:
+            values = np.atleast_1d(values)
 
         if at_val is not None and not isinstance(at_idx, slice):
             if len(at_idx) != len(at_val):
@@ -90,14 +85,19 @@ class PlotDimension(object):
         # would drop the dimension from the resulting mapped data array.
         # Conversely, for fixed mappings use a scalar to eliminate the
         # dimension from data array.
-        if not isinstance(at_idx, slice) and len(at_idx) == 1:
-            if self.fixed:
-                at_idx = at_idx[0]
-            else:
+        if self.fixed:
+            try:
+                at_idx = int(at_idx[0])
+            except TypeError:
+                m = 'Dim {:d}: at_idx must be integer type for fixed dimensions'
+                raise TypeError(m.format(self.dim))
+        else:
+            if not isinstance(at_idx, slice) and len(at_idx) == 1:
                 at_idx = slice(at_idx[0], at_idx[0] + 1)
 
         self.index = at_idx
-        self.values = at_val
+        self.values = values
+        self.at_val = at_val
 
     def __iter__(self):
         if self.index is None:
@@ -142,16 +142,10 @@ class PlotMap(object):
                 self.mapped[d.dim] = d
 
         if fixed is not None:
-            fixed = tuple(np.array(fixed, dtype=object))
+            fixed = tuple(np.atleast_1d(fixed))
             assert all(isinstance(x, PlotDimension) for x in fixed)
 
             for d in fixed:
-                if d.dim is None:
-                    raise ValueError('Missing dim attribute for fixed '
-                                     'dimension')
-                if d.index is None:
-                    raise ValueError('Missing index for fixed dimension')
-
                 if d.dim in self.mapped:
                     raise ValueError("Duplicate mapping for single dimension")
                 self.mapped[d.dim] = d
@@ -181,18 +175,18 @@ class PlotMap(object):
             if len(pm.mapped) != 0:
                 raise RuntimeError("No map for x-axis specified!")
             else:
-                pm.map_xaxis()
+                pm.map_xaxis(dim=0)
 
         dmap = pm.mapped
-        dims = np.sort(list(dmap.keys()))
+        ndims = max(dmap.keys())
 
         data = np.asarray(data)
-        if (data.ndim - 1) < dims[-1]:
+        if (data.ndim - 1) < ndims:
             raise ValueError('Plot map dimension exceeds data dimension')
 
-        # squeeze out length-1 dimensions that are not explicitly mapped. Do
-        # not iterate over data.shape directly, as we are modifying it in
-        # place in the loop.
+        # Step 1: squeeze out length-1 dimensions that are not explicitly
+        # mapped. Do not iterate over data.shape directly, as we are
+        # modifying it in place in the loop.
         i = 0
         while i < data.ndim - 1:
             if i not in dmap:
@@ -216,12 +210,39 @@ class PlotMap(object):
                 # move on to next dimension
                 i += 1
 
-        # Step 2: remove all fixed mappings from data and plot map
-        dims = np.sort(list(dmap.keys()))
-        dlist = [dmap[d] for d in dims]
+        dlist = [dmap[k] for k in sorted(dmap.keys())]
 
-        idx = tuple(d.index for d in dlist)
+        # Step 2: remove all fixed mappings from data and plot map. To apply
+        # dimension indices we first need to make sure that these are not
+        # slice() objects and they are broadcastable, otherwise numpy
+        # advanced indexing might fail. For example, if for the row dimension
+        # i = (1,2,3) and for the col axis j = (1,2), data[i, j, :] will fail
+        # because i and j cannot be broadcast against each other.
+
+        # Replace all non-slice tuples of non-fixed indices with
+        # appropriately shaped arrays. First we need to collect all indices
+        # that need to be replaced to be able to determine the broadcast
+        # dimensions.
+
+        idx = [d.index for d in dlist]
+        ix_args = list()
+        ix_dims = list()
+        for k, index in enumerate(idx):
+            # should not need to checked for non-fixed dim. as we check in
+            # PlotDimensions that at_idx is int for those.
+            if isinstance(index, tuple) and not dlist[k].fixed:
+                ix_args.append(index)
+                ix_dims.append(k)
+
+        if len(ix_args) > 0:
+            ix_res = np.ix_(*tuple(ix_args))
+            # store back results
+            for k, index in zip(ix_dims, ix_res):
+                idx[k] = index
+
+        # Reduce array to data that will be plotted
         data = data[idx]
+
         # Remove fixed mappings too, keep only explicit row/col/layer/xaxis
         i = 0
         while i < len(dlist):
@@ -263,7 +284,18 @@ class PlotMap(object):
                 if isinstance(d.index, slice):
                     # expand to true index values if index was defined as slice
                     d.index = np.arange(data.shape[d.dim])[d.index]
-                if d.values is None:
+                if d.at_val is not None:
+                    if len(d.index) != len(d.at_val):
+                        m = "Dim {:d}: Index and value length differ"
+                        raise RuntimeError(m.format(d.dim))
+                    d.values = d.at_val
+                elif d.values is not None:
+                    try:
+                        d.values = d.values[d.index]
+                    except IndexError:
+                        m = 'Dim {:d}: Non-conformable index and values arrays'
+                        raise RuntimeError(m.format(d.dim))
+                else:
                     d.values = d.index
                 pm.mapped[d.dim] = d
 
@@ -274,7 +306,7 @@ class PlotMap(object):
         Fix data array dimensions to specific indexes. This is useful for
         high-dimensional arrays that can or should not be mapped to
         rows/columns/layers. The specified dimensions are fixed across all
-        plots on grid.
+        plot on grid.
 
         Parameters
         ----------
@@ -360,20 +392,7 @@ class PlotMap(object):
     def map_layers(self, dim, *args, **kwargs):
         self.map_generic(dim, 'layers', *args, **kwargs)
 
-    def map_generic(self, dim, kind, *args, **kwargs):
-
-        if dim in self.mapped:
-            raise ValueError('Dimension {:d} already mapped!'.format(dim))
-
-        pd = getattr(self, kind)
-        if pd is not None:
-            del self.mapped[pd.dim]
-
-        pd = PlotDimension(dim, *args, **kwargs)
-        setattr(self, kind, pd)
-        self.mapped[pd.dim] = pd
-
-    def map_xaxis(self, dim=0, at_idx=slice(None), *args, **kwargs):
+    def map_xaxis(self, dim, *args, **kwargs):
         """
         Map data array dimension `dim` to x-axis, using `values` as labels.
         Indexes to be shown on x-axis can optionally be restricted using
@@ -397,12 +416,24 @@ class PlotMap(object):
 
         Returns
         -------
-
         Nothing
 
         """
 
         self.map_generic(dim, 'xaxis', *args, **kwargs)
+
+    def map_generic(self, dim, kind, *args, **kwargs):
+
+        if dim in self.mapped:
+            raise ValueError('Dimension {:d} already mapped!'.format(dim))
+
+        pd = getattr(self, kind)
+        if pd is not None:
+            del self.mapped[pd.dim]
+
+        pd = PlotDimension(dim, *args, **kwargs)
+        setattr(self, kind, pd)
+        self.mapped[pd.dim] = pd
 
     def plot(self, data, style=None, trim_iqr=2.0, ylim=None,
              xlim=None, extendy=0.01, extendx=0.01, identity=False, **kwargs):

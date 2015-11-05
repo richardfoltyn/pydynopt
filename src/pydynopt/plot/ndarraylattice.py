@@ -23,7 +23,7 @@ class NDArrayLattice(PlotMap):
         Fix data array dimensions to specific indexes. This is useful for
         high-dimensional arrays that can or should not be mapped to
         rows/columns/layers. The specified dimensions are fixed across all
-        plots on grid.
+        plot on grid.
 
         Parameters
         ----------
