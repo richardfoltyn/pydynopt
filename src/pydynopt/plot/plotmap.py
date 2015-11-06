@@ -40,13 +40,16 @@ class PlotDimension(object):
         self.label = label
         self.label_loc = label_loc
 
-        self.dim = int(dim)
-        self.values = None
-        self.at_val = None
-        self.index = None
+        self._dim = None
+        self.dim = dim
+        self._values = None
+        self._at_val = None
+        self._index = None
         self.fixed = fixed
         # save remaining kwargs to be used when calling axis.plot()
         self.plot_kwargs = kwargs
+
+        self.__repr__cached = None
 
         self.update(at_idx, at_val, values)
 
@@ -70,17 +73,17 @@ class PlotDimension(object):
 
         if at_idx is None:
             if at_val is not None and values is not None:
-                at_idx = tuple(np.atleast_1d(np.searchsorted(values, at_val)))
+                at_idx = np.searchsorted(values, at_val).flatten()
             else:
                 # Plot everything if nothing else was specified
                 at_idx = slice(None)
         elif not isinstance(at_idx, slice):
-            at_idx = tuple(np.atleast_1d(np.array(at_idx, dtype=np.int)))
+            at_idx = np.array(at_idx, dtype=np.int).flatten()
 
         if at_val is not None:
-            at_val = np.atleast_1d(at_val)
+            at_val = np.array(at_val).flatten()
         if values is not None:
-            values = np.atleast_1d(values)
+            values = np.array(values).flatten()
 
         if at_val is not None and not isinstance(at_idx, slice):
             if len(at_idx) != len(at_val):
@@ -101,9 +104,47 @@ class PlotDimension(object):
             if not isinstance(at_idx, slice) and len(at_idx) == 1:
                 at_idx = slice(at_idx[0], at_idx[0] + 1)
 
-        self.index = at_idx
-        self.values = values
-        self.at_val = at_val
+        self._index = at_idx
+        self._values = values
+        self._at_val = at_val
+
+        self.__repr__cached = None
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @dim.setter
+    def dim(self, value):
+        self._dim = int(value)
+        self.__repr__cached = None
+
+    @property
+    def index(self):
+        return self._index
+
+    @index.setter
+    def index(self, value):
+        self._index = value
+        self.__repr__cached = None
+
+    @property
+    def values(self):
+        return self._values
+
+    @values.setter
+    def values(self, value):
+        self._values = value
+        self.__repr__cached = None
+
+    @property
+    def at_val(self):
+        return self._at_val
+
+    @at_val.setter
+    def at_val(self, value):
+        self._at_val = value
+        self.__repr__cached = None
 
     def __iter__(self):
         if self.index is None:
@@ -136,22 +177,45 @@ class PlotDimension(object):
         return lbl
 
     def __repr__(self):
-        s = 'PlotDim(dim={:d}, index={:s}, values={:s})'
-        if self.index is None or isinstance(self.index, slice):
-            sidx = "{!r}".format(self.index)
-        else:
-            if len(self.index) > 0:
-                sidx = '...'.join(str(x) for x in self.index[[0, -1]])
+        if self.__repr__cached is None:
+            tokens = ['dim={:d}'.format(self.dim)]
+            if isinstance(self.index, slice):
+                index = self.index
+                sidx = "{!r}".format(index)
+                tokens.append('index={:s}'.format(sidx))
             else:
-                sidx = str(self.index[0])
-        sval = 'None'
-        if self.values is not None:
-            if len(self.values) > 0:
-                sval = '...'.join(str(x) for x in self.values[[0, -1]])
-            else:
-                sval = "{:.3f}".format(self.values[0])
+                index = np.atleast_1d(self.index)
+                if len(index) > 3:
+                    sidx = '...'.join(str(x) for x in index[[0, -1]])
+                else:
+                    sidx = ','.join('{:d}'.format(int(x)) for x in index)
 
-        return s.format(self.dim, sidx, sval)
+                fmt = 'index=[{:s}]' if len(index) > 1 else 'index={:s}'
+                tokens.append(fmt.format(sidx))
+
+            if self.at_val is None and self.values is not None:
+                values = np.atleast_1d(self.values)[index]
+            elif self.at_val is not None:
+                values = self.at_val
+            else:
+                values = None
+
+            if values is not None:
+                if len(values) > 3:
+                    sval = '...'.join(str(x) for x in values[[0, -1]])
+                else:
+                    sval = ','.join("{:.3f}".format(x) for x in values)
+
+                fmt = 'values=[{:s}]' if len(values) > 1 else 'values={:s}'
+                tokens.append(fmt.format(sval))
+
+            if self.fixed:
+                tokens.append('fixed=True')
+
+            s = 'PlotDim({:s})'.format(', '.join(tokens))
+            self.__repr__cached = s
+
+        return self.__repr__cached
 
 
 class PlotMap(object):
@@ -219,6 +283,27 @@ class PlotMap(object):
                     'apply() first!'
                 raise RuntimeError(m)
         return n
+
+    def __repr__(self):
+        tokens = list()
+        if self.xaxis is not None:
+            tokens.append('{:d}=>x-axis'.format(self.xaxis.dim))
+        if self.rows is not None:
+            tokens.append('{:d}=>Rows'.format(self.rows.dim))
+        if self.cols is not None:
+            tokens.append('{:d}=>Cols'.format(self.cols.dim))
+        if self.layers is not None:
+            tokens.append('{:d}=>Layers'.format(self.layers.dim))
+        if any(x.fixed for x in self.mapped.values()):
+            fixed = list()
+            for k, v in self.mapped.items():
+                if v.fixed:
+                    fixed.append('{:d}'.format(v.dim))
+            tokens.append('Fixed: {:s}'.format(' '.join(fixed)))
+
+        s = 'PlotMap({:s})'.format(', '.join(tokens))
+        return s
+
 
     def apply(self, data):
         """
@@ -297,8 +382,12 @@ class PlotMap(object):
         for k, index in enumerate(idx):
             # should not need to checked for non-fixed dim. as we check in
             # PlotDimensions that at_idx is int for those.
-            if isinstance(index, tuple) and not dlist[k].fixed:
+            if not isinstance(index, slice) and not dlist[k].fixed:
                 ix_args.append(index)
+                ix_dims.append(k)
+            elif isinstance(index, slice) and not dlist[k].fixed:
+                # Convert any slice indices to arrays
+                ix_args.append(np.arange(data.shape[k])[index])
                 ix_dims.append(k)
 
         if len(ix_args) > 0:
@@ -306,6 +395,10 @@ class PlotMap(object):
             # store back results
             for k, index in zip(ix_dims, ix_res):
                 idx[k] = index
+                # write back expanded slices into list of PlotDimensions too;
+                # flatten array since we do not want the broadcasted version
+                # that is used for finding the values in data
+                dlist[k].index = index.flatten()
 
         # Reduce array to data that will be plotted
         data = data[idx]
@@ -317,7 +410,9 @@ class PlotMap(object):
                 del dlist[i]
                 for j in range(i, len(dlist)):
                     dlist[j].dim -= 1
-            i += 1
+            else:
+                # Increment only if nothing was deleted!
+                i += 1
 
         # Step 3: swap and insert axis as necessary to obtain an array with
         # shape (nrows, ncols, nlayers, nxvals). If no mapping is provided
@@ -349,22 +444,18 @@ class PlotMap(object):
 
         for d in (pm.rows, pm.cols, pm.layers, pm.xaxis):
             if d is not None:
-                if isinstance(d.index, slice):
-                    # expand to true index values if index was defined as slice
-                    d.index = np.arange(data.shape[d.dim])[d.index]
                 if d.at_val is not None:
                     if len(d.index) != len(d.at_val):
                         m = "Dim {:d}: Index and value length differ"
                         raise RuntimeError(m.format(d.dim))
-                    d.values = d.at_val
                 elif d.values is not None:
                     try:
-                        d.values = d.values[d.index]
+                        d.at_val = d.values[d.index]
                     except IndexError:
                         m = 'Dim {:d}: Non-conformable index and values arrays'
                         raise RuntimeError(m.format(d.dim))
                 else:
-                    d.values = d.index
+                    d.at_val = d.index
                 pm.mapped[d.dim] = d
 
         return data, pm
@@ -696,7 +787,7 @@ def row_col_labels(nrow, ncol, maps, styles, first_only=True):
     # depending on where label is positioned within subplot
     direction_y = [-1, -1, 1]
 
-    for i, j in np.broadcast(range(nrow), range(ncol)):
+    for i, j in np.broadcast(*np.ix_(range(nrow), range(ncol))):
         largs = LabelArgs(i, j, None)
         labels_ij = list()
 
@@ -708,16 +799,14 @@ def row_col_labels(nrow, ncol, maps, styles, first_only=True):
 
             if r and i < len(r.index):
                 largs.index = r.index[i]
-                if r.values is not None:
-                    largs.value = r.values[i]
+                largs.value = r.at_val[i]
                 rtxt = r.get_label(largs, i)
                 if rtxt:
                     rloc = loc_text_to_tuple(r.label_loc)
 
             if c and j < len(c.index):
                 largs.index = c.index[j]
-                if c.values is not None:
-                    largs.value = c.values[j]
+                largs.value = c.at_val[j]
                 ctxt = c.get_label(largs, j)
                 if ctxt:
                     cloc = loc_text_to_tuple(c.label_loc)
@@ -857,14 +946,14 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
     # single array.
     bcast = np.broadcast(pm, data, style)
     maps = np.empty((bcast.size, ), dtype=object)
-    values = np.empty_like(maps)
+    data = np.empty_like(maps)
     styles = np.empty_like(maps)
     for i, (p, v, s) in enumerate(bcast):
         # extract plot data for given plot map to create specific values array
         # and PlotMap objects
         v_s, p_s = p.apply(v)
         maps[i] = p_s
-        values[i] = v_s
+        data[i] = v_s
         styles[i] = s
 
     # compute number of rows, cols and layers
@@ -883,14 +972,14 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
 
     # Determine plot limits for x-axis
     if xlim is None:
-        xmin = min(x.xaxis.values[0] for x in maps)
-        xmax = max(x.xaxis.values[-1] for x in maps)
+        xmin = min(x.xaxis.at_val[0] for x in maps)
+        xmax = max(x.xaxis.at_val[-1] for x in maps)
         xlim = (xmin, xmax)
     if extendx:
         xlim = bnd_extend(xlim, extendx)
 
     # Determine plot limits for y-axis
-    ylim = get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values)
+    ylim = get_ylim(nrow, ncol, ylim, extendy, sharey, maps, data)
 
     # Construct kwargs to be passed to plot() invocation for each plot map
     # and layer
@@ -909,7 +998,7 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
         i, j = idx
 
         # plot all plot objects sequentially
-        for i_m, (p, v, s) in enumerate(zip(maps, values, styles)):
+        for i_m, (p, v, s) in enumerate(zip(maps, data, styles)):
             # True if this is first obj. in sequence, or action should not be
             # limited to first-only
             first_or_all = not label_first_only or i_m == 0
@@ -917,7 +1006,7 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
             for k, yy in enumerate(v[i, j]):
                 if legend and first_or_all and (p.layers and k < p.nlayer):
                     lidx = p.layers.index[k]
-                    lval = p.layers.values[k]
+                    lval = p.layers.at_val[k]
                     # construct label argument for layer k
                     largs = LabelArgs(i, j, k, lidx, lval)
                     txt = p.layers.get_label(largs, k)
@@ -927,7 +1016,7 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
                 # kwargs such as color, line style, etc.
                 plot_kw = plot_kwargs[i_m][k]
 
-                ax.plot(p.xaxis.values, yy, label=txt, **plot_kw)
+                ax.plot(p.xaxis.at_val, yy, label=txt, **plot_kw)
 
         # iterate over all potential label locations in subplot,
         # check whether something should be plotted there, at plot it.

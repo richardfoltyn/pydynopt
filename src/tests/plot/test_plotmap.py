@@ -53,6 +53,19 @@ def data_3d():
     return x
 
 
+@pytest.fixture(scope='module')
+def data_4d():
+    x1 = np.linspace(0, 1, 101)
+    x2 = np.linspace(-2, 2, 5)
+    x3 = np.linspace(-2, 2, 3)
+    x4 = np.linspace(-1, 1, 7)
+
+    xx1, xx2, xx3, xx4 = np.meshgrid(x1, x2, x3, x4, indexing='ij')
+    f = xx2 * np.sqrt(xx1) + xx3 + xx4 * np.sin(xx1)
+
+    return x1, x2, x3, x4, f
+
+
 def test_plotdim(request):
     """
     Test PlotDimensions creation
@@ -98,11 +111,22 @@ def test_plotmap(request):
 
 
 def assert_data_shape(pm, data, desired):
-    data_aligned, pm_aligned = pm.apply(data)
+    data_a, pm_a = pm.apply(data)
 
-    assert data_aligned.ndim == 4
-    assert np.all(data_aligned.shape == desired.shape)
-    assert np.all(data_aligned == desired)
+    assert data_a.ndim == 4
+    assert np.all(data_a.shape == desired.shape)
+    assert np.all(data_a == desired)
+
+    sh = data_a.shape
+
+    # Check that dimensions have been adapted as needed
+    for i, x in enumerate((pm_a.rows, pm_a.cols, pm_a.layers, pm_a.xaxis)):
+        if x is not None:
+            assert x.dim == i
+            assert len(x.index) == sh[i]
+            assert len(x.at_val) == sh[i]
+
+    return data_a, pm_a
 
 
 def test_1d(request, data_1d):
@@ -255,6 +279,43 @@ def test_3d(request, data_3d):
     pm.map_columns(dim=1, at_idx=i2)
 
     assert_data_shape(pm, dd, desired)
+
+    # Test: Fix more than one dimension
+    idx0 = dd.shape[0] // 2
+    idx1 = dd.shape[1] - 1
+    desired = dd[None, idx0:idx0+1, idx1:idx1+1, :]
+
+    pm = PlotMap()
+    pm.map_xaxis(dim=2, values=data_3d.grid[2])
+    pm.add_fixed(dim=(0, 1), at_idx=(idx0, idx1))
+    assert_data_shape(pm, dd, desired)
+
+
+def test_4d(request, data_4d):
+
+    x0, x1, x2, x3, f = data_4d
+
+    i0 = slice(len(x0) // 2)
+    i1 = (0, len(x1) - 1)
+    i2 = np.arange(len(x2))[x2 < 2]
+    i3 = slice(0, None, 2)
+
+    ii1, ii2 = np.ix_(i1, i2)
+    desired = f[i0, ii1, ii2, i3]
+    desired = np.swapaxes(desired, 0, 1)
+    desired = np.swapaxes(desired, 1, 2)
+    desired = np.swapaxes(desired, 2, 3)
+
+    pm = PlotMap()
+    pm.map_xaxis(dim=0, at_idx=i0, values=x0)
+    pm.map_rows(dim=1, at_idx=i1, values=x1)
+    pm.map_columns(dim=2, values=x2, at_val=x2[i2])
+    pm.map_layers(dim=3, values=x3, at_idx=i3)
+
+    assert_data_shape(pm, f, desired)
+
+
+
 
 
 
