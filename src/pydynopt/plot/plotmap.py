@@ -304,7 +304,6 @@ class PlotMap(object):
         s = 'PlotMap({:s})'.format(', '.join(tokens))
         return s
 
-
     def apply(self, data):
         """
         Apply mapping to data array, resulting in a 4-dimensional array
@@ -396,8 +395,10 @@ class PlotMap(object):
             for k, index in zip(ix_dims, ix_res):
                 idx[k] = index
                 # write back expanded slices into list of PlotDimensions too;
-                # flatten array since we do not want the broadcasted version
-                # that is used for finding the values in data
+                # flatten array since we do not want the broadcast version
+                # that is used for finding the values in data. We need to do
+                # this before transforming the data, later there is no way to
+                #  find out what these indices actually were!
                 dlist[k].index = index.flatten()
 
         # Reduce array to data that will be plotted

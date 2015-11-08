@@ -2,8 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from pydynopt.plot.plotmap import PlotMap, plot_pm
 
-__author__ = 'Richard Foltyn'
-
 
 class NDArrayLattice(PlotMap):
 
@@ -13,6 +11,9 @@ class NDArrayLattice(PlotMap):
         high-dimensional arrays that can or should not be mapped to
         rows/columns/layers. The specified dimensions are fixed across all
         plot on grid.
+
+        Note that all existing fixed dimensions will be dropped from the
+        mapping.
 
         Parameters
         ----------
@@ -25,10 +26,15 @@ class NDArrayLattice(PlotMap):
 
         Returns
         -------
-
         Nothing
 
         """
+
+        # Need to delete all existing fixed mappings, since the name of this
+        # function implies that all existing ones are discarded
+
+        mapped = {k: v for k, v in self.mapped.items() if not v.fixed}
+        self.mapped = mapped
 
         self.add_fixed(dim, at_idx)
 
@@ -57,7 +63,6 @@ class NDArrayLattice(PlotMap):
         raise NotImplementedError()
 
     @staticmethod
-    def plot_array(*args, **kwargs):
+    def plot_arrays(*args, **kwargs):
         plot_pm(*args, **kwargs)
-
 
