@@ -79,4 +79,4 @@ def render(fig, outfile=None):
         fig.show()
     else:
         fig.savefig(outfile)
-        fig.clear()
+        plt.close()
