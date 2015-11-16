@@ -1,4 +1,6 @@
 
+import numpy as np
+from pydynopt.common.python_helpers import reshape_result
 
 cdef struct interp_accel:
     pass
@@ -41,3 +43,22 @@ cdef inline size_t \
             elif x >= xp[index + 1]:
                 acc.index = c_interp_bsearch(xp, x, index, length - 1)
         return acc.index
+
+
+def interp_find(double[:] xp, x):
+
+
+    cdef double *ptr_xp = &(xp[0])
+    biter = np.broadcast(x, 0.0)
+
+    cdef size_t[::1] lb = np.empty(biter.size, dtype=np.uint)
+
+    cdef size_t i
+    cdef size_t length = xp.shape[0]
+    cdef double x_i
+    cdef interp_accel acc
+
+    for i, x_i in enumerate(biter):
+        lb[i] = c_interp_find(ptr_xp, x_i, length, &acc)
+
+    return reshape_result(biter, lb)
