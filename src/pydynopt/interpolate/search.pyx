@@ -49,16 +49,18 @@ def interp_find(double[:] xp, x):
 
 
     cdef double *ptr_xp = &(xp[0])
+    # Use a dummy to be able to use broadcast() even with only one element
     biter = np.broadcast(x, 0.0)
 
     cdef size_t[::1] lb = np.empty(biter.size, dtype=np.uint)
 
     cdef size_t i
     cdef size_t length = xp.shape[0]
-    cdef double x_i
+    cdef double x_i, dummy
     cdef interp_accel acc
+    acc.index = xp.shape[0] // 2
 
-    for i, x_i in enumerate(biter):
+    for i, (x_i, dummy) in enumerate(biter):
         lb[i] = c_interp_find(ptr_xp, x_i, length, &acc)
 
     return reshape_result(biter, lb)
