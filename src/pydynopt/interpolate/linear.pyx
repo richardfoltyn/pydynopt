@@ -2,6 +2,7 @@
 from cython import boundscheck
 
 import numpy as np
+from pydynopt.common.python_helpers import reshape_result
 
 ################################################################################
 
@@ -106,19 +107,85 @@ def interp1d_linear(x, double[::1] xp, double[:] fp, out=None):
 ################################################################################
 # Bilinear interpolation
 
-cdef int _interp2d_bilinear(double[:] x0, double[:] y0,
-        double[::1] x, double[::1] y,
-        double[:, :] fval, double[:] out) nogil:
+@boundscheck(True)
+def interp2d_bilinear(x1, x2, x1p, x2p, fval, out=None):
+
+    cdef int error_val = 0
+
+    cdef double[::1] mv_x1p, mv_x2p
+    mv_x1p = np.ascontiguousarray(x1p, dtype=np.float)
+    mv_x2p = np.ascontiguousarray(x2p, dtype=np.float)
+
+    cdef double[:, ::1] mv_fval
+    mv_fval = np.ascontiguousarray(fval, dtype=np.float)
+
+    error_val = c_interp2d_check_inputs(mv_x1p, mv_x2p, mv_fval)
+
+    if error_val == -1:
+        raise ValueError('Dimensions of x1, x2 and fval not conformable')
+    elif error_val == -2:
+        raise ValueError('Arrays x1p and x2p must contain at least 2 points!')
+    elif error_val == -3:
+        raise ValueError('Dimensions of x0, y0 not conformable!')
+
+    cdef bint out_present = (out is not None)
+    it = np.broadcast(x1, x2)
+    if not out_present:
+        out = np.empty(it.size, dtype=np.float)
+    else:
+        if out.shape != it.shape:
+            raise ValueError('Non-conformable out array provided')
+
+    cdef interp_accel acc1, acc2
+    acc1.index = mv_x1p.shape[0] // 2
+    acc2.index = mv_x2p.shape[0] // 2
+
+    cdef double x1_i, x2_i, fval_i
+    cdef size_t i, length = it.size
+    for i, (x1_i, x2_i) in enumerate(it):
+        fval_i = c_interp2d_bilinear(x1_i, x2_i, mv_x1p, mv_x2p, mv_fval,
+                                     &acc1, &acc2)
+        if out_present:
+            out.flat[i] = fval_i
+        else:
+            out[i] = fval_i
+
+    if out_present:
+        return out
+    else:
+        return reshape_result(it, out)
+
+cdef int c_interp2d_check_inputs(double[::1] x1p, double[::1] x2p,
+                                 double[:, ::1] fval) nogil:
 
     # Some sanity checks: make sure dimension of input and output arrays
     # match. We also require at least 2 points in each direction on the
     # domain of f().
-    if x.shape[0] != fval.shape[0] or y.shape[0] != fval.shape[1]:
-        return -1
-    if x.shape[0] < 2 or y.shape[0] < 2:
-        return -2
-    if x0.shape[0] != y0.shape[0] != out.shape[0]:
-        return -3
+
+    cdef int retval = 0
+
+    if x1p.shape[0] != fval.shape[0] or x2p.shape[0] != fval.shape[1]:
+        retval = -1
+    if x1p.shape[0] < 2 or x2p.shape[0] < 2:
+        retval = -2
+    if x2p.shape[0] != x2p.shape[0]:
+        retval = -3
+
+    return retval
+
+
+cdef int c_interp2d_bilinear_vec(double[:] x1, double[:] x2,
+        double[::1] x1p, double[::1] x2p,
+        double[:, ::1] fval, double[:] out) nogil:
+
+    # Some sanity checks: make sure dimension of input and output arrays
+    # match. We also require at least 2 points in each direction on the
+    # domain of f().
+    cdef int error_val = 0
+
+    error_val = c_interp2d_check_inputs(x1p, x2p, fval)
+    if error_val != 0:
+        return error_val
 
     # for each (x_i, y_i) combination where we compute interpolation,
     # we first need to identify bounding rectangle with indexes ix_lb,
@@ -127,16 +194,23 @@ cdef int _interp2d_bilinear(double[:] x0, double[:] y0,
     # Special care needs to be taken if xi or yi falls outside of the domain
     # defined by x and y arrays. In that case we perform linear extrapolation.
 
-    cdef unsigned long i
-    for i in range(x0.shape[0]):
+    cdef interp_accel acc1, acc2
 
-        out[i] = _interp2d_bilinear_impl(x0[i], y0[i], x, y, fval)
+    acc1.index = x1p.shape[0] // 2
+    acc2.index = x2p.shape[1] // 2
 
-    return 0
+    cdef size_t i, length = x1.shape[0]
+    for i in range(length):
+
+        out[i] = c_interp2d_bilinear(x1[i], x2[i], x1p, x2p, fval, &acc1, &acc2)
+
+    return error_val
 
 
-cdef inline double _interp2d_bilinear_impl(double x, double y, double[::1] xp,
-            double[::1] yp, double[:, :] fval) nogil:
+cdef double c_interp2d_bilinear(
+        double x1, double x2, double[::1] x1p,
+        double[::1] x2p, double[:, ::1] fval,
+        interp_accel *acc1, interp_accel *acc2) nogil:
     """
 
     Note on implementation: This could alternatively be implemented as a
@@ -152,32 +226,35 @@ cdef inline double _interp2d_bilinear_impl(double x, double y, double[::1] xp,
     a binary search is performed only once for each dimension.
     """
 
-    cdef double x_lb, x_ub, y_lb, y_ub
-    cdef long ix_lb, iy_lb
+    cdef double x1_lb, x1_ub, x2_lb, x2_ub
+    cdef size_t ix1_lb, ix2_lb
 
     # interpolation weights in x and y direction
-    cdef double xwgt, ywgt
-    # interpolants in x direction evaluated at lower and upper y
-    cdef double fx1, fx2
+    cdef double w1, w2
+    # interpolants in x1 direction evaluated at lower and upper x2
+    cdef double f_lb, f_ub, fxy
 
-    ix_lb = cy_find_lb(&(xp[0]), x, xp.shape[0])
-    iy_lb = cy_find_lb(&(yp[0]), y, yp.shape[0])
+    ix1_lb = c_interp_find(&(x1p[0]), x1, x1p.shape[0], acc1)
+    ix2_lb = c_interp_find(&(x2p[0]), x2, x2p.shape[0], acc2)
 
-    # lower and upper bounding indexes in x direction
-    x_lb = xp[ix_lb]
-    x_ub = xp[ix_lb + 1]
+    # lower and upper bounding indexes in x1 direction
+    x1_lb = x1p[ix1_lb]
+    x1_ub = x1p[ix1_lb + 1]
 
     # lower and upper bounding indexes in y direction
-    y_lb = yp[iy_lb]
-    y_ub = yp[iy_lb + 1]
+    x2_lb = x2p[ix2_lb]
+    x2_ub = x2p[ix2_lb + 1]
 
-    xwgt = (x - x_lb) / (x_ub - x_lb)
-    fx1 = (1-xwgt) * fval[ix_lb, iy_lb] + xwgt * fval[ix_lb + 1, iy_lb]
-    fx2 = (1-xwgt) * fval[ix_lb, iy_lb + 1] + xwgt * fval[ix_lb + 1, iy_lb + 1]
+    # interpolation weights
+    w1 = (x1 - x1_lb) / (x1_ub - x1_lb)
+    w2 = (x2 - x2_lb) / (x2_ub - x2_lb)
 
-    ywgt = (y - y_lb) / (y_ub - y_lb)
+    f_lb = (1 - w1) * fval[ix1_lb, ix2_lb] + w1 * fval[ix1_lb + 1, ix2_lb]
+    f_ub = (1 - w1) * fval[ix1_lb, ix2_lb + 1] + w1 * fval[ix1_lb + 1, ix2_lb + 1]
 
-    return (1-ywgt) * fx1 + ywgt * fx2
+    fxy = (1 - w2) * f_lb + w2 * f_ub
+
+    return fxy
 
 
 ################################################################################
@@ -264,26 +341,6 @@ cdef int _interp3d_trilinear(double[:] x, double[:] y, double[:] z,
 
 ################################################################################
 # Python-callable convenience functions
-
-@boundscheck(True)
-def interp2d_bilinear(double[:] x0, double[:] y0, double[::1] x, double[::1] y,
-                      double[:,:] fval, double[:] out=None):
-
-
-    cdef unsigned long nx = x0.shape[0]
-    if out is None:
-        out = make_ndarray(1, nx, <double>x0[0])
-
-    retval = _interp2d_bilinear(x0, y0, x, y, fval, out)
-    if retval == -1:
-        raise ValueError('Dimensions of x, y and fval not conformable')
-    elif retval == -2:
-        raise ValueError('Arrays x and y must contain at least 2 points!')
-    elif retval == -3:
-        raise ValueError('Dimensions of x0, y0 and output array not '
-                         'conformable!')
-
-    return np.asarray(out)
 
 @boundscheck(True)
 def interp3d_trilinear(double[:] x, double[:] y, double[:] z,
