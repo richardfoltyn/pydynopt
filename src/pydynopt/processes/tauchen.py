@@ -14,21 +14,39 @@ def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
 
     Parameters
     ----------
-    rho :   AR(1) autocorrelation parameter (lambda in Tauchen 1986)
-    sigma : Conditional or unconditional std. deviation or AR(1)
-            In the Tauchen (1986) notation this corresponds to sigma_epsilon
-            and sigma_y, respectively.
-    n :     Number of elements on discretized state space.
-    m :     Determines range of state space, which has equidistant grid
-            points on +/- m * sigma_y. Tauchen uses m=3, Floden (2008) sets
-            m = 1.2 * log(n) * sigma_y
-    sigma_cond : If true, sigma is taken to be the conditional std.
-                deviation, i.e. the standard deviation of the error term.
-    full_output : If true, return ergodic distribution, implied
-                  autocorrelation and std. deviation of discretized process.
+    rho : float
+        AR(1) autocorrelation parameter (lambda in Tauchen 1986)
+    sigma : float
+        Conditional or unconditional std. deviation or AR(1)
+        In the Tauchen (1986) notation this corresponds to sigma_epsilon
+        and sigma_y, respectively.
+    n : int
+        Number of elements on discretized state space.
+    m : int
+        Determines range of state space, which has equidistant grid
+        points on +/- m * sigma_y. Tauchen uses m=3, Floden (2008) sets
+        m = 1.2 * log(n) * sigma_y
+    sigma_cond : bool
+        If true, sigma is taken to be the conditional std. deviation,
+        i.e. the standard deviation of the error term.
+    full_output : bool
+        If true, return ergodic distribution, implied autocorrelation and
+        std. deviation of discretized process.
 
     Returns
     -------
+    z : array
+        Discretized state space (1-d array)
+    transm : array
+        Transition matrix
+    ergodic_dist : array
+        Ergodic distribution of discretized process (1-d array)
+    rho_impl : float
+        Implied autocorrelation of discretized process
+    sigma_z_impl : float
+        Implied unconditional std. deviation of discretized process
+    sigma_e_impl : float
+        Implied conditional std. deviation corresponding of AR(1)
 
     """
 
