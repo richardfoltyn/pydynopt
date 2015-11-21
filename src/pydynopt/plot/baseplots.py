@@ -41,6 +41,20 @@ def plot_grid(fun, nrow=1, ncol=1,
                              sharex=sharex, sharey=sharey, squeeze=False,
                              **fig_kw)
 
+    if xlabel is not None:
+        xlabel = np.atleast_1d(xlabel)
+        if len(xlabel) != ncol:
+            if len(xlabel) != 1:
+                raise ValueError('Non-conformable number of xlabels passed')
+            xlabel = np.repeat(xlabel, ncol)
+
+    if ylabel is not None:
+        ylabel = np.atleast_1d(ylabel)
+        if len(ylabel) != nrow:
+            if len(ylabel) != 1:
+                raise ValueError('Non-conformable number of ylabels passed')
+            ylabel = np.repeat(ylabel, nrow)
+
     for i in range(nrow):
         for j in range(ncol):
             if i == 0:
@@ -59,11 +73,11 @@ def plot_grid(fun, nrow=1, ncol=1,
 
     if xlabel is not None:
         for j in range(ncol):
-            axes[-1, j].set_xlabel(xlabel, **style.xlabel)
+            axes[-1, j].set_xlabel(xlabel[j], **style.xlabel)
 
     if ylabel is not None:
         for i in range(nrow):
-            axes[i, 0].set_ylabel(ylabel, **style.ylabel)
+            axes[i, 0].set_ylabel(ylabel[i], **style.ylabel)
 
     if legend and legend_loc is not None and legend_at is not None:
         axes[legend_at[0], legend_at[1]].legend(loc=legend_loc, **style.legend)
