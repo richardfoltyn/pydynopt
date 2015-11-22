@@ -6,7 +6,7 @@ import pytest
 from itertools import permutations
 from random import randint
 
-from pydynopt.interpolate import interp1d_linear, interp2d_bilinear
+from pydynopt.interpolate import interp1d_linear, interp2d_linear
 
 import common
 
@@ -20,7 +20,7 @@ class TestBilinear(common.TestBase):
 
     @pytest.fixture
     def f_interp(self):
-        return interp2d_bilinear
+        return interp2d_linear
 
     @pytest.fixture
     def ndim(self):

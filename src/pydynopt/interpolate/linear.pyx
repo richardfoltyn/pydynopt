@@ -108,7 +108,7 @@ def interp1d_linear(x, double[::1] xp, double[:] fp, out=None):
 # Bilinear interpolation
 
 @boundscheck(True)
-def interp2d_bilinear(x1, x2, x1p, x2p, fval, out=None):
+def interp2d_linear(x1, x2, x1p, x2p, fval, out=None):
 
     cdef int error_val = 0
 
@@ -143,7 +143,7 @@ def interp2d_bilinear(x1, x2, x1p, x2p, fval, out=None):
     cdef double x1_i, x2_i, fval_i
     cdef size_t i, length = it.size
     for i, (x1_i, x2_i) in enumerate(it):
-        fval_i = c_interp2d_bilinear(x1_i, x2_i, mv_x1p, mv_x2p, mv_fval,
+        fval_i = c_interp2d_linear(x1_i, x2_i, mv_x1p, mv_x2p, mv_fval,
                                      &acc1, &acc2)
         if out_present:
             out.flat[i] = fval_i
@@ -174,7 +174,7 @@ cdef int c_interp2d_check_inputs(double[::1] x1p, double[::1] x2p,
     return retval
 
 
-cdef int c_interp2d_bilinear_vec(double[:] x1, double[:] x2,
+cdef int c_interp2d_linear_vec(double[:] x1, double[:] x2,
         double[::1] x1p, double[::1] x2p,
         double[:, ::1] fval, double[:] out) nogil:
 
@@ -202,12 +202,12 @@ cdef int c_interp2d_bilinear_vec(double[:] x1, double[:] x2,
     cdef size_t i, length = x1.shape[0]
     for i in range(length):
 
-        out[i] = c_interp2d_bilinear(x1[i], x2[i], x1p, x2p, fval, &acc1, &acc2)
+        out[i] = c_interp2d_linear(x1[i], x2[i], x1p, x2p, fval, &acc1, &acc2)
 
     return error_val
 
 
-cdef double c_interp2d_bilinear(
+cdef double c_interp2d_linear(
         double x1, double x2, double[::1] x1p,
         double[::1] x2p, double[:, ::1] fval,
         interp_accel *acc1, interp_accel *acc2) nogil:

@@ -6,7 +6,7 @@ from itertools import permutations
 import pytest
 
 from pydynopt.interpolate import interp3d_trilinear, interp1d_linear, \
-    interp2d_bilinear
+    interp2d_linear
 
 import common
 import test_bilinear as bilinear
@@ -64,4 +64,4 @@ class TestTrilinear(bilinear.TestBilinear):
                 # extrapolation
                 common.test_margin(f_interp, f, xp, x_ext,
                                    marg=(m1, m2), f_marg=fm,
-                                   f_interp_marg=interp2d_bilinear, tol=1e-9)
+                                   f_interp_marg=interp2d_linear, tol=1e-9)
