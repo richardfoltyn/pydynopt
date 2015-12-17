@@ -6,9 +6,9 @@ from matplotlib.font_manager import FontProperties
 from brewer2mpl import qualitative
 import itertools as it
 import numpy as np
+import copy
 
-
-# COLORS = ['#d7191c', '#2b83ba', '#1a9641', '#404040', '#ff7f00']
+COLORS = ['#e41a1c', '#377eb8', '#4daf4a', '#ff7f00', '#f781bf']
 
 LEG_KWARGS = {'prop': FontProperties(family='serif'), 'framealpha': .7}
 LBL_KWARGS = {'fontproperties': FontProperties(family='serif', size=12)}
@@ -31,13 +31,13 @@ class Colors(object):
         self.cache = colors
 
     def __getitem__(self, item):
-        if not self.cache or item >= len(self.cache):
-            if not self.colors:
-                nn = max(4, item + 1)
-                self.cache = tuple(qualitative.Set1[nn].hex_colors)
-            else:
-                col = it.cycle(self.colors)
-                self.cache = tuple(next(col) for x in range(item + 1))
+        if not self.colors:
+            self.colors = tuple(qualitative.Set1[7].mpl_colors)
+            self.cache = copy.deepcopy(self.colors)
+
+        if item >= len(self.cache):
+            col = it.cycle(self.colors)
+            self.cache = tuple(next(col) for x in range(item + 1))
         return self.cache[item]
 
 

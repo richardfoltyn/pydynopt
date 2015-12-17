@@ -461,7 +461,7 @@ class PlotMap(object):
 
         return data, pm
 
-    def add_fixed(self, dim, at_idx):
+    def add_fixed(self, dim, at_idx, replace=True):
         """
         Fix data array dimensions to specific indexes. This is useful for
         high-dimensional arrays that can or should not be mapped to
@@ -490,8 +490,9 @@ class PlotMap(object):
 
         for d, i in zip(dim, at_idx):
             if d in self.mapped:
-                raise ValueError('Mapping for dimension {:d} '
-                                 'already exists!'.format(d))
+                if not (self.mapped[d].fixed and replace):
+                    m = 'Mapping for dimension {:d} already exists!'.format(d)
+                    raise ValueError(m)
             self.mapped[d] = PlotDimension(dim=d, at_idx=i, fixed=True)
 
     def map_rows(self, dim, at_idx=None, at_val=None, values=None,
@@ -899,7 +900,7 @@ def axis_plot_args(maps, styles):
     plot_kwargs = list()
 
     # normalized key names to be used as kwargs to plot()
-    norm_keys = {'color': 'c', 'linewidth': 'lw', 'linestyle': 'ls'}
+    norm_keys = {'c': 'color', 'linewidth': 'lw', 'linestyle': 'ls'}
 
     for p, s in zip(maps, styles):
         kwargs_i = list()
@@ -916,7 +917,7 @@ def axis_plot_args(maps, styles):
 
         for k in range(p.nlayer):
             defaults = {'ls': s.linestyle[k], 'lw': s.linewidth[k],
-                        'c': s.color[k], 'alpha': s.alpha[k]}
+                        'color': s.color[k], 'alpha': s.alpha[k]}
             defaults.update(overrides)
             kwargs_i.append(defaults)
 
@@ -927,7 +928,8 @@ def axis_plot_args(maps, styles):
 
 def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
             xlim=None, extendy=0.01, extendx=0.01, label_first_only=True,
-            identity=False, sharey=True, legend=True, xlabel=None, **kwargs):
+            identity=False, sharey=True, legend=True, xlabel=None,
+            callback=None, **kwargs):
 
     # Convert input arguments to sequences.
     if not isinstance(data, (list, tuple)):
@@ -995,8 +997,14 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
             if xlabel:
                 break
 
+    do_callback = callback is not None and isinstance(callback, Callable)
+
     def subplot(ax, idx):
         i, j = idx
+
+        # set limits
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim[i, j])
 
         # plot all plot objects sequentially
         for i_m, (p, v, s) in enumerate(zip(maps, data, styles)):
@@ -1019,6 +1027,9 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
 
                 ax.plot(p.xaxis.at_val, yy, label=txt, **plot_kw)
 
+                if do_callback:
+                    callback(ax, (i, j, k, i_m), p.xaxis.at_val, yy, p, s)
+
         # iterate over all potential label locations in subplot,
         # check whether something should be plotted there, at plot it.
         # There is a possibly empty list in each array cell.
@@ -1034,10 +1045,6 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
             plot_identity(ax, xlim[0], xlim[1])
 
         ax.ticklabel_format(style='sci', axis='both', scilimits=(-2, 3))
-
-        # set limits
-        ax.set_xlim(xlim)
-        ax.set_ylim(ylim[i, j])
 
     plot_grid(subplot, nrow=nrow, ncol=ncol, style=style[0], sharey=sharey,
               legend=legend, xlabel=xlabel, **kwargs)
