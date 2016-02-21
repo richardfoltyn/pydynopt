@@ -65,6 +65,18 @@ class LineWidth(object):
         return self.cache[item]
 
 
+class Marker(object):
+    def __init__(self, markers):
+        self.markers = markers
+        self.cache = None
+
+    def __getitem__(self, item):
+        if not self.cache or item >= len(self.cache):
+            ms = it.cycle(self.markers)
+            self.cache = tuple(next(ms) for x in range(item + 1))
+        return self.cache[item]
+
+
 class Transparency(object):
     def __init__(self, alphas):
         self.alphas = alphas
@@ -100,6 +112,7 @@ class DefaultStyle(AbstractStyle):
 
     LINESTYLES = ['-', '--', '-', '--']
     ALPHAS = [.7, 0.9, 0.7, 1.0]
+    MARKERS = [None]
     LINEWIDTH = [2]
 
     def __init__(self):
@@ -121,6 +134,7 @@ class DefaultStyle(AbstractStyle):
         self._linewidth = None
         self._linestyle = None
         self._alpha = None
+        self._marker = None
 
     @property
     def color(self):
@@ -151,10 +165,18 @@ class DefaultStyle(AbstractStyle):
         self._linewidth = LineWidth(value)
 
     @property
+    def lw(self):
+        return self.linewidth
+
+    @property
     def linestyle(self):
         if self._linestyle is None:
             self._linestyle = LineStyle(DefaultStyle.LINESTYLES)
         return self._linestyle
+
+    @property
+    def ls(self):
+        return self.linestyle
 
     @linestyle.setter
     def linestyle(self, value):
@@ -178,6 +200,20 @@ class DefaultStyle(AbstractStyle):
             value = tuple(value)
         self._alpha = Transparency(value)
 
+    @property
+    def marker(self):
+        if self._marker is None:
+            self._marker = Marker(DefaultStyle.MARKERS)
+        return self._marker
+
+    @marker.setter
+    def marker(self, value):
+        if np.isscalar(value):
+            value = (value,)
+        else:
+            value = tuple(value)
+        self._marker = Marker(value)
+
 
 class Presentation(DefaultStyle):
 
@@ -186,12 +222,13 @@ class Presentation(DefaultStyle):
         super().__init__()
 
         self.cell_size = 5.0
-        # Red, Black, Green, Gray
+        # Green, Black, Red, Gray
 
         colors = ('#4daf4a', '#111111', '#e31a1c', '#4d4d4d')
         self.color = colors
-        self.linestyle = ('-', '--', '-.', ':')
+        self.linestyle = ('-', '--', '-', '-')
         self.linewidth = (2.0, 2.0, 2.0, 2.0)
         self.alpha = (.8, .8, .8, 1.0)
+        self.marker = (None, None, 'o', 'D')
 
 
