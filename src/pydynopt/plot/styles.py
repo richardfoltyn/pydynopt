@@ -222,13 +222,13 @@ class Presentation(DefaultStyle):
         super().__init__()
 
         self.cell_size = 5.0
-        # Green, Black, Red, Gray
+        # Green, Black/violet, Red, Gray
 
-        colors = ('#4daf4a', '#111111', '#e31a1c', '#4d4d4d')
+        colors = ('#4daf4a', '#56124E', '#e31a1c', '#4d4d4d')
         self.color = colors
-        self.linestyle = ('-', '--', '-', '-')
+        self.linestyle = ('-', '-', '-', '-')
         self.linewidth = (2.0, 2.0, 2.0, 2.0)
         self.alpha = (.8, .8, .8, 1.0)
-        self.marker = (None, None, 'o', 'D')
+        self.marker = (None, 'p', 'o', 'D')
 
 
