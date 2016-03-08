@@ -20,8 +20,7 @@ SUPTITLE_KWARGS = {'fontproperties':
 SUBPLOT_KWARGS = {'axisbg': 'white', 'axisbelow': True}
 GRID_KWARGS = {'color': 'black', 'alpha': 0.6, 'zorder': -1000}
 
-TEXT_KWARGS = {'fontsize': 14, 'alpha': 1.0, 'backgroundcolor': 'white',
-               'zorder': -5,
+TEXT_KWARGS = {'fontsize': 14, 'alpha': 1.0, 'zorder': 500,
                'fontproperties': FontProperties(family='serif')}
 
 
@@ -89,6 +88,21 @@ class Transparency(object):
         return self.cache[item]
 
 
+class PlotStyleDict(object):
+    def __init__(self, style):
+        self.style = style
+
+    def __getitem__(self, item):
+
+        keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec'}
+        res = dict()
+
+        for k in keys:
+            res[k] = getattr(self.style, k)[item]
+
+        return res
+
+
 class AbstractStyle(object):
 
     def __init__(self):
@@ -135,6 +149,9 @@ class DefaultStyle(AbstractStyle):
         self._linestyle = None
         self._alpha = None
         self._marker = None
+        self._mec = Colors(('white', ))
+
+        self._plot_all = PlotStyleDict(self)
 
     @property
     def color(self):
@@ -214,6 +231,16 @@ class DefaultStyle(AbstractStyle):
             value = tuple(value)
         self._marker = Marker(value)
 
+    @property
+    def mec(self):
+        if self._mec is None:
+            self._marker = Colors(('white', ))
+        return self._mec
+
+    @property
+    def plot_kwargs(self):
+        return self._plot_all
+
 
 class Presentation(DefaultStyle):
 
@@ -228,7 +255,7 @@ class Presentation(DefaultStyle):
         self.color = colors
         self.linestyle = ('-', '-', '-', '-')
         self.linewidth = (2.0, 2.0, 2.0, 2.0)
-        self.alpha = (.8, .8, .8, 1.0)
+        self.alpha = (.8, .8, .8, .8)
         self.marker = (None, 'p', 'o', 'D')
 
 
