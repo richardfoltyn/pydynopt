@@ -234,7 +234,7 @@ class DefaultStyle(AbstractStyle):
     @property
     def mec(self):
         if self._mec is None:
-            self._marker = Colors(('white', ))
+            self._mec = Colors(('white', ))
         return self._mec
 
     @property
@@ -251,11 +251,12 @@ class Presentation(DefaultStyle):
         self.cell_size = 5.0
         # Green, Black/violet, Red, Gray
 
-        colors = ('#4daf4a', '#56124E', '#e31a1c', '#4d4d4d')
+        colors = ('#4daf4a', '#56124E', '#e31a1c', '#000000', '#D76B00')
         self.color = colors
-        self.linestyle = ('-', '-', '-', '-')
-        self.linewidth = (2.0, 2.0, 2.0, 2.0)
-        self.alpha = (.8, .8, .8, .8)
-        self.marker = (None, 'p', 'o', 'D')
+        self.linestyle = ('-', '-', '-', '--', '-')
+        self.linewidth = (2.0, 2.0, 2.0, 2.0, 2.0)
+        self.alpha = (.8, .8, .8, .7, .8)
+        self.marker = (None, 'p', 'o', None, 'd')
+        self._mec = (None, 'White', 'White', None, 'White')
 
 
