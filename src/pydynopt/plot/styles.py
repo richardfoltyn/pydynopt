@@ -257,6 +257,6 @@ class Presentation(DefaultStyle):
         self.linewidth = (2.0, 2.0, 2.0, 2.0, 2.0)
         self.alpha = (.8, .8, .8, .7, .8)
         self.marker = (None, 'p', 'o', None, 'd')
-        self._mec = (None, 'White', 'White', None, 'White')
+        self._mec = Colors((None, 'White', 'White', None, 'White'))
 
 
