@@ -31,7 +31,7 @@ class Colors(object):
 
     def __getitem__(self, item):
         if not self.colors:
-            self.colors = tuple(qualitative.Set1[7].mpl_colors)
+            self.colors = tuple(qualitative.Set1[7].hex_colors)
             self.cache = copy.deepcopy(self.colors)
 
         if item >= len(self.cache):
