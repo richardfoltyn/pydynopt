@@ -45,7 +45,7 @@ cdef inline size_t \
         return acc.index
 
 
-def interp_find(double[:] xp, x):
+def interp_find(double[::1] xp, x):
 
 
     cdef double *ptr_xp = &(xp[0])
