@@ -57,22 +57,6 @@ def plot_grid(fun, nrow=1, ncol=1,
                 raise ValueError('Non-conformable number of ylabels passed')
             ylabel = np.repeat(ylabel, nrow)
 
-    for i in range(nrow):
-        for j in range(ncol):
-            if i == 0:
-                if j < column_title.shape[0] and column_title[j]:
-                    axes[i, j].set_title(column_title[j], **style.title)
-
-            if xlim is not None:
-                axes[i, j].set_xlim(xlim)
-            if ylim is not None:
-                axes[i, j].set_ylim(ylim)
-
-            if style.grid and ('b' not in style.grid or not style.grid['b']):
-                axes[i, j].grid(**style.grid)
-
-            fun(axes[i, j], (i, j), *args, **kwargs)
-
     if xlabel is not None:
         for j in range(ncol):
             axes[-1, j].set_xlabel(xlabel[j], **style.xlabel)
@@ -83,6 +67,22 @@ def plot_grid(fun, nrow=1, ncol=1,
 
     if legend and legend_loc is not None and legend_at is not None:
         axes[legend_at[0], legend_at[1]].legend(loc=legend_loc, **style.legend)
+
+    for i in range(nrow):
+        for j in range(ncol):
+            if i == 0:
+                if j < column_title.shape[0] and column_title[j]:
+                    axes[i, j].set_title(column_title[j], **style.title)
+
+            fun(axes[i, j], (i, j), *args, **kwargs)
+
+            if xlim is not None:
+                axes[i, j].set_xlim(xlim)
+            if ylim is not None:
+                axes[i, j].set_ylim(ylim)
+
+            if style.grid and ('b' not in style.grid or not style.grid['b']):
+                axes[i, j].grid(**style.grid)
 
     if suptitle is not None and suptitle:
         fig.suptitle(suptitle, **style.suptitle)
