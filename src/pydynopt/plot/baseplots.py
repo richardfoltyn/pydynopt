@@ -65,9 +65,6 @@ def plot_grid(fun, nrow=1, ncol=1,
         for i in range(nrow):
             axes[i, 0].set_ylabel(ylabel[i], **style.ylabel)
 
-    if legend and legend_loc is not None and legend_at is not None:
-        axes[legend_at[0], legend_at[1]].legend(loc=legend_loc, **style.legend)
-
     for i in range(nrow):
         for j in range(ncol):
             if i == 0:
@@ -83,6 +80,9 @@ def plot_grid(fun, nrow=1, ncol=1,
 
             if style.grid and ('b' not in style.grid or not style.grid['b']):
                 axes[i, j].grid(**style.grid)
+
+    if legend and legend_loc is not None and legend_at is not None:
+        axes[legend_at[0], legend_at[1]].legend(loc=legend_loc, **style.legend)
 
     if suptitle is not None and suptitle:
         fig.suptitle(suptitle, **style.suptitle)
