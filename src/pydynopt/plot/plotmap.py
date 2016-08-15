@@ -63,7 +63,7 @@ class PlotDimension(object):
             missing.
         2)  `values` specified: Same as (1), but axis labels available
         3)  `values` and `at_idx` given: Same as (2), but restrict to indices
-            that correspond to values in `at_val`
+            that correspond to values in `values`
         4)  `at_idx` specified: Plot at requested indices, no values for
             xaxis available
         5)  `at_idx` and `values` specified: same as (4), but with axis labels
@@ -866,15 +866,19 @@ def get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values):
             ylim = np.tile(ylim, reps=(nrow, ncol, 1))
 
         else:
-            # Compute ylims for each subplot
-            ylim = np.ndarray((nrow, ncol, 1), dtype=float)
-            for i, j in np.broadcast(range(nrow), range(ncol)):
-                # find all those objects which should be plotted in i, j
-                r = np.array([p.rows and i < len(p.rows) for p in maps])
-                c = np.array([p.cols and j < len(p.cols) for p in maps])
+            # Compute ylims for each subplot; for this we need to find all
+            # PMs that are to be shown in subplot (i, j), and find the
+            # min. and max of their y-values
+            ylim = np.ndarray((nrow, ncol, 2), dtype=float)
+            rr, cc = np.ix_(range(nrow), range(ncol))
+            for i, j in np.broadcast(rr, cc):
+                # find all those pmaps which should be plotted in i, j
+                r = np.array([p.rows and i < p.nrow for p in maps])
+                c = np.array([p.cols and j < p.ncol for p in maps])
                 use = np.logical_and(r, c)
-                ymin = min(np.amin(v[i, j]) for v in values[use])
-                ymax = max(np.amax(v[i, j]) for v in values[use])
+                # ignore NaNs when determining ylims
+                ymin = min(np.nanmin(v[i, j]) for v in values[use])
+                ymax = max(np.nanmax(v[i, j]) for v in values[use])
                 ylim[i, j] = (ymin, ymax)
     else:
         # User-provided ylim: if it's a simple tuple and sharey, broadcast
