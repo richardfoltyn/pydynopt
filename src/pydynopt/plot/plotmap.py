@@ -857,8 +857,15 @@ def get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values):
     # Determine plot limits for y-axis
     if ylim is None:
         if sharey:
-            ymin = min(np.amin(v) for v in values)
-            ymax = max(np.amax(v) for v in values)
+            # properly handle NaNs, ie ignore them unless all values
+            # in an array are NaNs
+            ymin = np.nanmin([np.nanmin(v) for v in values])
+            ymax = np.nanmax([np.nanmax(v) for v in values])
+
+            if np.isnan(ymin):
+                msg = 'Array contains only NaNs'
+                raise ValueError(msg)
+
             ylim = ymin, ymax
             if extendy:
                 ylim = bnd_extend(ylim, extendy)
@@ -877,8 +884,9 @@ def get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values):
                 c = np.array([p.cols and j < p.ncol for p in maps])
                 use = np.logical_and(r, c)
                 # ignore NaNs when determining ylims
-                ymin = min(np.nanmin(v[i, j]) for v in values[use])
-                ymax = max(np.nanmax(v[i, j]) for v in values[use])
+                ymin = np.nanmin([np.nanmin(v[i, j]) for v in values[use]])
+                ymax = np.nanmin([np.nanmax(v[i, j]) for v in values[use]])
+
                 ylim[i, j] = (ymin, ymax)
     else:
         # User-provided ylim: if it's a simple tuple and sharey, broadcast
