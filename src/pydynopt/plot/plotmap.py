@@ -853,20 +853,41 @@ def row_col_labels(nrow, ncol, maps, styles, first_only=True):
     return labels, text_kwargs
 
 
+def get_finite_ylim(values):
+    """
+    Compute joint ylim from list of arrays in values, taking into
+    consideration only finite elements.
+
+    Parameters
+    ----------
+    values : list
+        List of arrays to process
+
+    Returns
+    -------
+
+    """
+    min_v = [np.amin(v[np.isfinite(v)]) for v in values]
+    max_v = [np.amax(v[np.isfinite(v)]) for v in values]
+
+    if len(min_v) > 0 and len(max_v) > 0:
+        ymin = np.amin(min_v)
+        ymax = np.amax(max_v)
+    else:
+        msg = 'Array(s) contain any finite values'
+        raise ValueError(msg)
+
+    return ymin, ymax
+
+
 def get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values):
     # Determine plot limits for y-axis
     if ylim is None:
         if sharey:
-            # properly handle NaNs, ie ignore them unless all values
-            # in an array are NaNs
-            ymin = np.nanmin([np.nanmin(v) for v in values])
-            ymax = np.nanmax([np.nanmax(v) for v in values])
+            # properly handle NaNs and Infs
+            vv = [v for v in values if np.any(np.isfinite(v))]
+            ylim = get_finite_ylim(vv)
 
-            if np.isnan(ymin):
-                msg = 'Array contains only NaNs'
-                raise ValueError(msg)
-
-            ylim = ymin, ymax
             if extendy:
                 ylim = bnd_extend(ylim, extendy)
             # repeat across all rows / cols
@@ -883,11 +904,10 @@ def get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values):
                 r = np.array([p.rows and i < p.nrow for p in maps])
                 c = np.array([p.cols and j < p.ncol for p in maps])
                 use = np.logical_and(r, c)
-                # ignore NaNs when determining ylims
-                ymin = np.nanmin([np.nanmin(v[i, j]) for v in values[use]])
-                ymax = np.nanmin([np.nanmax(v[i, j]) for v in values[use]])
-
-                ylim[i, j] = (ymin, ymax)
+                # properly handle NaNs and Infs
+                vv = [v[i, j] for v in values[use]
+                      if np.any(np.isfinite(v[i, j]))]
+                ylim[i, j] = get_finite_ylim(vv)
     else:
         # User-provided ylim: if it's a simple tuple and sharey, broadcast
         # across all subplots
