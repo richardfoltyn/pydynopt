@@ -76,6 +76,18 @@ class Marker(object):
         return self.cache[item]
 
 
+class ConstFillProperty:
+    def __init__(self, const, values=None):
+        self.values = values
+        self.const = const
+
+    def __getitem__(self, item):
+        if self.values is None or item >= len(self.values):
+            return self.const
+        else:
+            return self.values[item]
+
+
 class Transparency(object):
     def __init__(self, alphas):
         self.alphas = alphas
@@ -94,7 +106,7 @@ class PlotStyleDict(object):
 
     def __getitem__(self, item):
 
-        keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec'}
+        keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec', 'markersize'}
         res = dict()
 
         for k in keys:
@@ -128,6 +140,7 @@ class DefaultStyle(AbstractStyle):
     ALPHAS = [.7, 0.9, 0.7, 1.0]
     MARKERS = [None]
     LINEWIDTH = [2]
+    MARKERSIZE = 5
 
     def __init__(self):
 
@@ -149,6 +162,7 @@ class DefaultStyle(AbstractStyle):
         self._linestyle = None
         self._alpha = None
         self._marker = None
+        self._markersize = None
         self._mec = Colors(('white', ))
 
         self._plot_all = PlotStyleDict(self)
@@ -230,6 +244,20 @@ class DefaultStyle(AbstractStyle):
         else:
             value = tuple(value)
         self._marker = Marker(value)
+
+    @property
+    def markersize(self):
+        if self._markersize is None:
+            self._markersize = ConstFillProperty(const=DefaultStyle.MARKERSIZE)
+        return self._markersize
+
+    @markersize.setter
+    def markersize(self, value):
+        if np.isscalar(value):
+            value = (value, )
+        else:
+            value = tuple(value)
+        self._markersize = ConstFillProperty(DefaultStyle.MARKERSIZE, value)
 
     @property
     def mec(self):

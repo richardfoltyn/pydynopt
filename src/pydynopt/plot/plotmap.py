@@ -932,7 +932,8 @@ def axis_plot_args(maps, styles):
     plot_kwargs = list()
 
     # normalized key names to be used as kwargs to plot()
-    norm_keys = {'c': 'color', 'linewidth': 'lw', 'linestyle': 'ls'}
+    norm_keys = {'c': 'color', 'linewidth': 'lw', 'linestyle': 'ls',
+                 'markersize': 'ms'}
 
     for p, s in zip(maps, styles):
         kwargs_i = list()
@@ -949,7 +950,9 @@ def axis_plot_args(maps, styles):
 
         for k in range(p.nlayer):
             defaults = {'ls': s.linestyle[k], 'lw': s.linewidth[k],
-                        'color': s.color[k], 'alpha': s.alpha[k]}
+                        'color': s.color[k], 'alpha': s.alpha[k],
+                        'marker': s.marker[k], 'ms': s.markersize[k],
+                        'mec': s.mec[k]}
             defaults.update(overrides)
             kwargs_i.append(defaults)
 
