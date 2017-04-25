@@ -265,6 +265,14 @@ class DefaultStyle(AbstractStyle):
             self._mec = Colors(('white', ))
         return self._mec
 
+    @mec.setter
+    def mec(self, value):
+        if np.isscalar(value):
+            value = (value, )
+        else:
+            value = tuple(value)
+        self._mec = ConstFillProperty('none', value)
+
     @property
     def plot_kwargs(self):
         return self._plot_all
