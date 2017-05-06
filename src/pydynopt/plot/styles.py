@@ -106,7 +106,8 @@ class PlotStyleDict(object):
 
     def __getitem__(self, item):
 
-        keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec', 'markersize'}
+        keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec', 'markersize',
+                'zorder'}
         res = dict()
 
         for k in keys:
@@ -164,6 +165,7 @@ class DefaultStyle(AbstractStyle):
         self._marker = None
         self._markersize = None
         self._mec = Colors(('white', ))
+        self._zorder = None
 
         self._plot_all = PlotStyleDict(self)
 
@@ -272,6 +274,20 @@ class DefaultStyle(AbstractStyle):
         else:
             value = tuple(value)
         self._mec = ConstFillProperty('none', value)
+
+    @property
+    def zorder(self):
+        if self._zorder is None:
+            self._zorder = ConstFillProperty(const=100)
+        return self._zorder
+
+    @zorder.setter
+    def zorder(self, value):
+        if np.isscalar(value):
+            value = (value, )
+        else:
+            value = tuple(value)
+        self._zorder = ConstFillProperty(100, value)
 
     @property
     def plot_kwargs(self):
