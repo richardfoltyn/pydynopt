@@ -18,7 +18,8 @@ SUPTITLE_KWARGS = {'fontproperties':
                     FontProperties(family='serif', size=14, style='italic',
                                    weight='semibold')}
 SUBPLOT_KWARGS = {'axisbg': 'white', 'axisbelow': True}
-GRID_KWARGS = {'color': 'black', 'alpha': 0.6, 'zorder': -1000}
+GRID_KWARGS = {'color': 'black', 'alpha': 0.7, 'zorder': -1000,
+               'linestyle': ':', 'linewidth': 0.5}
 
 TEXT_KWARGS = {'fontsize': 14, 'alpha': 1.0, 'zorder': 500,
                'fontproperties': FontProperties(family='serif')}
