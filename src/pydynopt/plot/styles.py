@@ -3,26 +3,8 @@ from __future__ import print_function, division, absolute_import
 __author__ = 'Richard Foltyn'
 
 from matplotlib.font_manager import FontProperties
-from brewer2mpl import qualitative
 import itertools as it
 import numpy as np
-import copy
-
-COLORS = ['#e41a1c', '#377eb8', '#4daf4a', '#ff7f00', '#f781bf']
-
-LEG_KWARGS = {'prop': FontProperties(family='serif'), 'framealpha': .7}
-LBL_KWARGS = {'fontproperties': FontProperties(family='serif', size=12)}
-TITLE_KWARGS = {'fontproperties':
-                    FontProperties(family='serif', size=14, style='italic')}
-SUPTITLE_KWARGS = {'fontproperties':
-                    FontProperties(family='serif', size=14, style='italic',
-                                   weight='semibold')}
-SUBPLOT_KWARGS = {'axisbg': 'white', 'axisbelow': True}
-GRID_KWARGS = {'color': 'black', 'alpha': 0.7, 'zorder': -1000,
-               'linestyle': ':', 'linewidth': 0.5}
-
-TEXT_KWARGS = {'fontsize': 14, 'alpha': 1.0, 'zorder': 500,
-               'fontproperties': FontProperties(family='serif')}
 
 
 class Colors(object):
@@ -31,10 +13,6 @@ class Colors(object):
         self.cache = colors
 
     def __getitem__(self, item):
-        if not self.colors:
-            self.colors = tuple(qualitative.Set1[7].hex_colors)
-            self.cache = copy.deepcopy(self.colors)
-
         if item >= len(self.cache):
             col = it.cycle(self.colors)
             self.cache = tuple(next(col) for x in range(item + 1))
@@ -119,24 +97,102 @@ class PlotStyleDict(object):
 
 class AbstractStyle(object):
 
+    DEFAULT_KWARGS = {}
+
     def __init__(self):
         self.linewidth = 1
 
         self.cell_size = None
         self.dpi = 96
 
-        self.grid = False
-        self.text = {}
-        self.title = {}
-        self.legend = {}
-        self.suptitle = {}
-        self.xlabel = {}
-        self.ylabel = {}
-        self.subplot = {}
-        self.figure = {}
+        self.figure = AbstractStyle.DEFAULT_KWARGS
+
+    @property
+    def legend(self):
+        return AbstractStyle.DEFAULT_KWARGS
+
+    @property
+    def grid(self):
+        return False
+
+    @property
+    def title(self):
+        return AbstractStyle.DEFAULT_KWARGS
+
+    @property
+    def suptitle(self):
+        return AbstractStyle.DEFAULT_KWARGS
+
+    @property
+    def xlabel(self):
+        return AbstractStyle.DEFAULT_KWARGS
+
+    @property
+    def ylabel(self):
+        return AbstractStyle.DEFAULT_KWARGS
+
+    @property
+    def subplot(self):
+        return AbstractStyle.DEFAULT_KWARGS
+
+    @property
+    def text(self):
+        return AbstractStyle.DEFAULT_KWARGS
 
 
 class DefaultStyle(AbstractStyle):
+
+    LEG_FONTPROP_KWARGS = {
+        'family': 'serif'
+    }
+
+    LBL_FONTPROP_KWARGS = {
+        'family': 'serif',
+        'size': 12
+    }
+
+    TITLE_FONTPROP_KWARGS = {
+        'family': 'serif',
+        'size': 14,
+        'style': 'italic'
+    }
+
+    SUBTITLE_FONTPROP_KWARGS = {
+        'family': 'serif',
+        'size': 14,
+        'style': 'italic',
+        'weight': 'semibold'
+    }
+
+    TEXT_FONTPROP_KWARGS = {
+        'family': 'serif',
+        'size': 14
+    }
+
+    # Keyword arguments (other than font properties) for various objects
+    LEG_KWARGS = {'framealpha': .7}
+
+    LBL_KWARGS = {}
+    TITLE_KWARGS = {}
+    SUPTITLE_KWARGS = {}
+
+    SUBPLOT_KWARGS = {
+        'axisbg': 'white',
+        'axisbelow': True
+    }
+
+    GRID_KWARGS = {
+        'color': 'black',
+        'alpha': 0.7,
+        'zorder': -1000,
+        'linestyle': ':',
+        'linewidth': 0.5
+    }
+
+    TEXT_KWARGS = {
+        'alpha': 1.0,
+        'zorder': 500
+    }
 
     LINESTYLES = ['-', '--', '-', '--']
     ALPHAS = [.7, 0.9, 0.7, 1.0]
@@ -144,19 +200,14 @@ class DefaultStyle(AbstractStyle):
     LINEWIDTH = [2]
     MARKERSIZE = 5
 
+    COLORS = ['#e41a1c', '#377eb8', '#4daf4a', '#ff7f00', '#f781bf']
+
     def __init__(self):
 
         super(DefaultStyle, self).__init__()
 
         self.cell_size = 6
 
-        self.grid = GRID_KWARGS
-        self.text = TEXT_KWARGS
-        self.title = TITLE_KWARGS
-        self.legend = LEG_KWARGS
-        self.suptitle = SUPTITLE_KWARGS
-        self.xlabel = LBL_KWARGS
-        self.ylabel = LBL_KWARGS
         self.figure = {'tight_layout': True}
 
         self._color = None
@@ -171,9 +222,64 @@ class DefaultStyle(AbstractStyle):
         self._plot_all = PlotStyleDict(self)
 
     @property
+    def legend(self):
+        cls = self.__class__
+        fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
+        kwargs = cls.LEG_KWARGS.copy()
+        # Add font properties
+        kwargs.update({'prop': fp})
+        return kwargs
+
+    @property
+    def grid(self):
+        cls = self.__class__
+        kwargs = cls.GRID_KWARGS.copy()
+        return kwargs
+
+    @property
+    def text(self):
+        cls = self.__class__
+        fp = FontProperties(**cls.TEXT_FONTPROP_KWARGS)
+        kwargs = cls.TEXT_KWARGS.copy()
+        kwargs.update({'fontproperties': fp})
+        return kwargs
+
+    @property
+    def title(self):
+        cls = self.__class__
+        fp = FontProperties(**cls.TITLE_FONTPROP_KWARGS)
+        kwargs = cls.TITLE_KWARGS.copy()
+        kwargs.update({'fontproperties': fp})
+        return kwargs
+
+    @property
+    def suptitle(self):
+        cls = self.__class__
+        fp = FontProperties(**cls.SUBTITLE_FONTPROP_KWARGS)
+        kwargs = cls.SUPTITLE_KWARGS.copy()
+        kwargs.update({'fontproperties': fp})
+        return kwargs
+
+    @property
+    def xlabel(self):
+        cls = self.__class__
+        fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
+        kwargs = cls.LBL_KWARGS.copy()
+        kwargs.update({'fontproperties': fp})
+        return kwargs
+
+    @property
+    def ylabel(self):
+        cls = self.__class__
+        fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
+        kwargs = cls.LBL_KWARGS.copy()
+        kwargs.update(fp)
+        return kwargs
+
+    @property
     def color(self):
         if self._color is None:
-            self._color = Colors()
+            self._color = Colors(self.__class__.COLORS)
         return self._color
 
     @color.setter
