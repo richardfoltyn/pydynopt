@@ -71,8 +71,6 @@ def plot_grid(fun, nrow=1, ncol=1,
                 if j < column_title.shape[0] and column_title[j]:
                     axes[i, j].set_title(column_title[j], **style.title)
 
-            fun(axes[i, j], (i, j), *args, **kwargs)
-
             if xlim is not None:
                 axes[i, j].set_xlim(xlim)
             if ylim is not None:
@@ -80,6 +78,8 @@ def plot_grid(fun, nrow=1, ncol=1,
 
             if style.grid and ('b' not in style.grid or not style.grid['b']):
                 axes[i, j].grid(**style.grid)
+
+            fun(axes[i, j], (i, j), *args, **kwargs)
 
     if legend and legend_loc is not None and legend_at is not None:
         axes[legend_at[0], legend_at[1]].legend(loc=legend_loc, **style.legend)

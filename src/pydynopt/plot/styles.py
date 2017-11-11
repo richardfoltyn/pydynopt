@@ -273,7 +273,7 @@ class DefaultStyle(AbstractStyle):
         cls = self.__class__
         fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
         kwargs = cls.LBL_KWARGS.copy()
-        kwargs.update(fp)
+        kwargs.update({'fontproperties': fp})
         return kwargs
 
     @property
