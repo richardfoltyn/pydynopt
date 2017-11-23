@@ -104,6 +104,7 @@ class AbstractStyle(object):
 
         self.cell_size = None
         self.dpi = 96
+        self._grid = None
 
         self.figure = AbstractStyle.DEFAULT_KWARGS
 
@@ -113,7 +114,14 @@ class AbstractStyle(object):
 
     @property
     def grid(self):
-        return False
+        return self._grid
+
+    @grid.setter
+    def grid(self, value):
+        if isinstance(value, bool):
+            self._grid = {'b': False}
+        else:
+            self._grid = dict(value)
 
     @property
     def title(self):
@@ -210,6 +218,7 @@ class DefaultStyle(AbstractStyle):
 
         self.figure = {'tight_layout': True}
 
+        self._grid = DefaultStyle.GRID_KWARGS
         self._color = None
         self._linewidth = None
         self._linestyle = None
@@ -228,12 +237,6 @@ class DefaultStyle(AbstractStyle):
         kwargs = cls.LEG_KWARGS.copy()
         # Add font properties
         kwargs.update({'prop': fp})
-        return kwargs
-
-    @property
-    def grid(self):
-        cls = self.__class__
-        kwargs = cls.GRID_KWARGS.copy()
         return kwargs
 
     @property
