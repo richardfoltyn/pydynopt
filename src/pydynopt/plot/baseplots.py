@@ -14,7 +14,61 @@ def plot_grid(fun, nrow=1, ncol=1,
               sharex=True, sharey=True,
               xlabel=None, ylabel=None, xlim=None, ylim=None,
               legend_at=(0, 0), legend_loc='upper left', legend=False,
-              outfile=None, style=None, aspect=1, *args, **kwargs):
+              outfile=None, style=None, aspect=1.0, *args, **kwargs):
+    """
+
+    Parameters
+    ----------
+    fun : callable
+        Callback function that is called for each subplot with arguments
+            fun(ax, idx, *args, **kwargs)
+        where `ax` is the MPL Axes class, `idx` is a tuple (row, col)
+        identifying the current subplot, and `args` and `kwargs` are
+        the corresponding arguments to `plot_grid` passed directly to the
+        callback function.
+    nrow : int
+        Number of rows
+    ncol : int
+        Number of columns
+    column_title : str or array_like
+        List of column titles
+    suptitle : str
+        Subtitle, currently not properly implemented
+    figure_kw : dict
+        Dictionary of keyword arguments passed to MPL's subplots() function
+        via **kwargs.
+    subplot_kw : dict
+        Dictionary passed to MPL's subplots() as the `subplot_kw` argument
+    sharex : bool
+        If true, identical x-limits are enforced across all subplots
+    sharey : bool
+        If true, identical y-limits are enforced across all subplots
+    xlabel : str
+        x-axis label
+    ylabel : str
+        y-axis label
+    xlim : iterable
+        Lower and upper x-axis limits
+    ylim : iterable
+        Lower and upper y-axis limits
+    legend_at : tuple
+        Subplot in which legend should be placed (default: (0,0))
+    legend_loc : str
+        MPL-compatible string identifying where the legend should be placed
+        within a subplot
+    legend : bool
+        If true, legend is displayed in the subplot identified by `legend_at`
+    outfile : str or None
+        If not None, figure is saved into given file
+    style : styles.AbstractStyle
+        Instance of AbstractStyle controlling various rendering options.
+    aspect : float
+        Aspect ratio
+    args : tuple
+        Positional arguments passed directly to `fun`
+    kwargs : dict
+        Keyword arguments passed directly to `fun`
+    """
 
     if column_title is None:
         column_title = np.ndarray((nrow, ), dtype=object)
