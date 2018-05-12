@@ -51,7 +51,8 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
 
     Returns
     -------
-
+    mu : numpy.ndarray
+        Ergodic distribution
     """
 
     # This function should also work for sparse matrices from scipy.sparse,
@@ -90,7 +91,8 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
     return mu
 
 
-def markov_moments(states, transm, ergodic_dist=None, moments=0):
+def markov_moments(states, transm, ergodic_dist=None, moments=False,
+                   *args, **kwargs):
     """
     Computes (exact) moments implied my a given Markov process, including
     the autocorrelation and the unconditional and conditional standard
@@ -105,9 +107,9 @@ def markov_moments(states, transm, ergodic_dist=None, moments=0):
     ergodic_dist : array_like or None
         Optional ergodic distribution implied by the transition matrix. If
         None this will be computed.
-    moments : int
-        If > 0, additionally return array containing the first `moments'
-        unconditional (centered) moments.
+    moments : bool
+        If True, additionally return array containing the usual first four
+        unconditional (standardized) moments.
 
     Returns
     -------
@@ -118,24 +120,27 @@ def markov_moments(states, transm, ergodic_dist=None, moments=0):
     sigma_e : float
         Conditional standard deviation
     mom : numpy.ndarray
-        If `moments` > 0, returns array containing this many first unconditional
-        (centered) moments.
+        If `moments` is True, returns array containing the following
+        (unconditional) moments: [mean, variance, skewness, kurtosis]
     """
 
     if ergodic_dist is None:
-        ergodic_dist = markov_ergodic_dist(transm)
+        ergodic_dist = markov_ergodic_dist(transm, *args, **kwargs)
     else:
         ergodic_dist = np.atleast_1d(ergodic_dist)
 
     x = np.atleast_1d(states)
 
     # unconditional centered moments
-    kmax = max(2, moments)
     # include the 0-th moment so that m[i] gives the i-th moment
-    m = np.zeros(kmax+1)
+    m = np.zeros(5)
     m[1] = np.dot(ergodic_dist, x)
-    for k in range(2, kmax+1):
-        m[k] = np.dot(np.power(x - m[1], k), ergodic_dist)
+    m[2] = np.dot(np.power(x - m[1], 2), ergodic_dist)
+    # Compute skewness and kurtosis only if requested
+    if moments:
+        for k in range(3, 5):
+            m[k] = np.dot(np.power(x - m[1], k), ergodic_dist) / m[2] ** (k/2.0)
+
     x_demeaned = x - m[1]
     x_m1 = np.outer(x_demeaned, x_demeaned)
     wgt = transm * ergodic_dist.reshape((-1, 1))
@@ -149,8 +154,8 @@ def markov_moments(states, transm, ergodic_dist=None, moments=0):
     sigma_e = np.sqrt((1-autocorr**2) * m[2])
     sigma_x = np.sqrt(m[2])
 
-    if moments > 0:
+    if moments:
         # do not return the 0-th moment
-        return autocorr, sigma_x, sigma_e, m[1:moments+1]
+        return autocorr, sigma_x, sigma_e, m[1:]
     else:
         return autocorr, sigma_x, sigma_e
