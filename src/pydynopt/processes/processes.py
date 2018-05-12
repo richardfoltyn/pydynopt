@@ -28,6 +28,31 @@ def rouwenhorst(n, mu, rho, sigma):
 
 def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
                         mu0=None, inverse=False):
+    """
+    Compute the ergodic distribution implied by a given Makrov chain transition
+    matrix.
+
+    Parameters
+    ----------
+    transm : numpy.ndarray
+        Markov chain transition matrix
+    tol : float
+        Terminal tolerance on consecutive changes in the ergodic distribution
+        if computing via the iterative method (`inverse` = False)
+    maxiter : int
+        Maximum number of iterations for iterative method.
+    transpose : bool
+        If true, the transition matrix `transm` is provided in transposed form.
+    mu0 : numpy.ndarray
+        Optional initial guess for the ergodic distribution if the iterative
+        method is used (default: uniform distribution).
+    inverse : bool
+        If True, compute the erdogic distribution using the "inverse" method
+
+    Returns
+    -------
+
+    """
 
     # This function should also work for sparse matrices from scipy.sparse,
     # so do not use .T to get the transpose.
@@ -46,12 +71,13 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
 
             dv = np.max(np.abs(mu0 - mu1))
             if dv < tol:
-                return mu1/(np.sum(mu1))
+                mu = mu1 / np.sum(mu1)
+                break
             else:
                 mu0 = mu1
         else:
-            print('Failed to converge after %d iterations (delta = %e)' %
-                  (it, dv))
+            msg = 'Failed to converge (delta = {:.e})'.format(dv)
+            print(msg)
             raise ConvergenceError(it, dv)
     else:
         m = transm - np.identity(transm.shape[0])
@@ -61,19 +87,56 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
         assert np.abs(np.sum(mu) - 1) < 1e-9
         mu /= np.sum(mu)
 
-        return mu
+    return mu
 
 
-def markov_moments(states, transm, ergodic_dist=None):
+def markov_moments(states, transm, ergodic_dist=None, moments=0):
+    """
+    Computes (exact) moments implied my a given Markov process, including
+    the autocorrelation and the unconditional and conditional standard
+    deviation.
+
+    Parameters
+    ----------
+    states : array_like
+        State space of the Markov chain
+    transm : numpy.ndarray
+        Transition matrix of the Markov chain
+    ergodic_dist : array_like or None
+        Optional ergodic distribution implied by the transition matrix. If
+        None this will be computed.
+    moments : int
+        If > 0, additionally return array containing the first `moments'
+        unconditional (centered) moments.
+
+    Returns
+    -------
+    autocorr : float
+        First-order autocorrelation
+    sigma_x : float
+        Unconditional standard deviation
+    sigma_e : float
+        Conditional standard deviation
+    mom : numpy.ndarray
+        If `moments` > 0, returns array containing this many first unconditional
+        (centered) moments.
+    """
 
     if ergodic_dist is None:
         ergodic_dist = markov_ergodic_dist(transm)
+    else:
+        ergodic_dist = np.atleast_1d(ergodic_dist)
 
-    x = states
+    x = np.atleast_1d(states)
 
-    mean_uncond = np.dot(ergodic_dist, x)
-    var_uncond = np.dot(np.power(x - mean_uncond, 2), ergodic_dist)
-    x_demeaned = x - mean_uncond
+    # unconditional centered moments
+    kmax = max(2, moments)
+    # include the 0-th moment so that m[i] gives the i-th moment
+    m = np.zeros(kmax+1)
+    m[1] = np.dot(ergodic_dist, x)
+    for k in range(2, kmax+1):
+        m[k] = np.dot(np.power(x - m[1], k), ergodic_dist)
+    x_demeaned = x - m[1]
     x_m1 = np.outer(x_demeaned, x_demeaned)
     wgt = transm * ergodic_dist.reshape((-1, 1))
 
@@ -82,8 +145,12 @@ def markov_moments(states, transm, ergodic_dist=None):
 
     # implied autocorrelation and variance of error term of discretized
     # process
-    autocorr = autocov / var_uncond
-    sigma_e = np.sqrt((1-autocorr**2) * var_uncond)
-    sigma_x = np.sqrt(var_uncond)
+    autocorr = autocov / m[2]
+    sigma_e = np.sqrt((1-autocorr**2) * m[2])
+    sigma_x = np.sqrt(m[2])
 
-    return autocorr, sigma_x, sigma_e
+    if moments > 0:
+        # do not return the 0-th moment
+        return autocorr, sigma_x, sigma_e, m[1:moments+1]
+    else:
+        return autocorr, sigma_x, sigma_e
