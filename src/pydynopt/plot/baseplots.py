@@ -16,6 +16,8 @@ def plot_grid(fun, nrow=1, ncol=1,
               legend_at=(0, 0), legend_loc='upper left', legend=False,
               outfile=None, style=None, aspect=1.0, *args, **kwargs):
     """
+    Creates a rectangular grid of subplots and calls a user-provided function
+    for each subplot to render user-supplied content.
 
     Parameters
     ----------
