@@ -901,8 +901,8 @@ def get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values):
             rr, cc = np.ix_(range(nrow), range(ncol))
             for i, j in np.broadcast(rr, cc):
                 # find all those pmaps which should be plotted in i, j
-                r = np.array([p.rows and i < p.nrow for p in maps])
-                c = np.array([p.cols and j < p.ncol for p in maps])
+                r = np.array([i < p.nrow for p in maps])
+                c = np.array([j < p.ncol for p in maps])
                 use = np.logical_and(r, c)
                 # properly handle NaNs and Infs
                 vv = [v[i, j] for v in values[use]
