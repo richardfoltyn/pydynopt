@@ -159,3 +159,65 @@ def markov_moments(states, transm, ergodic_dist=None, moments=False,
         return autocorr, sigma_x, sigma_e, m[1:]
     else:
         return autocorr, sigma_x, sigma_e
+
+
+def markov_simulate(transm, size, dtype=int, init=None):
+    """
+    Simulate a sequence of draws from a Markov chain with given transition
+    matrix.
+
+    Parameters
+    ----------
+    transm : ndarray
+        Transition matrix of Markov process
+    size : int
+        Number of draws to be simulated
+    dtype : object
+        Optional integer dtype of return value
+    init : int or None
+        Optional initial value of the simulated series. If None, a random
+        initial value will be drawn from the ergodic distribution.
+
+    Returns
+    -------
+    isim : ndarray
+        Array of simulated draws.
+    """
+
+    if transm.shape[0] != transm.shape[1] or transm.ndim != 2:
+        raise ValueError('Invalid transition matrix shape')
+
+    x = np.sum(transm, axis=1)
+    if np.any(abs(x-1.0) > 1.0e-12) or np.any(transm < 0.0):
+        raise ValueError('Invalid values in transition matrix')
+
+    if init is not None:
+        init = int(init)
+        if init >= transm.shape[0] or init < 0:
+            raise ValueError('Invalid initial value %d'.format(init))
+
+    m = transm.shape[0]
+    n = size
+
+    # "cumulative" transition matrix
+    tm_cum = np.cumsum(transm, axis=1)
+    tm_cum = np.hstack((np.zeros((m, 1)), tm_cum))
+
+    isim = np.empty(n, dtype=dtype)
+
+    if init is None:
+        # Compute ergodic distribution for initial draw
+        edist = markov_ergodic_dist(transm, inverse=True)
+        init = int(np.random.choice(np.arange(m), 1, p=edist))
+
+    isim[0] = init
+
+    eps = np.random.rand(n-1)
+
+    for i in range(1, n):
+        ifrom = isim[i-1]
+        ito = np.sum(tm_cum[ifrom] < eps[i-1]) - 1
+        isim[i] = ito
+
+    return isim
+
