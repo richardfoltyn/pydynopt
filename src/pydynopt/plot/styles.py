@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 __author__ = 'Richard Foltyn'
 
+import matplotlib
 from matplotlib.font_manager import FontProperties
 import itertools as it
 import numpy as np
@@ -423,7 +424,7 @@ class DefaultStyle(AbstractStyle):
     SUPTITLE_KWARGS = {}
 
     SUBPLOT_KWARGS = {
-        'axisbg': 'white',
+        'facecolor': 'white',
         'axisbelow': True
     }
 
@@ -475,3 +476,12 @@ class Presentation(DefaultStyle):
         self._mec = Colors((None, 'White', 'White', None, 'White'))
 
 
+MPL_VERSION = matplotlib.__version__.split('.')
+try:
+    major = int(MPL_VERSION[0])
+    if major < 2:
+        val = DefaultStyle.SUBPLOT_KWARGS['facecolor']
+        del DefaultStyle.SUBPLOT_KWARGS['facecolor']
+        DefaultStyle.SUBPLOT_KWARGS['axisbg'] = val
+except:
+    pass
