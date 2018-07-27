@@ -53,8 +53,10 @@ def plot_grid(fun, nrow=1, ncol=1,
         Lower and upper x-axis limits
     ylim : iterable
         Lower and upper y-axis limits
-    legend_at : tuple
-        Subplot in which legend should be placed (default: (0,0))
+    legend_at : array_like
+        Subplot in which legend should be placed (default: (0,0)). Accepts
+        either a single tuple if legend should be placed in only one subplot,
+        or a list of tuples for multiple legends.
     legend_loc : str
         MPL-compatible string identifying where the legend should be placed
         within a subplot
@@ -79,7 +81,9 @@ def plot_grid(fun, nrow=1, ncol=1,
 
     if legend_at is not None:
         legend_at = np.array(legend_at, dtype=np.int)
-        assert legend_at.shape[0] == 2
+        assert 1 <= legend_at.ndim <= 2
+        assert legend_at.shape[-1] == 2
+        legend_at = legend_at.reshape((-1, 2))
 
     if style is None:
         style = DefaultStyle()
@@ -138,7 +142,8 @@ def plot_grid(fun, nrow=1, ncol=1,
             fun(axes[i, j], (i, j), *args, **kwargs)
 
     if legend and legend_loc is not None and legend_at is not None:
-        axes[legend_at[0], legend_at[1]].legend(loc=legend_loc, **style.legend)
+        for i, idx in enumerate(legend_at):
+            axes[idx[0], idx[1]].legend(loc=legend_loc, **style.legend)
 
     if suptitle is not None and suptitle:
         fig.suptitle(suptitle, **style.suptitle)
