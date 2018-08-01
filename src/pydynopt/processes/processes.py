@@ -9,7 +9,36 @@ def rouwenhorst(n, mu, rho, sigma):
     Code to approximate an AR(1) process using the Rouwenhorst method as in
     Kopecky & Suen, Review of Economic Dynamics (2010), Vol 13, pp. 701-714
     Adapted from Matlab code by Martin Floden.
+
+    Parameters
+    ----------
+    n : int
+        Number of states for discretized Markov process
+    mu : float
+        Unconditional mean or AR(1) process
+    rho : float
+        Autocorrelation of AR(1) process
+    sigma : float
+        Conditional standard deviation of AR(1) innovations
+
+    Returns
+    -------
+    z : numpy.ndarray
+        Discretized state space
+    Pi : numpy.ndarray
+        Transition matrix of discretized process where
+            Pi[i,j] = Prob[z'=z_j | z=z_i]
     """
+
+    if n < 1:
+        msg = 'Invalid number of states'
+        raise ValueError(msg)
+    if sigma < 0.0:
+        msg = 'Argument sigma must be non-negative'
+        raise ValueError(msg)
+    if abs(rho) >= 1.0:
+        msg = 'Cannot create stationary process with abs(rho) >= 1.0'
+        raise ValueError(msg)
 
     p = (1+rho)/2
     Pi = np.array([[p, 1-p], [1-p, p]])
