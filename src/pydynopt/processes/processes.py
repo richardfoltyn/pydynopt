@@ -58,7 +58,7 @@ def rouwenhorst(n, mu, rho, sigma):
 def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
                         mu0=None, inverse=False):
     """
-    Compute the ergodic distribution implied by a given Makrov chain transition
+    Compute the ergodic distribution implied by a given Markov chain transition
     matrix.
 
     Parameters
