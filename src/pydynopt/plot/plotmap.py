@@ -402,7 +402,7 @@ class PlotMap(object):
                 dlist[k].index = index.flatten()
 
         # Reduce array to data that will be plotted
-        data = data[idx]
+        data = data[tuple(idx)]
 
         # Remove fixed mappings too, keep only explicit row/col/layer/xaxis
         i = 0
