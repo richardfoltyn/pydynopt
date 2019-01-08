@@ -1,5 +1,5 @@
 __author__ = 'Richard Foltyn'
 
-from .routines import fminbound
+from .common import OptimResult
 
-from .interface import OptResult
+from .zeros import newton_bisect
