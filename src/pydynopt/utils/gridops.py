@@ -102,3 +102,33 @@ def makegrid(start, stop, num, logs=True, insert_vals=None, log_shift=0,
     return grid
 
 
+def powerspace(xmin, xmax, n, exponent):
+    """
+    Create a "power-spaced" grid of size n.
+
+    Parameters
+    ----------
+    xmin : float
+        Lower bound
+    xmax : float
+        Upper bound
+    n : int
+        Number of grid points
+    exponent : float
+
+    Returns
+    -------
+    xx : np.ndarray
+        Array containing "power-spaced" grid
+    """
+
+    n = int(n)
+    xmin, xmax = float(xmin), float(xmax)
+    exponent = float(exponent)
+
+    xx = np.linspace(0.0, 1.0, n)
+    xx = xmin + (xmax - xmin) * xx**exponent
+    # Prevent rounding errors
+    xx[-1] = xmax
+
+    return xx
