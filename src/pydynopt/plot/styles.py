@@ -413,7 +413,8 @@ class DefaultStyle(AbstractStyle):
 
     TEXT_FONTPROP_KWARGS = {
         'family': 'serif',
-        'size': 14
+        'style': 'italic',
+        'size': 10
     }
 
     # Keyword arguments (other than font properties) for various objects
