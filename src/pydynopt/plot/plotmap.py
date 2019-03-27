@@ -916,13 +916,25 @@ def get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values):
                 raise ValueError('Argument ylim must be a length-2 tuple!')
             ylim = np.tile(ylim, reps=(nrow, ncol, 1))
         else:
-            tmp, ylim = ylim, np.ndarray((nrow, ncol, 2))
-            try:
-                rr, cc = np.ix_(range(nrow), range(ncol))
-                for i, j, yl in np.broadcast(rr, cc, tmp):
-                    ylim[i, j] = yl
-            except:
+            # Tile ylim as needed to obtain array dimension (nrow, ncol, 2)
+            ylim = np.atleast_1d(ylim)
+            if ylim.ndim != 1 and ylim.ndim != 3:
+                raise ValueError('ylim dimension must be either 1 or 3!')
+
+            if ylim.ndim == 1:
+                ylim = ylim[np.newaxis, np.newaxis]
+
+            if ylim.shape[0] not in [1, nrow]:
                 raise ValueError('Non-conformable argument ylim!')
+            if ylim.shape[1] not in [1, ncol]:
+                raise ValueError('Non-conformable argument ylim!')
+
+            reps = [1, 1, 1]
+            if ylim.shape[0] != nrow:
+                reps[0] = nrow
+            if ylim.shape[1] != ncol:
+                reps[1] = ncol
+            ylim = np.tile(ylim, reps)
 
     return ylim
 
