@@ -36,9 +36,9 @@ def gini(states, pmf):
     return gini
 
 
-def percentile(x, pmf, prank):
+def quantile(x, pmf, qrank):
     """
-    Compute percentiles of a given distribution characterized by its (finite)
+    Compute quantiles of a given distribution characterized by its (finite)
     state space and PMF.
 
     If `x` and `pmf` are of equal length, they are assumed to represent a
@@ -46,12 +46,70 @@ def percentile(x, pmf, prank):
 
     If `x` has one element more than `pmf`, it is assumed that `x` contains
     the bin edges that define intervals with the corresponding mass given by
-    `pmf`. Percentile ranks are linearly interpolated, but *only* within the bin
+    `pmf`. Quantile ranks are linearly interpolated, but *only* within the bin
     that brackets a percentile.
 
-    This function differs from Numpy's percentile() in that in attempts to
+    This function differs from Numpy's quantile() in that in attempts to
     correctly deal with points masses in PMFs, yet still allow for linear
     interpolation within a bin.
+
+    Parameters
+    ----------
+    x : array_like
+    pmf : array_like
+    qrank : array_like or float
+        Quantile ranks (valid range: [0,1])
+
+    Returns
+    -------
+    pctl : np.ndarray or float
+        Quantile corresponding to given percentile ranks.
+    """
+
+    x = np.atleast_1d(x).flatten()
+    pmf = np.atleast_1d(pmf).flatten()
+    if np.any(qrank < 0.0) or np.any(qrank > 1.0):
+        msg = 'Invalid percentile rank argument'
+        raise ValueError(msg)
+
+    if len(x) == len(pmf):
+        # Assume that RV is discrete and that x contains the discrete support
+        # with corresponding probabilities stored in pmf
+
+        cdf = np.hstack((0.0, np.cumsum(pmf)))
+        cdf /= cdf[-1]
+        # trim (constant) right tail as that confuses digitize()
+        ii = np.where(np.abs(cdf - 1.0) > 1.0e-14)[0]
+        cdf = cdf[ii]
+        ii = np.digitize(qrank, cdf) - 1
+        ii = np.fmin(ii, len(pmf) - 1)
+        pctl = x[ii]
+
+    elif len(x) == (len(pmf) + 1):
+        cdf = np.hstack((0.0, np.cumsum(pmf)))
+        cdf /= cdf[-1]
+        # trim (constant) right tail as that confuses digitize()
+        ii = np.where(np.abs(cdf - 1.0) > 1.0e-14)[0]
+        cdf = cdf[ii]
+        x = x[ii]
+        cdf[-1] = 1.0
+        ii = np.digitize(qrank, cdf) - 1
+        # include only CDF values that bracket percentiles of interest.
+        ii = np.union1d(ii, np.fmin(ii + 1, len(cdf) - 1))
+        # linearly interpolate *within* brackets
+        pctl = np.interp(qrank, cdf[ii], x[ii])
+    else:
+        msg = 'Non-conformable arrays'
+        raise ValueError(msg)
+
+    return pctl
+
+
+def percentile(x, pmf, prank):
+    """
+    Convenience wrapper around quantile() function that accepts percentile
+    rank argument in the interval [0,100] instead of quantile ranks
+    in [0.0,1.0]
 
     Parameters
     ----------
@@ -62,65 +120,9 @@ def percentile(x, pmf, prank):
 
     Returns
     -------
-    pctl : np.ndarray or float
-        Percentiles corresponding to given percentile ranks.
+    pctl : float or np.ndarray
+        Percentiles corresponding to given percentile ranks
     """
 
-    x = np.atleast_1d(x).flatten()
-    pmf = np.atleast_1d(pmf).flatten()
-    if np.any(prank < 0.0) or np.any(prank > 1.0):
-        msg = 'Invalid percentile rank argument'
-        raise ValueError(msg)
-
-    if len(x) == len(pmf):
-        # Assume that RV is discrete and that x contains the discrete support
-        # with corresponding probabilities stored in pmf
-
-        cdf = np.hstack((0.0, np.cumsum(pmf)))
-        # trim (constant) right tail as that confuses digitize()
-        ii = np.where(np.abs(cdf - 1.0) > 1.0e-14)[0]
-        cdf = cdf[ii]
-        ii = np.digitize(prank, cdf) - 1
-        ii = np.fmin(ii, len(pmf) - 1)
-        pctl = x[ii]
-
-    elif len(x) == (len(pmf) + 1):
-        cdf = np.hstack((0.0, np.cumsum(pmf)))
-        # trim (constant) right tail as that confuses digitize()
-        ii = np.where(np.abs(cdf - 1.0) > 1.0e-14)[0]
-        cdf = cdf[ii]
-        x = x[ii]
-        cdf[-1] = 1.0
-        ii = np.digitize(prank, cdf) - 1
-        # include only CDF values that bracket percentiles of interest.
-        ii = np.union1d(ii, np.fmin(ii + 1, len(cdf) - 1))
-        # linearly interpolate *within* brackets
-        pctl = np.interp(prank, cdf[ii], x[ii])
-    else:
-        msg = 'Non-conformable arrays'
-        raise ValueError(msg)
-
+    pctl = quantile(x, pmf, prank/100.0)
     return pctl
-
-
-def quantile(x, pmf, qrank):
-    """
-    Convenience wrapper around percentile() function that accepts quantile
-    rank argument in the interval [0.0, 1.0] instead of percentile ranks
-    in [0.0, 100.0]
-
-    Parameters
-    ----------
-    x : array_like
-    pmf : array_like
-    qrank : array_like or float
-        Quantiles ranks (valid range: [0.0, 1.0])
-
-    Returns
-    -------
-    qntl : float or np.ndarray
-        Quantiles corresponding to given quantile ranks
-    """
-
-    qntl = percentile(x, pmf, qrank*100.0)
-    return qntl
