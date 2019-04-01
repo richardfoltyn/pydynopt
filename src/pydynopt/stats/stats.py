@@ -126,3 +126,97 @@ def percentile(x, pmf, prank):
 
     pctl = quantile(x, pmf, prank/100.0)
     return pctl
+
+
+def quantile_rank(x, pmf, qntl):
+    """
+    (Approximate) inverse function of quantile().
+    Returns the quantile ranks corresponding to a given array of quantiles.
+
+    Note: this basically is a CDF function except that it returns NaN
+    for those quantiles that are outside of the distribution's support.
+
+    Additionally, this function should correctly handle point masses.
+
+    Parameters
+    ----------
+    x : array_like
+        (flattened) state space
+    pmf : array_like
+        PMF corresponding to (flattened) state space
+    qntl : float or array_like
+        List of quantiles
+
+    Returns
+    -------
+    rank : array_like
+        Quantile ranks corresponding to given quantiles
+    """
+
+    is_scalar = np.isscalar(qntl)
+    shp_in = np.array(qntl).shape
+
+    x = np.atleast_1d(x).flatten()
+    pmf = np.atleast_1d(pmf).flatten()
+
+    qntl = np.atleast_1d(qntl)
+
+    if len(x) == len(pmf):
+        # (x, pmf) describe a discrete random variable and qntl should
+        # match the values in x exactly for this to make any sense.
+        raise NotImplementedError()
+    elif len(x) == (len(pmf) + 1):
+        # assume that x contains bin edges and pmf contains the mass
+        # within these edges.
+        cdf = np.hstack((0.0, np.cumsum(pmf)))
+        cdf /= cdf[-1]
+
+        # remove all points where CDF is exactly 0.0, except for the last
+        ifrom = np.amax(np.where(cdf == 0.0)[0])
+        # remove all trailing points where CDF is exactly 1.0, except for the
+        # first one
+        ito = min(np.amin(np.where(cdf == 1.0)[0]) + 1, len(cdf))
+        cdf = cdf[ifrom:ito]
+        x = x[ifrom:ito]
+
+        ii = np.digitize(qntl, x, right=True)
+        # include only CDF values that bracket percentiles of interest.
+        jj = np.fmin(np.fmax(0, ii), len(x) - 2)
+        jj = np.union1d(jj, jj+1)
+
+        rank = np.interp(qntl, x[jj], cdf[jj], left=np.nan, right=np.nan)
+    else:
+        rank = None
+
+    if rank is not None:
+        if is_scalar:
+            rank = np.asscalar(rank)
+        else:
+            rank = rank.reshape(shp_in)
+
+    return rank
+
+
+def percentile_rank(x, pmf, pctl):
+    """
+    Convenience wrapper around quantile_rank() that returns percentiles
+    instead of quantiles.
+
+    Parameters
+    ----------
+    x : array_like
+        (flattened) state space
+    pmf : array_like
+        PMF corresponding to (flattened) state space
+    qntl : float or array_like
+        List of percentiles
+
+    Returns
+    -------
+    rank : array_like
+        Percentile ranks corresponding to given percentiles
+    """
+    rank = quantile_rank(x, pmf, pctl)
+    rank *= 100.0
+
+    return rank
