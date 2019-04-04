@@ -1,3 +1,4 @@
+
 import numpy as np
 from numpy import pad
 
@@ -250,3 +251,34 @@ def markov_simulate(transm, size, dtype=int, init=None):
 
     return isim
 
+
+def istransm(m, transposed=False, tol=1e-12):
+    """
+    Check that matrix m satisfies properties of transition matrix
+
+    Parameters
+    ----------
+    m : np.ndarray
+        Transition matrix with element (i,j) containing the probability
+        Prob[x' = j | x = i].
+    transposed : bool
+        If true, assume that transition matrix `tm` is transposed.
+    tol : float
+        Tolerance on rows sums being close to 1.0 (column sums, if transposed)
+
+    Returns
+    -------
+    valid : bool
+        True if `tm` is a valid Markov transition matrix.
+    """
+
+    m = np.atleast_2d(m)
+    if (m.shape[0] != m.shape[1]) or (m.ndim != 2):
+        msg = 'Square matrix argument required'
+        raise ValueError(msg)
+
+    axis = 1 - int(transposed)
+    valid = np.all(m >= 0) and np.all(m <= 1)
+    valid = valid and np.all(np.abs(np.sum(m, axis=axis) - 1 < tol))
+
+    return valid
