@@ -124,7 +124,13 @@ def percentile(x, pmf, prank):
         Percentiles corresponding to given percentile ranks
     """
 
-    pctl = quantile(x, pmf, prank/100.0)
+    isscalar = np.isscalar(prank)
+    qrank = np.array(prank) / 100.0
+    pctl = quantile(x, pmf, qrank)
+
+    if isscalar:
+        pctl = np.asscalar(pctl)
+
     return pctl
 
 
