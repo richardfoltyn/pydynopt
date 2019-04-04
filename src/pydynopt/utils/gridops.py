@@ -115,6 +115,7 @@ def powerspace(xmin, xmax, n, exponent):
     n : int
         Number of grid points
     exponent : float
+        Shape parameter of "power-spaced" grid.
 
     Returns
     -------

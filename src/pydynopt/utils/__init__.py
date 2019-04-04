@@ -1,3 +1,3 @@
 
 
-from .gridops import  powerspace
+from .gridops import powerspace
