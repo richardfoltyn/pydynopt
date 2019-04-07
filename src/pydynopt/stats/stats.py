@@ -89,9 +89,9 @@ def quantile(x, pmf, qrank):
         cdf = np.hstack((0.0, np.cumsum(pmf)))
         cdf /= cdf[-1]
         # trim (constant) right tail as that confuses digitize()
-        ii = np.where(np.abs(cdf - 1.0) > 1.0e-14)[0]
-        cdf = cdf[ii]
-        x = x[ii]
+        iub = np.amin(np.where(cdf == 1.0)[0]) + 1
+        cdf = cdf[:iub]
+        x = x[:iub]
         cdf[-1] = 1.0
         ii = np.digitize(qrank, cdf) - 1
         # include only CDF values that bracket percentiles of interest.
