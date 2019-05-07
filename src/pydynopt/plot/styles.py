@@ -245,7 +245,7 @@ class AbstractStyle(object):
     @grid.setter
     def grid(self, value):
         if isinstance(value, bool):
-            self._grid = {'b': False}
+            self._grid = {'b': value}
         else:
             self._grid = dict(value)
 
