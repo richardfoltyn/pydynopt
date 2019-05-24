@@ -47,7 +47,7 @@ def plot_grid(fun, nrow=1, ncol=1,
         If true, identical y-limits are enforced across all subplots
     xlabel : str
         x-axis label
-    ylabel : str
+    ylabel : str or array_like or None
         y-axis label
     xlim : iterable
         Lower and upper x-axis limits

@@ -140,6 +140,7 @@ class AbstractStyle(object):
     TEXT_KWARGS = {}
 
     COLORS = ['black']
+    FACECOLORS = ['white']
     LINESTYLES = ['-']
     ALPHAS = [1.0]
     MARKERS = [None]
@@ -154,6 +155,7 @@ class AbstractStyle(object):
         self.dpi = 96
         self._grid = cls.GRID_KWARGS
         self._color = None
+        self._facecolor = None
         self._linewidth = None
         self._linestyle = None
         self._alpha = None
@@ -173,14 +175,15 @@ class AbstractStyle(object):
         obj.dpi = self.dpi
 
         obj._grid = copy.deepcopy(self._grid, memodict)
-        obj._color = copy.deepcopy(self.color, memodict)
-        obj._linestyle = copy.deepcopy(self.linestyle, memodict)
-        obj._linewidth = copy.deepcopy(self.linewidth, memodict)
-        obj._alpha = copy.deepcopy(self.alpha, memodict)
-        obj._marker = copy.deepcopy(self.marker, memodict)
-        obj._markersize = copy.deepcopy(self.markersize, memodict)
-        obj._mec = copy.deepcopy(self.mec, memodict)
-        obj._zorder = copy.deepcopy(self.zorder, memodict)
+        obj._color = copy.deepcopy(self._color, memodict)
+        obj._facecolor = copy.deepcopy(self._facecolor, memodict)
+        obj._linestyle = copy.deepcopy(self._linestyle, memodict)
+        obj._linewidth = copy.deepcopy(self._linewidth, memodict)
+        obj._alpha = copy.deepcopy(self._alpha, memodict)
+        obj._marker = copy.deepcopy(self._marker, memodict)
+        obj._markersize = copy.deepcopy(self._markersize, memodict)
+        obj._mec = copy.deepcopy(self._mec, memodict)
+        obj._zorder = copy.deepcopy(self._zorder, memodict)
         # Omit updating _figure since we do not permit updating by user code
 
         return obj
@@ -268,6 +271,21 @@ class AbstractStyle(object):
         else:
             value = tuple(value)
         self._color = Colors(colors=value)
+
+    @property
+    def facecolor(self):
+        cls = self.__class__
+        if self._facecolor is None:
+            self._facecolor = Colors(cls.FACECOLORS)
+        return self._facecolor
+
+    @facecolor.setter
+    def facecolor(self, value):
+        if np.isscalar(value):
+            value = (value,)
+        else:
+            value = tuple(value)
+        self._facecolor = Colors(colors=value)
 
     @property
     def linewidth(self):
@@ -453,10 +471,17 @@ class DefaultStyle(AbstractStyle):
     MARKERSIZE = 5
     MEC = ['white']
     COLORS = ['#e41a1c', '#377eb8', '#4daf4a', '#ff7f00', '#f781bf']
+    FACECOLORS = ['#e41a1c', '#377eb8', '#4daf4a', '#ff7f00', '#f781bf']
 
     def __init__(self):
 
         super(DefaultStyle, self).__init__()
+
+
+class PurpleBlue(DefaultStyle):
+
+    COLORS = ['#810f7c', '#737373', '#045a8d', '#807dba', '#f768a1', '#3690c0']
+    FACECOLORS = ['#8c6bb1', '#dadaeb', '#0570b0', '#8f8cd0', '#fcc5c0', '#a6bddb']
 
 
 class Presentation(DefaultStyle):
