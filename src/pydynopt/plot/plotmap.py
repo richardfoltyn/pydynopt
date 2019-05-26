@@ -918,11 +918,14 @@ def get_ylim(nrow, ncol, ylim, extendy, sharey, maps, values):
         else:
             # Tile ylim as needed to obtain array dimension (nrow, ncol, 2)
             ylim = np.atleast_1d(ylim)
-            if ylim.ndim != 1 and ylim.ndim != 3:
-                raise ValueError('ylim dimension must be either 1 or 3!')
+            if not (1 <= ylim.ndim <= 3):
+                raise ValueError('ylim dimension must be between 1 and 3!')
 
             if ylim.ndim == 1:
                 ylim = ylim[np.newaxis, np.newaxis]
+            elif ylim.ndim == 2:
+                # Insert column dimension
+                ylim = ylim[:, np.newaxis]
 
             if ylim.shape[0] not in [1, nrow]:
                 raise ValueError('Non-conformable argument ylim!')
@@ -1049,10 +1052,6 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
     def subplot(ax, idx):
         i, j = idx
 
-        # set limits
-        ax.set_xlim(xlim)
-        ax.set_ylim(ylim[i, j])
-
         # plot all plot objects sequentially
         for i_m, (p, v, s) in enumerate(zip(maps, data, styles)):
             # True if this is first obj. in sequence, or action should not be
@@ -1094,4 +1093,4 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
         ax.ticklabel_format(style='sci', axis='both', scilimits=(-2, 3))
 
     plot_grid(subplot, nrow=nrow, ncol=ncol, style=style[0], sharey=sharey,
-              legend=legend, xlabel=xlabel, **kwargs)
+              legend=legend, xlabel=xlabel, xlim=xlim, ylim=ylim, **kwargs)

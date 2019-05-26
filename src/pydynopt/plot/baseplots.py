@@ -51,8 +51,10 @@ def plot_grid(fun, nrow=1, ncol=1,
         y-axis label
     xlim : iterable
         Lower and upper x-axis limits
-    ylim : iterable
-        Lower and upper y-axis limits
+    ylim : array_like
+        Lower and upper y-axis limits. Can be specified either as a tuple
+        if limits are to be applied across all rows / columns, or as an
+        array of shape [nrow, ncol, 2] with panel-specific limits.
     legend_at : array_like
         Subplot in which legend should be placed (default: (0,0)). Accepts
         either a single tuple if legend should be placed in only one subplot,
@@ -87,6 +89,9 @@ def plot_grid(fun, nrow=1, ncol=1,
 
     if style is None:
         style = DefaultStyle()
+
+    if ylim is not None:
+        ylim = broadcast_ylim(nrow, ncol, ylim)
 
     # Aspect ratio is defined as width / height
     fig_kw = {'figsize': (style.cell_size * ncol,
@@ -134,7 +139,7 @@ def plot_grid(fun, nrow=1, ncol=1,
             if xlim is not None:
                 axes[i, j].set_xlim(xlim)
             if ylim is not None:
-                axes[i, j].set_ylim(ylim)
+                axes[i, j].set_ylim(ylim[i, j])
 
             if style.grid and ('b' not in style.grid or not style.grid['b']):
                 axes[i, j].grid(**style.grid)
@@ -148,6 +153,20 @@ def plot_grid(fun, nrow=1, ncol=1,
     if suptitle is not None and suptitle:
         fig.suptitle(suptitle, **style.suptitle)
 
+    # === y-ticks for shared ylims ===
+    # Turn off ytick labels if ylim are the same for entire row
+    # for all but the first column
+    if not sharey:
+        for i in range(nrow):
+            # Determine whether ylim in this row are identical for all columns
+            ylim_same = False
+            if ylim is not None:
+                ylim_same = all(np.all(ylim[i] == ylim[i, 0:1], axis=0))
+
+            for j in range(ncol):
+                if j > 0 and ylim_same and not sharey:
+                    axes[i, j].set_yticklabels([])
+
     render(fig, outfile)
 
 
@@ -157,3 +176,41 @@ def render(fig, outfile=None):
     else:
         fig.savefig(outfile)
         plt.close()
+
+
+def broadcast_ylim(nrow, ncol, ylim):
+    """
+    Broadcast ylim across rows / columns as needed.
+
+    Parameters
+    ----------
+    nrow : int
+    ncol : int
+    ylim : array_like
+        ylim values as passed into plot_grid() by user code.
+
+    Returns
+    -------
+    ylim : np.ndarray
+        ylims broadcast across rows / columns. Return array has shape
+        [nrow, ncol, 2]
+    """
+
+    # Tile ylim as needed to obtain array dimension (nrow, ncol, 2)
+    ylim = np.atleast_1d(ylim)
+    if not (1 <= ylim.ndim <= 3):
+        raise ValueError('ylim dimension must be between 1 and 3!')
+
+    if ylim.ndim == 1:
+        ylim = ylim[np.newaxis, np.newaxis]
+    elif ylim.ndim == 2:
+        # Insert column dimension, assume that ylims are identical within each
+        # row
+        ylim = ylim[:, np.newaxis]
+
+    if ylim.shape[0] not in [1, nrow]:
+        raise ValueError('Non-conformable argument ylim!')
+    if ylim.shape[1] not in [1, ncol]:
+        raise ValueError('Non-conformable argument ylim!')
+
+    return ylim
