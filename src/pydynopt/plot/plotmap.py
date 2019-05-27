@@ -156,7 +156,7 @@ class PlotDimension(object):
         lbl = None
         if isinstance(self.label, Callable):
             lbl = self.label(largs)
-        elif self.label_fmt:
+        elif self.label_fmt is not None:
             # For compatibility with old format strings, detect deprecated
             # format string which contain {.attribute} with a leading dot. If
             # there is no leading dots, pass a dictionary instead.
@@ -165,7 +165,7 @@ class PlotDimension(object):
                 lbl = self.label_fmt.format(largs)
             else:
                 lbl = self.label_fmt.format(**largs.to_dict())
-        elif self.label:
+        elif self.label is not None:
             if isinstance(self.label, str):
                 lbl = self.label
             else:
