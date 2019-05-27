@@ -213,4 +213,9 @@ def broadcast_ylim(nrow, ncol, ylim):
     if ylim.shape[1] not in [1, ncol]:
         raise ValueError('Non-conformable argument ylim!')
 
+    if ylim.shape[0] != nrow:
+        ylim = np.tile(ylim, reps=(nrow, 1, 1))
+    if ylim.shape[1] != ncol:
+        ylim = np.tile(ylim, reps=(1, ncol, 1))
+
     return ylim
