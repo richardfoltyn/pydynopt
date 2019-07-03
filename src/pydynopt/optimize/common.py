@@ -10,7 +10,49 @@ class OptimResult:
         self.iterations = 0
         self.function_calls = 0
         self.converged = False
+        # Some status message or flag of type string
         self.flag = ""
+
+    def __repr__(self):
+        """
+        Return string representation of result object.
+
+        Returns
+        -------
+        s : str
+        """
+
+        fmt_float = '{:>20s}: {:g}'
+        fmt_int = '{:>20s}: {:d}'
+        fmt_default = '{:>20s}: {}'
+
+        attrs = ['converged', 'flag', 'function_calls', 'iterations', 'x']
+
+        tokens = []
+
+        for attr in attrs:
+            if not hasattr(self, attr):
+                continue
+
+            value = getattr(self, attr)
+            if isinstance(value, float):
+                s = fmt_float.format(attr, value)
+            elif isinstance(value, int):
+                s = fmt_int.format(attr, value)
+            elif isinstance(value, np.ndarray):
+                if np.isscalar(value):
+                    s = fmt_float.format(attr, value)
+                else:
+                    x = np.atleast_1d(value)
+                    s = ', '.join('{:g}'.format(xi) for xi in x)
+                    s = '[' + s + ']'
+            else:
+                s = fmt_default.format(attr, value)
+
+            tokens.append(s)
+
+        s = '\n'.join(tokens)
+        return s
 
 
 class FunctionWrapper:
