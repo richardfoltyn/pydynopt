@@ -43,7 +43,8 @@ def interp_bilinear(x1, x2, xp1, xp2, fp, extrapolate=True, out=None):
     """
 
     isscalar = np.isscalar(x1) and np.isscalar(x2)
-    x1, x2 = np.broadcast_arrays(x1, x2)
+    x1 = np.atleast_1d(x1)
+    x2 = np.atleast_1d(x2)
 
     xx = np.vstack((x1, x2)).T
 

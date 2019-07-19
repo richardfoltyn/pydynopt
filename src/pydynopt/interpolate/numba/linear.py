@@ -145,6 +145,6 @@ def interp_bilinear_generic(x1, x2, xp1, xp2, fp, extrapolate=True, out=None):
     if all(isinstance(x, numba.types.scalars.Number) for x in (x1, x2)):
         fcn = interp_bilinear_scalar
     elif all(isinstance(x, numba.types.npytypes.Array) for x in (x1, x2)):
-        fcn = interp_bilinear
+        fcn = interp_bilinear_array
 
     return fcn
