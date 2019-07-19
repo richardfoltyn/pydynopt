@@ -10,20 +10,7 @@ from numba import jit
 from numba.extending import overload
 
 from .search import bsearch
-
-
-def interp_bilinear(*args, **kwargs):
-    """
-    Generic function used to create overloaded function instances for Numba
-    calls.
-
-    Parameters
-    ----------
-    args
-    kwargs
-    """
-    pass
-
+from ..linear import interp_bilinear
 
 def interp_bilinear_scalar(x1, x2, xp1, xp2, fp, extrapolate=True, out=None):
     """
@@ -158,6 +145,6 @@ def interp_bilinear_generic(x1, x2, xp1, xp2, fp, extrapolate=True, out=None):
     if all(isinstance(x, numba.types.scalars.Number) for x in (x1, x2)):
         fcn = interp_bilinear_scalar
     elif all(isinstance(x, numba.types.npytypes.Array) for x in (x1, x2)):
-        fcn = interp_bilinear_array
+        fcn = interp_bilinear
 
     return fcn
