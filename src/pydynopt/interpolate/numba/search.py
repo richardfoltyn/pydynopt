@@ -4,7 +4,7 @@ Implement search routines used by numba-fied interpolation routines.
 Author: Richard Foltyn
 """
 
-from numba import jit
+from pydynopt.common.numba import jit, jitclass, int64
 
 
 @jit
@@ -32,11 +32,34 @@ def bsearch(needle, haystack):
         Index of lower bound of bracketing interval.
     """
 
-    n = len(haystack)
+    n = haystack.shape[0]
 
     if n <= 1:
         ilb = -1
         return ilb
+
+    ilb = bsearch_impl(needle, haystack)
+
+    return ilb
+
+
+@jit
+def bsearch_impl(needle, haystack):
+    """
+    Implementation for bsearch without error checking.
+
+    Parameters
+    ----------
+    needle : float or int
+    haystack : np.ndarray
+
+    Returns
+    -------
+    ilb : int
+        Index of lower bound of bracketing interval.
+    """
+
+    n = haystack.shape[0]
 
     ilb = 0
     iub = n - 1
@@ -49,4 +72,3 @@ def bsearch(needle, haystack):
             ilb = imid
 
     return ilb
-

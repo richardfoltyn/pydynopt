@@ -12,6 +12,11 @@ from numba.extending import overload
 from .search import bsearch
 from ..linear import interp_bilinear
 
+
+def interp_linear():
+    pass
+
+
 def interp_bilinear_scalar(x1, x2, xp1, xp2, fp, extrapolate=True, out=None):
     """
     Perform bilinear interpolation at given tuple of scalar sample points.
