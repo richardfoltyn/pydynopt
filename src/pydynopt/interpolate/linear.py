@@ -5,16 +5,22 @@ Author: Richard Foltyn
 """
 
 import numpy as np
-from scipy.interpolate import interpn
 
 from pydynopt.numba import jit
 from .numba.linear import interp1d_eval_array, interp1d_locate_array
 from .numba.linear import interp1d_array
 
+from .numba.linear import interp2d_locate_array, interp2d_eval_array
+from .numba.linear import interp2d_array
+
 # Add @jit wrappers around Numba implementations of interpolation routines
 interp1d_locate_jit = jit(interp1d_locate_array, nopython=True)
 interp1d_eval_jit = jit(interp1d_eval_array, nopython=True)
 interp1d_jit = jit(interp1d_array, nopython=True)
+
+interp2d_locate_jit = jit(interp2d_locate_array, nopython=True)
+interp2d_eval_jit = jit(interp2d_eval_array, nopython=True)
+interp2d_jit = jit(interp2d_array, nopython=True)
 
 
 def interp1d_locate(x, xp, ilb=0, index_out=None, weight_out=None):
@@ -120,7 +126,53 @@ def interp1d(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
     return out
 
 
-def interp_bilinear(x1, x2, xp1, xp2, fp, extrapolate=True, out=None):
+def interp2d_locate(x0, x1, xp0, xp1, ilb=None, index_out=None,
+                    weight_out=None):
+
+    xx0 = np.atleast_1d(x0)
+    xx1 = np.atleast_1d(x1)
+
+    xx0, xx1 = np.broadcast_arrays(xx0, xx1)
+
+    if np.any(xx0.shape !=  xx1.shape):
+        msg = 'Non-conformable sample data arrays x0, x1'
+        raise ValueError(msg)
+
+    shp = None
+
+    if index_out is None or weight_out is None:
+        shp = list(x0.shape) + [2]
+
+    if index_out is None:
+        index_out = np.empty(shp, dtype=np.int64)
+
+    if weight_out is None:
+        weight_out = np.empty(shp, dtype=x0.dtype)
+
+    interp2d_locate_jit(xx0, xx1, xp0, xp1, ilb, index_out, weight_out)
+
+    if np.isscalar(x0) and np.isscalar(x1):
+        index_out = index_out.flatten()
+        weight_out = weight_out.flatten()
+
+    return index_out, weight_out
+
+
+def interp2d_eval(index, weight, fp, extrapolate=True, out=None):
+
+    if out is None:
+        shp = index.shape[:-1]
+        out = np.empty(shp, dtype=fp.dtype)
+
+    interp2d_eval_jit(index, weight, fp, extrapolate, out)
+
+    if index.ndim == 1:
+        out = out.item()
+
+    return out
+
+
+def interp2d(x0, x1, xp0, xp1, fp, extrapolate=True, out=None):
     """
     Perform bilinear interpolation at given sample points.
 
@@ -132,13 +184,13 @@ def interp_bilinear(x1, x2, xp1, xp2, fp, extrapolate=True, out=None):
 
     Parameters
     ----------
-    x1 : float or np.ndarray
+    x0 : float or np.ndarray
         Sample points in first dimension
-    x2 : float or np.ndarray
+    x1 : float or np.ndarray
         Sample points in second dimension
-    xp1 : np.ndarray
+    xp0 : np.ndarray
         Grid in first dimension
-    xp2 : np.ndarray
+    xp1 : np.ndarray
         Grid in second dimension
     fp : np.ndarray
         Function evaluated at Cartesian product of `xp1` and  `xp2`
@@ -154,20 +206,30 @@ def interp_bilinear(x1, x2, xp1, xp2, fp, extrapolate=True, out=None):
         Interpolated function values at given sample points
     """
 
-    isscalar = np.isscalar(x1) and np.isscalar(x2)
-    x1 = np.atleast_1d(x1)
-    x2 = np.atleast_1d(x2)
+    xx0 = np.atleast_1d(x0)
+    xx1 = np.atleast_1d(x1)
 
-    xx = np.vstack((x1, x2)).T
+    xx0, xx1 = np.broadcast_arrays(xx0, xx1)
+
+    if xp0.shape[0] != fp.shape[0] or xp1.shape[0] != fp.shape[1]:
+        msg = 'Non-conformable input arrays'
+        raise ValueError(msg)
+
+    if any(n < 2 for n in fp.shape):
+        msg = 'At least two grid points needed in each dimension!'
+        raise ValueError(msg)
+
+    if np.any(xx0.shape != xx1.shape):
+        msg = 'Non-conformable sample data arrays x0, x1'
+        raise ValueError(msg)
 
     if out is None:
-        out = np.empty_like(x1)
+        out = np.empty_like(xx0)
 
-    fill_value = None if extrapolate else np.nan
-    out[:] = interpn((xp1, xp2), fp, xx, bounds_error=False,
-                     fill_value=fill_value)
+    # Let Numba version perform the actual work
+    interp2d_jit(xx0, xx1, xp0, xp1, fp, extrapolate, out)
 
-    if isscalar:
+    if np.isscalar(x0) and np.isscalar(x1):
         out = out.item()
 
     return out
