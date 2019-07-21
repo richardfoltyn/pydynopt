@@ -1,1 +1,3 @@
-__author__ = 'richard'
+
+
+use_numba = True

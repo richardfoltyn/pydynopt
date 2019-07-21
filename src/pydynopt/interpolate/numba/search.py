@@ -4,11 +4,13 @@ Implement search routines used by numba-fied interpolation routines.
 Author: Richard Foltyn
 """
 
-from pydynopt.common.numba import jit, jitclass, int64
+from pydynopt.numba import jit, jitclass, int64
+
+__all__ = ['bsearch', 'bsearch_impl']
 
 
-@jit
-def bsearch(needle, haystack):
+@jit(nopython=True)
+def bsearch(needle, haystack, ilb=0):
     """
     Return the index of the lower bound of a bracketing interval which contains
     needle, ie
@@ -25,6 +27,9 @@ def bsearch(needle, haystack):
     ----------
     needle : float or int
     haystack : np.ndarray
+    ilb : int
+        Optional (cached) index of lower bound of bracketing interval to be
+        used as initial value.
 
     Returns
     -------
@@ -38,20 +43,22 @@ def bsearch(needle, haystack):
         ilb = -1
         return ilb
 
-    ilb = bsearch_impl(needle, haystack)
+    ilb = max(0, min(ilb, n-2))
+    ilb = bsearch_impl(needle, haystack, ilb)
 
     return ilb
 
 
-@jit
-def bsearch_impl(needle, haystack):
+@jit(nopython=True)
+def bsearch_impl(needle, haystack, ilb=0):
     """
-    Implementation for bsearch without error checking.
 
     Parameters
     ----------
-    needle : float or int
+    needle :
     haystack : np.ndarray
+    ilb : int
+        Cached value of index of lower bound of bracketing interval.
 
     Returns
     -------
@@ -60,12 +67,18 @@ def bsearch_impl(needle, haystack):
     """
 
     n = haystack.shape[0]
-
-    ilb = 0
     iub = n - 1
 
+    if haystack[ilb] <= needle:
+        if haystack[ilb+1] > needle:
+            return ilb
+        elif ilb == (n - 2):
+            return ilb
+    else:
+        ilb, iub = 0, ilb
+
     while iub > (ilb + 1):
-        imid = (iub + ilb) // 2
+        imid = (iub + ilb)//2
         if haystack[imid] > needle:
             iub = imid
         else:

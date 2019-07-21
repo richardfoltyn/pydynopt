@@ -7,6 +7,118 @@ Author: Richard Foltyn
 import numpy as np
 from scipy.interpolate import interpn
 
+from pydynopt.numba import jit
+from .numba.linear import interp1d_eval_array, interp1d_locate_array
+from .numba.linear import interp1d_array
+
+# Add @jit wrappers around Numba implementations of interpolation routines
+interp1d_locate_jit = jit(interp1d_locate_array, nopython=True)
+interp1d_eval_jit = jit(interp1d_eval_array, nopython=True)
+interp1d_jit = jit(interp1d_array, nopython=True)
+
+
+def interp1d_locate(x, xp, ilb=0, index_out=None, weight_out=None):
+    """
+
+    Parameters
+    ----------
+    x
+    xp
+    index_out
+    weight_out
+
+    Returns
+    -------
+
+    """
+
+    xx = np.atleast_1d(x)
+
+    if xp.shape[0] < 2:
+        msg = 'Invalid input array xp'
+        raise ValueError(msg)
+
+    if index_out is None:
+        index_out = np.empty_like(xx, dtype=np.int64)
+    if weight_out is None:
+        weight_out = np.empty_like(xx, dtype=np.float64)
+
+    ilb = max(0, min(xp.shape[0] - 2, ilb))
+
+    # Use Numba-fied implementation to do the actual work
+    interp1d_locate_jit(xx, xp, ilb, index_out, weight_out)
+
+    if np.isscalar(x):
+        index_out = index_out.item()
+        weight_out = weight_out.item()
+
+    return index_out, weight_out
+
+
+def interp1d_eval(index, weight, fp, extrapolate=True,
+                  left=np.nan, right=np.nan, out=None):
+    """
+
+    Parameters
+    ----------
+    index
+    weight
+    fp
+    extrapolate
+    out
+
+    Returns
+    -------
+
+    """
+
+    ilb = np.atleast_1d(index)
+    wgt_lb = np.atleast_1d(weight)
+
+    if out is None:
+        out = np.empty_like(wgt_lb, dtype=np.float64)
+
+    # Use numba-fied function to perform actual evaluation
+    interp1d_eval_jit(ilb, wgt_lb, fp, extrapolate, left, right, out)
+
+    if np.isscalar(index):
+        out = out.item()
+
+    return out
+
+
+def interp1d(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
+             out=None):
+    """
+
+    Parameters
+    ----------
+    x
+    xp
+    fp
+    extrapolate
+    out
+
+    Returns
+    -------
+
+    """
+    xx = np.atleast_1d(x)
+
+    if xp.shape[0] < 2:
+        msg = 'Invalid input array xp'
+        raise ValueError(msg)
+
+    if out is None:
+        out = np.empty_like(xx, dtype=np.float64)
+
+    interp1d_jit(x, xp, fp, extrapolate, left, right, out)
+
+    if np.isscalar(x):
+        out = out.item()
+
+    return out
+
 
 def interp_bilinear(x1, x2, xp1, xp2, fp, extrapolate=True, out=None):
     """
