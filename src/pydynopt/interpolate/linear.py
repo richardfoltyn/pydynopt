@@ -94,7 +94,7 @@ def interp1d_eval(index, weight, fp, extrapolate=True,
 
 
 def interp1d(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
-             out=None):
+             out=None, axis=-1):
     """
 
     Parameters
@@ -109,16 +109,57 @@ def interp1d(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
     -------
 
     """
-    xx = np.atleast_1d(x)
+    xx = np.ascontiguousarray(np.atleast_1d(x))
 
     if xp.shape[0] < 2:
         msg = 'Invalid input array xp'
         raise ValueError(msg)
 
-    if out is None:
-        out = np.empty_like(xx, dtype=np.float64)
+    if np.atleast_2d(fp).shape[axis] != xp.shape[0]:
+        msg = 'Non-conformable arrays xp, fp'
+        raise ValueError(msg)
 
-    interp1d_jit(x, xp, fp, extrapolate, left, right, out)
+    # Recover "true" axis along which to interpolate
+    axis += fp.ndim
+
+    out_shp = list(fp.shape[:axis]) + list(fp.shape[axis+1:]) + list(xx.shape)
+    out_shp = tuple(out_shp)
+
+    # Move interpolation axis to the very end, reshape into two dimensions
+    # with the interpolation axis last.
+    fp_work = fp
+    if fp.ndim > 1:
+        fp_work = np.moveaxis(fp, axis, -1)
+    fp_work = fp_work.reshape((-1, xp.shape[0]))
+
+    # Allocate output array if required
+    if out is None:
+        out = np.empty(out_shp, dtype=xx.dtype)
+    else:
+        shp_ok = np.all(np.array(out_shp) == out.shape)
+        if not shp_ok:
+            msg = 'Non-conformable output array shape, expected {}'
+            raise ValueError(msg.format(out_shp))
+
+
+    # Reshape output array such that sample points are along last axis
+    shp = tuple(np.hstack((-1, xx.shape)))
+    out_work = out.reshape(shp)
+
+    # Find interpolation indices and weights: this has to be done only once
+    # and applied to all remaining axis of fp
+    index = np.empty_like(xx, dtype=np.int64)
+    weight = np.empty_like(xx)
+
+    interp1d_locate_jit(xx, xp, index_out=index, weight_out=weight)
+
+    fp1d = np.empty_like(fp_work[0])
+    out1d = np.empty_like(out_work[0])
+    for i in range(fp_work.shape[0]):
+        # Copy into contiguous array
+        fp1d[:] = fp_work[i]
+        interp1d_eval_jit(index, weight, fp1d, extrapolate, left, right, out1d)
+        out_work[i] = out1d
 
     if np.isscalar(x):
         out = out.item()
@@ -134,7 +175,7 @@ def interp2d_locate(x0, x1, xp0, xp1, ilb=None, index_out=None,
 
     xx0, xx1 = np.broadcast_arrays(xx0, xx1)
 
-    if np.any(xx0.shape !=  xx1.shape):
+    if np.any(xx0.shape != xx1.shape):
         msg = 'Non-conformable sample data arrays x0, x1'
         raise ValueError(msg)
 
@@ -149,11 +190,14 @@ def interp2d_locate(x0, x1, xp0, xp1, ilb=None, index_out=None,
     if weight_out is None:
         weight_out = np.empty(shp, dtype=x0.dtype)
 
+    index_out = np.atleast_2d(index_out)
+    weight_out = np.atleast_2d(weight_out)
+
     interp2d_locate_jit(xx0, xx1, xp0, xp1, ilb, index_out, weight_out)
 
     if np.isscalar(x0) and np.isscalar(x1):
-        index_out = index_out.flatten()
-        weight_out = weight_out.flatten()
+        index_out = index_out.reshape((-1, ))
+        weight_out = weight_out.reshape((-1, ))
 
     return index_out, weight_out
 

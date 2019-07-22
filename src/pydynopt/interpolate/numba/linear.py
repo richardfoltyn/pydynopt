@@ -160,7 +160,7 @@ def interp1d_eval_array(index, weight, fp, extrapolate=True, left=np.nan,
     """
 
     if out is None:
-        out = np.empty_like(weight, dtype=np.float64)
+        out = np.empty_like(weight, dtype=fp.dtype)
 
     index_flat = index.reshape((-1, ))
     weight_flat = weight.reshape((-1, ))
