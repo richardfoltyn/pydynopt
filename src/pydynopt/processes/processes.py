@@ -41,6 +41,13 @@ def rouwenhorst(n, mu, rho, sigma):
         msg = 'Cannot create stationary process with abs(rho) >= 1.0'
         raise ValueError(msg)
 
+    if n == 1:
+        # Degenerate process on a single state: disregard variance and
+        # autocorrelation
+        z = np.array([mu])
+        Pi = np.ones((1, 1))
+        return z, Pi
+
     p = (1+rho)/2
     Pi = np.array([[p, 1-p], [1-p, p]])
 
