@@ -14,7 +14,8 @@ def plot_grid(fun, nrow=1, ncol=1,
               sharex=True, sharey=True,
               xlabel=None, ylabel=None, xlim=None, ylim=None,
               legend_at=(0, 0), legend_loc='upper left', legend=False,
-              outfile=None, style=None, aspect=1.0, *args, **kwargs):
+              outfile=None, style=None, aspect=1.0, close_fig=True,
+              *args, **kwargs):
     """
     Creates a rectangular grid of subplots and calls a user-provided function
     for each subplot to render user-supplied content.
@@ -70,6 +71,10 @@ def plot_grid(fun, nrow=1, ncol=1,
         Instance of AbstractStyle controlling various rendering options.
     aspect : float
         Aspect ratio
+    close_fig : bool
+        If true (default), close the figure after plotting if an output
+        file is specified. This can be disabled if the figure should
+        be shown on screen after being saved in a file.
     args : tuple
         Positional arguments passed directly to `fun`
     kwargs : dict
@@ -167,15 +172,16 @@ def plot_grid(fun, nrow=1, ncol=1,
                 if j > 0 and ylim_same and not sharey:
                     axes[i, j].set_yticklabels([])
 
-    render(fig, outfile)
+    render(fig, outfile, close_fig)
 
 
-def render(fig, outfile=None):
+def render(fig, outfile=None, close_fig=True):
     if not outfile:
         fig.show()
     else:
         fig.savefig(outfile)
-        plt.close()
+        if close_fig:
+            plt.close(fig)
 
 
 def broadcast_ylim(nrow, ncol, ylim):
