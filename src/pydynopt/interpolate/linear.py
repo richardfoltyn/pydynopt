@@ -141,9 +141,11 @@ def interp1d(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
             msg = 'Non-conformable output array shape, expected {}'
             raise ValueError(msg.format(out_shp))
 
-
-    # Reshape output array such that sample points are along last axis
-    shp = tuple(np.hstack((-1, xx.shape)))
+    # Reshape output array such that sample points are along last axis.
+    # Manually compute size of first dimension to correctly handle 0-sized
+    # input arrays.
+    d0 = out.size // xx.size if xx.size > 0 else 1
+    shp = tuple(np.hstack((d0, xx.shape)))
     out_work = out.reshape(shp)
 
     # Find interpolation indices and weights: this has to be done only once
@@ -154,7 +156,7 @@ def interp1d(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
     interp1d_locate_jit(xx, xp, index_out=index, weight_out=weight)
 
     fp1d = np.empty_like(fp_work[0])
-    out1d = np.empty_like(out_work[0])
+    out1d = np.empty(out_work.shape[1:])
     for i in range(fp_work.shape[0]):
         # Copy into contiguous array
         fp1d[:] = fp_work[i]
