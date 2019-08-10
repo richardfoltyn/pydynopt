@@ -7,6 +7,9 @@ from pydynopt import use_numba
 
 import numpy as np
 
+__all__ = ['jit', 'jitclass', 'overload', 'float64', 'int64', 'boolean']
+
+
 def jit(signature_or_function=None, *jit_args, **jit_kwargs):
     """
     Default implementation of Numba's @jit decorator when Numba is not
@@ -74,12 +77,13 @@ class SubscriptableType(np.int64):
 
 int64 = SubscriptableType()
 float64 = SubscriptableType()
+boolean = SubscriptableType()
 
 if use_numba:
     try:
         from numba import jit, jitclass
         from numba.extending import overload
-        from numba.types import int64, float64
+        from numba.types import int64, float64, boolean, string
     except ImportError:
         # Nothing to do, use the default decorators defined above
         pass
