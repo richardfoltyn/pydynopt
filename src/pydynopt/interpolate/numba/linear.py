@@ -73,23 +73,21 @@ def interp1d_locate_array(x, xp, ilb=0, index_out=None, weight_out=None):
     weight_out : np.ndarray
     """
 
-    if index_out is None:
-        index_out = np.empty_like(x, dtype=np.int64)
-    if weight_out is None:
-        weight_out = np.empty_like(x, dtype=np.float64)
+    lind_out = np.empty_like(x, dtype=np.int64) if index_out is None else index_out
+    lwgt_out = np.empty_like(x, dtype=np.float64) if weight_out is None else weight_out
 
-    index_out_flat = index_out.reshape((-1, ))
-    weight_out_flat = weight_out.reshape((-1, ))
+    lind_out_flat = lind_out.reshape((-1, ))
+    lwgt_out_flat = lwgt_out.reshape((-1, ))
 
     for i, xi in enumerate(x.flat):
         ilb = bsearch_impl(xi, xp, ilb)
-        index_out_flat[i] = ilb
+        lind_out_flat[i] = ilb
 
         # Interpolation weight on lower bound
         wgt_lb = (xp[ilb + 1] - xi)/(xp[ilb + 1] - xp[ilb])
-        weight_out_flat[i] = wgt_lb
+        lwgt_out_flat[i] = wgt_lb
 
-    return index_out, weight_out
+    return lind_out, lwgt_out
 
 
 def interp1d_eval_scalar(index, weight, fp, extrapolate=True, left=np.nan,
@@ -159,12 +157,11 @@ def interp1d_eval_array(index, weight, fp, extrapolate=True, left=np.nan,
         Interpolant evaluated at sample points.
     """
 
-    if out is None:
-        out = np.empty_like(weight, dtype=fp.dtype)
+    lout = np.empty_like(weight, dtype=fp.dtype) if out is None else out
 
     index_flat = index.reshape((-1, ))
     weight_flat = weight.reshape((-1, ))
-    out_flat = out.reshape((-1, ))
+    out_flat = lout.reshape((-1, ))
 
     for i in range(out_flat.size):
         ilb, wgt = index_flat[i], weight_flat[i]
@@ -172,7 +169,7 @@ def interp1d_eval_array(index, weight, fp, extrapolate=True, left=np.nan,
 
         out_flat[i] = fx
 
-    return out
+    return lout
 
 
 interp1d_locate_scalar_jit = jit(interp1d_locate_scalar, nopython=True)
@@ -227,28 +224,24 @@ def interp1d_array(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
 
     """
 
-    if out is None:
-        out = np.empty_like(x, dtype=x.dtype)
-
-    out_flat = out.reshape((-1, ))
+    lout = np.empty_like(x, dtype=x.dtype) if out is None else out
+    lout_flat = lout.reshape((-1, 1))
 
     ilb = 0
     for i, xi in enumerate(x.flat):
         ilb, wgt = interp1d_locate_scalar_jit(xi, xp, ilb)
-        fx = interp1d_eval_scalar_jit(ilb, wgt, fp, extrapolate, left, right, out)
+        fx = interp1d_eval_scalar_jit(ilb, wgt, fp, extrapolate, left, right, lout)
 
-        out_flat[i] = fx
+        lout_flat[i] = fx
 
-    return out
+    return lout
 
 
 def interp2d_locate_scalar(x0, x1, xp0, xp1, ilb=None, index_out=None,
                            weight_out=None):
 
-    if index_out is None:
-        index_out = np.empty(2, dtype=np.int64)
-    if weight_out is None:
-        weight_out = np.empty(2, dtype=np.float64)
+    lind_out = np.empty(2, dtype=np.int64) if index_out is None else index_out
+    lwgt_out = np.empty(2, dtype=np.float64) if weight_out is None else weight_out
 
     ilb0 = 0
     ilb1 = 0
@@ -259,29 +252,25 @@ def interp2d_locate_scalar(x0, x1, xp0, xp1, ilb=None, index_out=None,
     ilb0, wgt0 = interp1d_locate_scalar_jit(x0, xp0, ilb0)
     ilb1, wgt1 = interp1d_locate_scalar_jit(x1, xp1, ilb1)
 
-    index_out[0] = ilb0
-    index_out[1] = ilb1
+    lind_out[0] = ilb0
+    lind_out[1] = ilb1
 
-    weight_out[0] = wgt0
-    weight_out[1] = wgt1
+    lwgt_out[0] = wgt0
+    lwgt_out[1] = wgt1
 
-    return index_out, weight_out
+    return lind_out, lwgt_out
 
 
 def interp2d_locate_array(x0, x1, xp0, xp1, ilb=None, index_out=None,
                           weight_out=None):
 
-    if index_out is None:
-        # Numba does not support constructing tuples to be passed as
-        # shape arguments to Numpy's array construction routines, so
-        # use some tricks
-        index_out = np.stack((np.empty_like(x0, dtype=np.int64),
-                              np.empty_like(x0, dtype=np.int64)), axis=-1)
-    if weight_out is None:
-        weight_out = np.stack((np.empty_like(x0), np.empty_like(x0)), axis=-1)
+    shp = tuple(x0.shape) + (2, )
 
-    index_out_flat = index_out.reshape((-1, 2))
-    weight_out_flat = weight_out.reshape((-1, 2))
+    lind_out = np.empty(shp, dtype=np.int64) if index_out is None else index_out
+    lwgt_out = np.empty(shp, dtype=x0.dtype) if weight_out is None else weight_out
+
+    lind_out_flat = lind_out.reshape((-1, 2))
+    lwgt_out_flat = lwgt_out.reshape((-1, 2))
 
     ilb0 = 0
     ilb1 = 0
@@ -293,13 +282,13 @@ def interp2d_locate_array(x0, x1, xp0, xp1, ilb=None, index_out=None,
         ilb0, wgt0 = interp1d_locate_scalar_jit(x0i, xp0, ilb0)
         ilb1, wgt1 = interp1d_locate_scalar_jit(x1i, xp1, ilb1)
 
-        index_out_flat[i, 0] = ilb0
-        index_out_flat[i, 1] = ilb1
+        lind_out_flat[i, 0] = ilb0
+        lind_out_flat[i, 1] = ilb1
 
-        weight_out_flat[i, 0] = wgt0
-        weight_out_flat[i, 1] = wgt1
+        lwgt_out_flat[i, 0] = wgt0
+        lwgt_out_flat[i, 1] = wgt1
 
-    return index_out, weight_out
+    return lind_out, lwgt_out
 
 
 def interp2d_eval_scalar(index, weight, fp, extrapolate=True, out=None):
@@ -329,22 +318,18 @@ interp2d_eval_scalar_jit = jit(interp2d_eval_scalar, nopython=True)
 
 def interp2d_eval_array(index, weight, fp, extrapolate=True, out=None):
 
-    if out is None:
-        # Numba does not support constructing tuples to be passed as
-        # shape arguments to Numpy's array construction routines, so
-        # use some tricks
-        out = np.empty_like(weight[..., 0], dtype=fp.dtype)
+    lout = np.empty_like(weight[..., 0], dtype=fp.dtype) if out is None else out
 
     index_flat = index.reshape((-1, 2))
     weight_flat = weight.reshape((-1, 2))
-    out_flat = out.reshape((-1, ))
+    lout_flat = lout.reshape((-1, ))
 
-    for i in range(out.size):
+    for i in range(lout.size):
         fx = interp2d_eval_scalar_jit(index_flat[i], weight_flat[i], fp,
                                       extrapolate=extrapolate)
-        out_flat[i] = fx
+        lout_flat[i] = fx
 
-    return out
+    return lout
 
 
 def interp2d_scalar(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
@@ -360,10 +345,9 @@ def interp2d_scalar(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
 
 def interp2d_array(x0, x1, xp0, xp1, fp, extrapolate=True, out=None):
 
-    if out is None:
-        out = np.empty_like(x0, dtype=x0.dtype)
+    lout = np.empty_like(x0) if out is None else out
 
-    out_flat = out.reshape((-1, 1))
+    lout_flat = lout.reshape((-1, 1))
 
     ilb = np.zeros(2, dtype=np.int64)
     wgt = np.zeros(2, dtype=x0.dtype)
@@ -371,7 +355,7 @@ def interp2d_array(x0, x1, xp0, xp1, fp, extrapolate=True, out=None):
     for i, (x0i, x1i) in enumerate(zip(x0, x1)):
         interp2d_locate_scalar_jit(x0i, x1i, xp0, xp1, ilb, ilb, wgt)
         fx = interp2d_eval_scalar_jit(ilb, wgt, fp, extrapolate)
-        out_flat[i] = fx
+        lout_flat[i] = fx
 
-    return out
+    return lout
 
