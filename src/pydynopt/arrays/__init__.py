@@ -8,8 +8,9 @@ from numpy import insert
 from pydynopt.numba import overload
 
 from .numba import _insert_scalar, _insert_array
+from .base import powerspace
 
-__all__ = ['insert']
+__all__ = ['insert', 'powerspace']
 
 
 @overload(insert)
@@ -23,4 +24,10 @@ def insert_generic(arr, obj, values, axis=None):
     elif isinstance(obj, Array) and isinstance(values, Array):
         f = _insert_array
 
+    return f
+
+
+@overload(powerspace)
+def powerspace_generic(xmin, xmax, n, exponent):
+    f = powerspace
     return f
