@@ -7,7 +7,7 @@ Author: Richard Foltyn
 from numpy import insert
 from pydynopt.numba import overload
 
-from .numba import _insert_scalar, _insert_array
+from .numba import _insert
 from .base import powerspace
 
 __all__ = ['insert', 'powerspace']
@@ -20,14 +20,9 @@ def insert_generic(arr, obj, values, axis=None):
 
     f = None
     if isinstance(obj, Integer) and isinstance(values, Number):
-        f = _insert_scalar
+        f = _insert
     elif isinstance(obj, Array) and isinstance(values, Array):
-        f = _insert_array
+        if obj.ndim <= 1:
+            f = _insert
 
-    return f
-
-
-@overload(powerspace)
-def powerspace_generic(xmin, xmax, n, exponent):
-    f = powerspace
     return f
