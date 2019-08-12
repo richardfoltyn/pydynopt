@@ -153,14 +153,14 @@ def interp1d(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
     index = np.empty_like(xx, dtype=np.int64)
     weight = np.empty_like(xx)
 
-    interp1d_locate_array(xx, xp, index_out=index, weight_out=weight)
+    interp1d_locate_jit(xx, xp, index_out=index, weight_out=weight)
 
     fp1d = np.empty_like(fp_work[0])
     out1d = np.empty(out_work.shape[1:])
     for i in range(fp_work.shape[0]):
         # Copy into contiguous array
         fp1d[:] = fp_work[i]
-        interp1d_eval_array(index, weight, fp1d, extrapolate, left, right, out1d)
+        interp1d_eval_jit(index, weight, fp1d, extrapolate, left, right, out1d)
         out_work[i] = out1d
 
     if np.isscalar(x):
