@@ -8,10 +8,11 @@ Author: Richard Foltyn
 
 import numpy as np
 
-from pydynopt.numba import jit
+from pydynopt.numba import jit, register_jitable
 from .search import bsearch_impl
 
 
+@register_jitable(parallel=False)
 def interp1d_locate_scalar(x, xp, ilb=0, index_out=None, weight_out=None):
     """
     Numba implementation for computing the interpolation bracketing interval
@@ -46,6 +47,7 @@ def interp1d_locate_scalar(x, xp, ilb=0, index_out=None, weight_out=None):
     return ilb, weight
 
 
+@register_jitable(parallel=False)
 def interp1d_locate_array(x, xp, ilb=0, index_out=None, weight_out=None):
     """
     Numba implementation for computing the interpolation bracketing intervals
@@ -90,6 +92,7 @@ def interp1d_locate_array(x, xp, ilb=0, index_out=None, weight_out=None):
     return lind_out, lwgt_out
 
 
+@register_jitable(parallel=False)
 def interp1d_eval_scalar(index, weight, fp, extrapolate=True, left=np.nan,
                          right=np.nan, out=None):
     """
@@ -129,6 +132,7 @@ def interp1d_eval_scalar(index, weight, fp, extrapolate=True, left=np.nan,
     return fx
 
 
+@register_jitable(parallel=False)
 def interp1d_eval_array(index, weight, fp, extrapolate=True, left=np.nan,
                         right=np.nan, out=None):
     """
@@ -165,15 +169,18 @@ def interp1d_eval_array(index, weight, fp, extrapolate=True, left=np.nan,
 
     for i in range(out_flat.size):
         ilb, wgt = index_flat[i], weight_flat[i]
-        fx = interp1d_eval_scalar_jit(ilb, wgt, fp, extrapolate, left, right)
+
+        fx = wgt*fp[ilb] + (1.0 - wgt)*fp[ilb + 1]
+
+        if not extrapolate:
+            if wgt > 1.0:
+                fx = left
+            elif wgt < 0.0:
+                fx = right
 
         out_flat[i] = fx
 
     return lout
-
-
-interp1d_locate_scalar_jit = jit(interp1d_locate_scalar, nopython=True)
-interp1d_eval_scalar_jit = jit(interp1d_eval_scalar, nopython=True)
 
 
 def interp1d_scalar(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
@@ -197,8 +204,8 @@ def interp1d_scalar(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
 
     """
 
-    ilb, wgt = interp1d_locate_scalar_jit(x, xp)
-    fx = interp1d_eval_scalar_jit(ilb, wgt, fp, extrapolate, left, right, out)
+    ilb, wgt = interp1d_locate_scalar(x, xp)
+    fx = interp1d_eval_scalar(ilb, wgt, fp, extrapolate, left, right, out)
 
     return fx
 
@@ -229,8 +236,8 @@ def interp1d_array(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
 
     ilb = 0
     for i, xi in enumerate(x.flat):
-        ilb, wgt = interp1d_locate_scalar_jit(xi, xp, ilb)
-        fx = interp1d_eval_scalar_jit(ilb, wgt, fp, extrapolate, left, right, lout)
+        ilb, wgt = interp1d_locate_scalar(xi, xp, ilb)
+        fx = interp1d_eval_scalar(ilb, wgt, fp, extrapolate, left, right, lout)
 
         lout_flat[i] = fx
 
@@ -249,8 +256,8 @@ def interp2d_locate_scalar(x0, x1, xp0, xp1, ilb=None, index_out=None,
     if ilb is not None:
         ilb0, ilb1 = ilb[0], ilb[1]
 
-    ilb0, wgt0 = interp1d_locate_scalar_jit(x0, xp0, ilb0)
-    ilb1, wgt1 = interp1d_locate_scalar_jit(x1, xp1, ilb1)
+    ilb0, wgt0 = interp1d_locate_scalar(x0, xp0, ilb0)
+    ilb1, wgt1 = interp1d_locate_scalar(x1, xp1, ilb1)
 
     lind_out[0] = ilb0
     lind_out[1] = ilb1
@@ -279,8 +286,11 @@ def interp2d_locate_array(x0, x1, xp0, xp1, ilb=None, index_out=None,
         ilb0, ilb1 = ilb[0], ilb[1]
 
     for i, (x0i, x1i) in enumerate(zip(x0.flat, x1.flat)):
-        ilb0, wgt0 = interp1d_locate_scalar_jit(x0i, xp0, ilb0)
-        ilb1, wgt1 = interp1d_locate_scalar_jit(x1i, xp1, ilb1)
+        ilb0 = bsearch_impl(x0i, xp0, ilb0)
+        ilb1 = bsearch_impl(x1i, xp1, ilb1)
+
+        wgt0 = (xp0[ilb0 + 1] - x0i)/(xp0[ilb0 + 1] - xp0[ilb0])
+        wgt1 = (xp1[ilb1 + 1] - x1i)/(xp1[ilb1 + 1] - xp1[ilb1])
 
         lind_out_flat[i, 0] = ilb0
         lind_out_flat[i, 1] = ilb1
@@ -325,8 +335,22 @@ def interp2d_eval_array(index, weight, fp, extrapolate=True, out=None):
     lout_flat = lout.reshape((-1, ))
 
     for i in range(lout.size):
-        fx = interp2d_eval_scalar_jit(index_flat[i], weight_flat[i], fp,
-                                      extrapolate=extrapolate)
+        wgt0, wgt1 = weight_flat[i, 0], weight_flat[i, 1]
+        ilb0, ilb1 = index_flat[i, 0], index_flat[i, 1]
+
+        if not extrapolate:
+            if wgt0 < 0.0 or wgt0 > 1.0 or wgt1 < 0.0 or wgt1 > 1.0:
+                fx = np.nan
+                lout_flat[i] = fx
+                continue
+
+        # Interpolate in dimension 0
+        fx0_lb = wgt0*fp[ilb0, ilb1] + (1.0 - wgt0)*fp[ilb0 + 1, ilb1]
+        fx0_ub = wgt0*fp[ilb0, ilb1 + 1] + (1.0 - wgt0)*fp[ilb0 + 1, ilb1 + 1]
+
+        # Interpolate in dimension 1
+        fx = wgt1*fx0_lb + (1.0 - wgt1)*fx0_ub
+
         lout_flat[i] = fx
 
     return lout
