@@ -1,9 +1,14 @@
 """
+Basic routines to create and manipulate arrays.
+
 Author: Richard Foltyn
 """
 import numpy as np
 
+from pydynopt.numba import register_jitable
 
+
+@register_jitable(nopython=True, parallel=False)
 def powerspace(xmin, xmax, n, exponent):
     """
     Create a "power-spaced" grid of size n.
