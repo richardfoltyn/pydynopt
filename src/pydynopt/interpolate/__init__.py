@@ -19,7 +19,7 @@ __all__ = ['interp1d', 'interp1d_locate', 'interp1d_eval',
            'interp2d', 'interp2d_locate', 'interp2d_eval']
 
 
-@overload(interp1d)
+@overload(interp1d, jit_options={'parallel': False})
 def _interp1d_generic(x, xp, fp, extrapolate=True, left=np.nan,
                      right=np.nan, out=None):
     from numba.types.scalars import Number
@@ -34,7 +34,7 @@ def _interp1d_generic(x, xp, fp, extrapolate=True, left=np.nan,
     return f
 
 
-@overload(interp1d_locate)
+@overload(interp1d_locate, jit_options={'parallel': False})
 def _interp1d_locate_generic(x, xp, ilb=0, index_out=None, weight_out=None):
     from numba.types.scalars import Number
     from numba.types.npytypes import Array
@@ -48,7 +48,7 @@ def _interp1d_locate_generic(x, xp, ilb=0, index_out=None, weight_out=None):
     return f
 
 
-@overload(interp1d_eval)
+@overload(interp1d_eval, jit_options={'parallel': False})
 def _interp1d_eval_generic(index, weight, fp, extrapolate=True,
                           left=np.nan, right=np.nan, out=None):
     from numba.types.scalars import Number
@@ -63,7 +63,7 @@ def _interp1d_eval_generic(index, weight, fp, extrapolate=True,
     return f
 
 
-@overload(interp2d)
+@overload(interp2d, jit_options={'parallel': False})
 def _interp2d_generic(x0, x1, xp0, xp1, fp, extrapolate=True, out=None):
     from numba.types.scalars import Number
     from numba.types.npytypes import Array
@@ -77,7 +77,7 @@ def _interp2d_generic(x0, x1, xp0, xp1, fp, extrapolate=True, out=None):
     return f
 
 
-@overload(interp2d_locate)
+@overload(interp2d_locate, jit_options={'parallel': False})
 def _interp2d_locate_generic(x0, x1, xp0, xp1, ilb=None, index_out=None,
                             weight_out=None):
     from numba.types.scalars import Number
@@ -92,7 +92,7 @@ def _interp2d_locate_generic(x0, x1, xp0, xp1, ilb=None, index_out=None,
     return f
 
 
-@overload(interp2d_eval)
+@overload(interp2d_eval, jit_options={'parallel': False})
 def _interp2d_eval_generic(index, weight, fp, extrapolate=True, out=None):
     from numba.types.npytypes import Array
     from numba.types import Optional
