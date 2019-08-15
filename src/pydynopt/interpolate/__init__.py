@@ -3,8 +3,11 @@ __author__ = 'Richard Foltyn'
 import numpy as np
 
 from pydynopt.numba import overload
+
 from .linear import interp1d, interp1d_locate, interp1d_eval
 from .linear import interp2d, interp2d_locate, interp2d_eval
+
+from .numba.search import bsearch
 
 from .numba.linear import interp1d_locate_scalar, interp1d_locate_array
 from .numba.linear import interp1d_eval_scalar, interp1d_eval_array
@@ -15,7 +18,8 @@ from .numba.linear import interp2d_eval_scalar, interp2d_eval_array
 from .numba.linear import interp2d_scalar, interp2d_array
 
 
-__all__ = ['interp1d', 'interp1d_locate', 'interp1d_eval',
+__all__ = ['bsearch',
+           'interp1d', 'interp1d_locate', 'interp1d_eval',
            'interp2d', 'interp2d_locate', 'interp2d_eval']
 
 
@@ -64,7 +68,7 @@ def _interp1d_eval_generic(index, weight, fp, extrapolate=True,
 
 
 @overload(interp2d, jit_options={'parallel': False})
-def _interp2d_generic(x0, x1, xp0, xp1, fp, extrapolate=True, out=None):
+def _interp2d_generic(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
     from numba.types.scalars import Number
     from numba.types.npytypes import Array
     f = None

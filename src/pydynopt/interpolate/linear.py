@@ -218,7 +218,7 @@ def interp2d_eval(index, weight, fp, extrapolate=True, out=None):
     return out
 
 
-def interp2d(x0, x1, xp0, xp1, fp, extrapolate=True, out=None):
+def interp2d(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
     """
     Perform bilinear interpolation at given sample points.
 
@@ -240,6 +240,9 @@ def interp2d(x0, x1, xp0, xp1, fp, extrapolate=True, out=None):
         Grid in second dimension
     fp : np.ndarray
         Function evaluated at Cartesian product of `xp1` and  `xp2`
+    ilb : np.narray or None
+        Optional initial guess for search routine used to locate interpolating
+        bracket.
     extrapolate : bool
         If true, extrapolate values at points outside of given domain. Otherwise
         non-interior points will be set to NaN.
@@ -273,7 +276,7 @@ def interp2d(x0, x1, xp0, xp1, fp, extrapolate=True, out=None):
         out = np.empty_like(xx0)
 
     # Let Numba version perform the actual work
-    interp2d_jit(xx0, xx1, xp0, xp1, fp, extrapolate, out)
+    interp2d_jit(xx0, xx1, xp0, xp1, fp, ilb, extrapolate, out)
 
     if np.isscalar(x0) and np.isscalar(x1):
         out = out.item()

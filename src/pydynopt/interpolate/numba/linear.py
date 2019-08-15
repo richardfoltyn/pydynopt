@@ -359,7 +359,7 @@ def interp2d_eval_array(index, weight, fp, extrapolate=True, out=None):
 def interp2d_scalar(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
 
     index = np.empty(2, dtype=np.int64)
-    weight = np.empty(2, dtype=x0.dtype)
+    weight = np.empty(2, dtype=xp0.dtype)
 
     interp2d_locate_scalar_jit(x0, x1, xp0, xp1, ilb, index, weight)
     fx = interp2d_eval_scalar_jit(index, weight, fp, extrapolate)
@@ -367,18 +367,21 @@ def interp2d_scalar(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
     return fx
 
 
-def interp2d_array(x0, x1, xp0, xp1, fp, extrapolate=True, out=None):
+def interp2d_array(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
 
     lout = np.empty_like(x0) if out is None else out
 
     lout_flat = lout.reshape((-1, 1))
 
-    ilb = np.zeros(2, dtype=np.int64)
+    lilb = np.zeros(2, dtype=np.int64)
     wgt = np.zeros(2, dtype=x0.dtype)
 
+    if ilb is not None:
+        lilb[:] = ilb
+
     for i, (x0i, x1i) in enumerate(zip(x0, x1)):
-        interp2d_locate_scalar_jit(x0i, x1i, xp0, xp1, ilb, ilb, wgt)
-        fx = interp2d_eval_scalar_jit(ilb, wgt, fp, extrapolate)
+        interp2d_locate_scalar_jit(x0i, x1i, xp0, xp1, lilb, lilb, wgt)
+        fx = interp2d_eval_scalar_jit(lilb, wgt, fp, extrapolate)
         lout_flat[i] = fx
 
     return lout
