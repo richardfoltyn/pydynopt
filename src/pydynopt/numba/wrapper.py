@@ -8,7 +8,8 @@ from pydynopt import use_numba
 import numpy as np
 
 __all__ = ['jit', 'jitclass', 'overload', 'register_jitable',
-           'float64', 'int64', 'boolean']
+           'float64', 'int64', 'boolean',
+           'prange']
 
 
 def jit(signature_or_function=None, *jit_args, **jit_kwargs):
@@ -108,11 +109,14 @@ int64 = SubscriptableType()
 float64 = SubscriptableType()
 boolean = SubscriptableType()
 
+prange = range
+
 if use_numba:
     try:
         from numba import jit, jitclass
         from numba.extending import overload, register_jitable
         from numba.types import int64, float64, boolean, string
+        from numba import prange
     except ImportError:
         # Nothing to do, use the default decorators defined above
         pass
