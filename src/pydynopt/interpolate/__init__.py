@@ -23,7 +23,10 @@ __all__ = ['bsearch',
            'interp2d', 'interp2d_locate', 'interp2d_eval']
 
 
-@overload(interp1d, jit_options={'parallel': False})
+JIT_OPTIONS = {'parallel': False, 'nogil': True, 'cache': True}
+
+
+@overload(interp1d, jit_options=JIT_OPTIONS)
 def _interp1d_generic(x, xp, fp, extrapolate=True, left=np.nan,
                      right=np.nan, out=None):
     from numba.types.scalars import Number
@@ -38,7 +41,7 @@ def _interp1d_generic(x, xp, fp, extrapolate=True, left=np.nan,
     return f
 
 
-@overload(interp1d_locate, jit_options={'parallel': False})
+@overload(interp1d_locate, jit_options=JIT_OPTIONS)
 def _interp1d_locate_generic(x, xp, ilb=0, index_out=None, weight_out=None):
     from numba.types.scalars import Number
     from numba.types.npytypes import Array
@@ -52,7 +55,7 @@ def _interp1d_locate_generic(x, xp, ilb=0, index_out=None, weight_out=None):
     return f
 
 
-@overload(interp1d_eval, jit_options={'parallel': False})
+@overload(interp1d_eval, jit_options=JIT_OPTIONS)
 def _interp1d_eval_generic(index, weight, fp, extrapolate=True,
                           left=np.nan, right=np.nan, out=None):
     from numba.types.scalars import Number
@@ -67,7 +70,7 @@ def _interp1d_eval_generic(index, weight, fp, extrapolate=True,
     return f
 
 
-@overload(interp2d, jit_options={'parallel': False})
+@overload(interp2d, jit_options=JIT_OPTIONS)
 def _interp2d_generic(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
     from numba.types.scalars import Number
     from numba.types.npytypes import Array
@@ -81,7 +84,7 @@ def _interp2d_generic(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None
     return f
 
 
-@overload(interp2d_locate, jit_options={'parallel': False})
+@overload(interp2d_locate, jit_options=JIT_OPTIONS)
 def _interp2d_locate_generic(x0, x1, xp0, xp1, ilb=None, index_out=None,
                             weight_out=None):
     from numba.types.scalars import Number
@@ -96,7 +99,7 @@ def _interp2d_locate_generic(x0, x1, xp0, xp1, ilb=None, index_out=None,
     return f
 
 
-@overload(interp2d_eval, jit_options={'parallel': False})
+@overload(interp2d_eval, jit_options=JIT_OPTIONS)
 def _interp2d_eval_generic(index, weight, fp, extrapolate=True, out=None):
     from numba.types.npytypes import Array
     from numba.types import Optional
