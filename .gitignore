@@ -10,3 +10,4 @@ build/
 *.c
 *.html
 .cache/
+__pycache__/
