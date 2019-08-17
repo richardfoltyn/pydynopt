@@ -71,3 +71,119 @@ def _insert(arr, obj, values, axis=None):
     return out
 
 
+def _unravel_index_array(indices, shape, order='C'):
+
+    order = order.upper()
+
+    lindices = np.atleast_1d(indices)
+    lindices_flat = lindices.reshape((-1,))
+
+    unravel_ndim = len(shape)
+    unravel_dims = np.array(shape, dtype=np.int64)
+    unravel_size = int(np.prod(unravel_dims))
+
+    coords_shp = (unravel_ndim, ) + tuple(lindices.shape)
+    coords = np.empty(coords_shp, dtype=lindices.dtype)
+    coords_flat = coords.reshape((unravel_ndim, -1))
+
+    idx_start = unravel_ndim - 1 if order == 'C' else 0
+    idx_step = -1 if order == 'C' else 1
+
+    for i in range(lindices.size):
+        val = lindices_flat[i]
+
+        if val < 0 or val >= unravel_size:
+            raise ValueError('Invalid flat index')
+
+        idx = idx_start
+
+        for j in range(0, unravel_ndim):
+            tmp = val / unravel_dims[idx]
+            coords_flat[idx, i] = val % unravel_dims[idx]
+            val = tmp
+            idx += idx_step
+
+    return coords
+
+
+def _unravel_index_scalar(indices, shape, order='C'):
+
+    indices1d = np.array(indices, dtype=np.int64)
+
+    coords2d = np.unravel_index(indices1d, shape, order)
+    coords = coords2d[:, 0]
+
+    return coords
+
+
+def _ravel_multi_index_array(multi_index, dims, mode='raise', order='C'):
+
+    ravel_dims = np.empty(len(dims), dtype=np.int64)
+    for i, d in enumerate(dims):
+        ravel_dims[i] = d
+
+    ravel_ndim = ravel_dims.shape[0]
+
+    dtype = multi_index.dtype
+    lmulti_index_flat = multi_index.reshape((ravel_ndim, -1))
+
+    one = np.ones(1, dtype=ravel_dims.dtype)
+    iwork = np.hstack((one, ravel_dims[:0:-1]))
+    ravel_strides = np.cumprod(iwork)[::-1]
+
+    if multi_index.ndim >= 2:
+        shp_indices = tuple(multi_index.shape[1:])
+    else:
+        shp_indices = (1, )
+
+    indices = np.empty(shp_indices, dtype=dtype)
+    indices_flat = indices.reshape((-1, ))
+    N = lmulti_index_flat.shape[-1]
+
+    mode = mode.upper()
+
+    if mode != 'RAISE':
+        raise NotImplementedError("mode='raise' required")
+
+    MODE_RAISE = 0
+    MODE_WRAP = 1
+    MODE_CLIP = 2
+
+    imode = MODE_RAISE
+
+    for k in range(N):
+        raveled = 0
+
+        for i in range(ravel_ndim):
+            m = ravel_dims[i]
+            j = lmulti_index_flat[i, k]
+
+            if imode == MODE_RAISE:
+                if j < 0 or j >= m:
+                    raise ValueError('Invalid multi-index')
+
+            raveled += j * ravel_strides[i]
+
+        indices_flat[k] = raveled
+
+    return indices
+
+
+def _ravel_multi_index_array1d(multi_index, dims, mode='raise', order='C'):
+
+    lmulti_index = multi_index.reshape((-1, 1))
+    indices = np.ravel_multi_index(lmulti_index, dims, mode, order)
+
+    index = indices[0]
+
+    return index
+
+
+def _ravel_multi_index(multi_index, dims, mode='raise', order='C'):
+
+    lmulti_index = np.array(multi_index)
+
+    # This should call the _array1d implementation above
+    index = np.ravel_multi_index(lmulti_index, dims, mode, order)
+
+    return index
