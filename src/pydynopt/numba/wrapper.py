@@ -12,7 +12,7 @@ __all__ = ['jit', 'jitclass', 'overload', 'register_jitable',
            'prange']
 
 
-def jit(signature_or_function=None, *jit_args, **jit_kwargs):
+def jit_dummy(signature_or_function=None, *jit_args, **jit_kwargs):
     """
     Default implementation of Numba's @jit decorator when Numba is not
     available or not desired.
@@ -39,7 +39,7 @@ def jit(signature_or_function=None, *jit_args, **jit_kwargs):
         return decorate
 
 
-def jitclass(spec):
+def jitclass_dummy(spec):
     """
     Default implementation of Numba's @jitclass decorator when Numba is
     not available or not desired.
@@ -53,7 +53,7 @@ def jitclass(spec):
     return decorate
 
 
-def overload(func, jit_options={}, strict=True):
+def overload_dummy(func, jit_options={}, strict=True):
     """
     Default implementation of Numba's @overload decorator when Numba is
     not available or not desired.
@@ -67,7 +67,7 @@ def overload(func, jit_options={}, strict=True):
     return decorate
 
 
-def register_jitable(*args, **kwargs):
+def register_jitable_dummy(*args, **kwargs):
     """
     Register a regular python function that can be executed by the python
     interpreter and can be compiled into a nopython function when referenced
@@ -109,6 +109,10 @@ int64 = SubscriptableType()
 float64 = SubscriptableType()
 boolean = SubscriptableType()
 
+jit = jit_dummy
+jitclass = jitclass_dummy
+overload = overload_dummy
+register_jitable = register_jitable_dummy
 prange = range
 
 if use_numba:
