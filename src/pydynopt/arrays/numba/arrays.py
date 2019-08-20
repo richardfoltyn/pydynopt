@@ -79,7 +79,11 @@ def _unravel_index_array(indices, shape, order='C'):
     lindices_flat = lindices.reshape((-1,))
 
     unravel_ndim = len(shape)
-    unravel_dims = np.array(shape, dtype=np.int64)
+    unravel_dims = np.empty(unravel_ndim, dtype=np.int64)
+    # Copy over dimensions in a loop, since creating an array with np.array()
+    # with an argument that already is an array seems to fail in Numba mode.
+    for i in range(unravel_ndim):
+        unravel_dims[i] = shape[i]
     unravel_size = int(np.prod(unravel_dims))
 
     coords_shp = (unravel_ndim, ) + tuple(lindices.shape)
