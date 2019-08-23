@@ -25,16 +25,10 @@ def jit_dummy(signature_or_function=None, *jit_args, **jit_kwargs):
         pyfunc = signature_or_function
 
     if pyfunc is not None:
-        @wraps(pyfunc)
-        def wrapper(*args, **kwargs):
-            return pyfunc(*args, **kwargs)
-        return wrapper
+        return pyfunc
     else:
         def decorate(func):
-            @wraps(func)
-            def wrapper(*args, **kwargs):
-                return func(*args, **kwargs)
-            return wrapper
+            return func
 
         return decorate
 
@@ -45,10 +39,7 @@ def jitclass_dummy(spec):
     not available or not desired.
     """
     def decorate(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            return func(*args, **kwargs)
-        return wrapper
+        return func
 
     return decorate
 
@@ -59,10 +50,7 @@ def overload_dummy(func, jit_options={}, strict=True):
     not available or not desired.
     """
     def decorate(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            return func(*args, **kwargs)
-        return wrapper
+        return func
 
     return decorate
 
