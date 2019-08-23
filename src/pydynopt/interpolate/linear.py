@@ -71,6 +71,8 @@ def interp1d_eval(index, weight, fp, extrapolate=True,
     weight
     fp
     extrapolate
+    left : float
+    right : float
     out
 
     Returns
@@ -81,11 +83,15 @@ def interp1d_eval(index, weight, fp, extrapolate=True,
     ilb = np.atleast_1d(index)
     wgt_lb = np.atleast_1d(weight)
 
+    if ilb.ndim != wgt_lb.ndim or np.any(ilb.shape != wgt_lb.shape):
+        msg = 'Arguments index and weight have non-conformable shapes'
+        raise ValueError(msg)
+
     if out is None:
         out = np.empty_like(wgt_lb, dtype=np.float64)
 
     # Use numba-fied function to perform actual evaluation
-    interp1d_eval_array(ilb, wgt_lb, fp, extrapolate, left, right, out)
+    interp1d_eval_jit(ilb, wgt_lb, fp, extrapolate, left, right, out)
 
     if np.isscalar(index):
         out = out.item()
