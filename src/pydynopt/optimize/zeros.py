@@ -1,6 +1,5 @@
-
-from .common import FunctionWrapper
-from .common import OptimResult
+from pydynopt.optimize.common import FunctionJacWrapper, FunctionWrapper
+from .common import nderiv
 
 
 from pydynopt.numba import jitclass, float64, int64, boolean, overload
@@ -25,12 +24,14 @@ _ECONVERGED = 0
 _ESIGNERR = -1
 _ECONVERR = -2
 _EVALUEERR = -3
+_EMAXITER = -4
 _EINPROGRESS = 1
 
 CONVERGED = 'converged'
 SIGNERR = 'sign error'
 CONVERR = 'convergence error'
 VALUEERR = 'value error'
+MAXITER = 'maximum iterations exceeded'
 INPROGRESS = 'No error'
 
 flag_map = {_ECONVERGED: CONVERGED, _ESIGNERR: SIGNERR, _ECONVERR: CONVERR,
@@ -38,6 +39,7 @@ flag_map = {_ECONVERGED: CONVERGED, _ESIGNERR: SIGNERR, _ECONVERR: CONVERR,
 
 
 @jitclass([('root', float64),
+           ('fx', float64),
            ('iterations', int64),
            ('function_calls', int64),
            ('converged', boolean),
@@ -50,6 +52,8 @@ class RootResult(object):
     ----------
     root : float
         Estimated root location.
+    fx : float
+        Function value at estimated root location.
     iterations : int
         Number of iterations needed to find the root.
     function_calls : int
@@ -62,6 +66,7 @@ class RootResult(object):
 
     def __init__(self):
         self.root = 0.0
+        self.fx = 0.0
         self.iterations = 0
         self.function_calls = 0
         self.converged = False
@@ -236,9 +241,9 @@ if overload_scipy:
         return f
 
 
-def newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
-                  eps=1.0e-8, xtol=1.0e-8, tol=1.0e-8, maxiter=50,
-                  full_output=False):
+def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
+                   eps=1.0e-8, xtol=1.0e-8, tol=1.0e-8, maxiter=50,
+                   full_output=False):
     """
     Find the root of a scalar function using a hybrid approach that
     combines Newton-Raphson and bisection. The idea is to speed up
@@ -255,13 +260,13 @@ def newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
 
     Parameters
     ----------
-    func : callable
+    func : FunctionWrapper or FunctionJacWrapper
         Function whose root should be determined
     x0 : float
         Initial guess for root
-    a : float or None
+    a : float
         Optional bracket lower bound
-    b : float or None
+    b : float
         Optional bracket upper bound
     args : tuple
         Optional arguments passed to `func` as func(x, *args)
@@ -281,57 +286,65 @@ def newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
     maxiter : int
         Maximum number of iterations
     full_output : bool
-        If true, return OptimResult as a second return value.
+        Ignored in the Numba-compatible version, only present for API
+        compatibility. RootResult object is always returned.
 
     Returns
     -------
     x : float
         Contains root if algorithm terminates successfully
-    res : OptimResult
-        Optional additional return value if `full_output` is True.
+    res : RootResult
+        Result object containing additional data.
     """
 
-    fcn = FunctionWrapper(func, jac=jac, eps=eps)
     it = 0
 
-    xtol = float(xtol)
-    tol = float(tol)
-    maxiter = int(maxiter)
+    res = RootResult()
 
-    def build_res(x, fx, flag, converged):
-        if full_output:
-            res = OptimResult()
-            res.x = x
-            res.fx = fx
-            res.iterations = it
-            res.flag = flag
-            res.function_calls = fcn.ncalls
-            res.converged = converged
-            return x, res
-        else:
-            return x
+    if xtol < 0.0:
+        raise ValueError('xtol >= 0 required')
+    if tol < 0.0:
+        raise ValueError('tol >= 0 required')
+    if eps <= 0.0:
+        raise ValueError('eps > 0 required')
+    if maxiter < 1:
+        raise ValueError('maxiter > 0 required')
 
     x = x0
     xstart = x0
 
     fx, fpx = fcn.eval_func_jac(x, *args)
+
     if np.abs(fx) < tol:
-        msg = 'Convergence achieved; |f(x)| < tol'
-        return build_res(x, fx, msg, converged=True)
+        res.converged = True
+        res.root = x
+        res.fx = fx
+        res.flag = _ECONVERGED
+        res.iterations = it
+        res.function_calls = nfev
+        return x, res
 
     fa = 0.0
     fb = 0.0
 
-    if a is not None:
-        fa = fcn.eval_func(a, *args)
+    if np.isfinite(a):
+        if jac:
+            fa, fignore = func(a, *args)
+        else:
+            fa = func(a, *args)
+        nfev += 1
         slb = np.sign(fa)
         xlb = a
     else:
         slb = np.sign(fx)
         xlb = x
 
-    if b is not None:
-        fb = fcn.eval_func(b, *args)
+    if np.isfinite(b):
+        if jac:
+            fb, fignore = func(b, *args)
+        else:
+            fb = func(b, *args)
+        nfev += 1
         sub = np.sign(fb)
         xub = b
     else:
@@ -339,7 +352,7 @@ def newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
         xub = x
 
     # Check that initial bracket contains a root
-    if a is not None and b is not None:
+    if np.isfinite(a) and np.isfinite(b):
         s = np.sign(fa) * np.sign(fb)
         if s > 0.0:
             msg = 'Invalid initial bracket'
@@ -355,12 +368,22 @@ def newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
     for it in range(1, maxiter+1):
 
         if np.abs(fx) < tol:
-            msg = 'Convergence achieved; |f(x)| < tol'
-            return build_res(x, fx, msg, converged=True)
+            res.converged = True
+            res.root = x
+            res.fx = fx
+            res.iterations = it
+            res.function_calls = nfev
+            res.flag = _ECONVERGED
+            return x, res
 
         if fpx == 0.0:
-            msg = 'Derivative evaluated to 0.0'
-            return build_res(x, fx, msg, converged=False)
+            res.converged = False
+            res.root = x
+            res.fx = fx
+            res.iterations = it
+            res.function_calls = nfev
+            res.flag = _EVALUEERR
+            return x, res
 
         # Newton step
         x = x0 - fx / fpx
@@ -384,12 +407,23 @@ def newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
                 x = (xlb + xub) / 2.0
 
         # Compute function value and derivative for the NEXT iteration
-        fx, fpx = fcn.eval_func_jac(x, *args)
+        if jac:
+            fx, fpx = func(x, *args)
+            nfev += 1
+        else:
+            fx = func(x, *args)
+            fpx = nderiv(func, x, fx, eps, *args)
+            nfev += 2
 
         # Exit if tolerance level on function domain is achieved
         if np.abs(x - x0) < xtol:
-            msg = 'Convergence achieved: |x(n) - x(n-1)| < xtol'
-            return build_res(x, fx, msg, converged=True)
+            res.converged = True
+            res.root = x
+            res.fx = fx
+            res.iterations = it
+            res.nfev = nfev
+            res.flag = _ECONVERGED
+            return x, res
 
         s = slb * np.sign(fx)
         if not has_bracket:
@@ -443,7 +477,43 @@ def newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
 
     else:
         # max. number of iterations exceeded
-        msg = 'Max. number of iterations exceeded'
-        return build_res(x, fx, msg, converged=False)
+        res.converged = False
+        res.root = x
+        res.fx = fx
+        res.flag = _EMAXITER
+        res.iterations = it
+        res.function_calls = nfev
+        return x, res
 
 
+def newton_bisect(func, x0, a=-np.inf, b=np.inf, args=(), jac=False,
+                  eps=1.0e-8, xtol=1.0e-8, tol=1.0e-8, maxiter=50,
+                  full_output=False):
+
+    xtol = float(xtol)
+    tol = float(tol)
+    maxiter = int(maxiter)
+    eps = float(eps)
+
+    fcn_obj = None
+    if jac:
+        fcn_obj = FunctionJacWrapper(func)
+    else:
+        fcn_obj = FunctionWrapper(func, eps=eps)
+
+    root, res = _newton_bisect(fcn_obj, x0, a, b, args, jac, eps, xtol, tol,
+                               maxiter)
+
+    if full_output:
+        return root, res
+    else:
+        return res
+
+
+@overload(newton_bisect, jit_options={'parallel': False, 'nogil': True})
+def newton_bisect_generic(func, x0, a=-np.inf, b=np.inf, args=(), jac=False,
+                  eps=1.0e-8, xtol=1.0e-8, tol=1.0e-8, maxiter=50,
+                  full_output=False):
+
+    f = _newton_bisect
+    return f
