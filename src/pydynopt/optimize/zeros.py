@@ -1,7 +1,8 @@
-from pydynopt.optimize.common import FunctionJacWrapper, FunctionWrapper
+
 from .common import nderiv
 
 
+from pydynopt.numba import register_jitable
 from pydynopt.numba import jitclass, float64, int64, boolean, overload
 import numpy as np
 
@@ -241,7 +242,8 @@ if overload_scipy:
         return f
 
 
-def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
+@register_jitable(parallel=False, nogil=False)
+def _newton_bisect(func, x0, a=-np.inf, b=np.inf, args=(), jac=False,
                    eps=1.0e-8, xtol=1.0e-8, tol=1.0e-8, maxiter=50,
                    full_output=False):
     """
@@ -260,7 +262,7 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
 
     Parameters
     ----------
-    func : FunctionWrapper or FunctionJacWrapper
+    func : callable
         Function whose root should be determined
     x0 : float
         Initial guess for root
@@ -298,6 +300,7 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
     """
 
     it = 0
+    nfev = 0
 
     res = RootResult()
 
@@ -313,7 +316,17 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
     x = x0
     xstart = x0
 
-    fx, fpx = fcn.eval_func_jac(x, *args)
+    xarr = np.array(x)
+    fx_all = np.empty(2, dtype=xarr.dtype)
+
+    fx_all[:] = func(x, *args)
+    fx = fx_all[0]
+    nfev += 1
+    if jac:
+        fpx = fx_all[1]
+    else:
+        fpx = nderiv(func, x, fx, eps, *args)
+        nfev += 1
 
     if np.abs(fx) < tol:
         res.converged = True
@@ -328,10 +341,8 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
     fb = 0.0
 
     if np.isfinite(a):
-        if jac:
-            fa, fignore = func(a, *args)
-        else:
-            fa = func(a, *args)
+        fx_all[:] = func(a, *args)
+        fa = fx_all[0]
         nfev += 1
         slb = np.sign(fa)
         xlb = a
@@ -340,10 +351,8 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
         xlb = x
 
     if np.isfinite(b):
-        if jac:
-            fb, fignore = func(b, *args)
-        else:
-            fb = func(b, *args)
+        fx_all[:] = func(b, *args)
+        fb = fx_all[0]
         nfev += 1
         sub = np.sign(fb)
         xub = b
@@ -353,7 +362,7 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
 
     # Check that initial bracket contains a root
     if np.isfinite(a) and np.isfinite(b):
-        s = np.sign(fa) * np.sign(fb)
+        s = np.sign(fa)*np.sign(fb)
         if s > 0.0:
             msg = 'Invalid initial bracket'
             raise ValueError(msg)
@@ -365,7 +374,7 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
 
     has_bracket = slb*sub < 0.0
 
-    for it in range(1, maxiter+1):
+    for it in range(1, maxiter + 1):
 
         if np.abs(fx) < tol:
             res.converged = True
@@ -386,7 +395,7 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
             return x, res
 
         # Newton step
-        x = x0 - fx / fpx
+        x = x0 - fx/fpx
 
         if has_bracket:
             if x < xlb or x > xub:
@@ -396,7 +405,7 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
                 # the first Newton step is outside of [a,b].
                 # Note: fx contains function value evaluated at what is now
                 # stored in x0.
-                s = slb * np.sign(fx)
+                s = slb*np.sign(fx)
                 if s > 0.0:
                     # f(x) has the same sign as f(xlb)
                     xlb = x0
@@ -404,16 +413,17 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
                     xub = x0
 
                 # Bisection step: set next candidate to midpoint
-                x = (xlb + xub) / 2.0
+                x = (xlb + xub)/2.0
 
         # Compute function value and derivative for the NEXT iteration
+        fx_all[:] = func(x, *args)
+        fx = fx_all[0]
+        nfev += 1
         if jac:
-            fx, fpx = func(x, *args)
-            nfev += 1
+            fpx = fx_all[1]
         else:
-            fx = func(x, *args)
             fpx = nderiv(func, x, fx, eps, *args)
-            nfev += 2
+            nfev += 1
 
         # Exit if tolerance level on function domain is achieved
         if np.abs(x - x0) < xtol:
@@ -421,11 +431,11 @@ def _newton_bisect(fcn, x0, a=-np.inf, b=np.inf, args=(), jac=False,
             res.root = x
             res.fx = fx
             res.iterations = it
-            res.nfev = nfev
+            res.function_calls = nfev
             res.flag = _ECONVERGED
             return x, res
 
-        s = slb * np.sign(fx)
+        s = slb*np.sign(fx)
         if not has_bracket:
             if s < 0.0:
                 # Create initial bracket
@@ -495,14 +505,7 @@ def newton_bisect(func, x0, a=-np.inf, b=np.inf, args=(), jac=False,
     maxiter = int(maxiter)
     eps = float(eps)
 
-    fcn_obj = None
-    if jac:
-        fcn_obj = FunctionJacWrapper(func)
-    else:
-        fcn_obj = FunctionWrapper(func, eps=eps)
-
-    root, res = _newton_bisect(fcn_obj, x0, a, b, args, jac, eps, xtol, tol,
-                               maxiter)
+    root, res = _newton_bisect(func, x0, a, b, args, jac, eps, xtol, tol, maxiter)
 
     if full_output:
         return root, res
@@ -516,4 +519,5 @@ def newton_bisect_generic(func, x0, a=-np.inf, b=np.inf, args=(), jac=False,
                   full_output=False):
 
     f = _newton_bisect
+
     return f

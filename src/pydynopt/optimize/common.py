@@ -2,7 +2,8 @@
 
 import numpy as np
 
-from pydynopt.numba import overload
+from pydynopt.numba import overload, jitclass, register_jitable
+from pydynopt.numba import int64, float64
 
 
 class OptimResult:
@@ -57,158 +58,7 @@ class OptimResult:
         return s
 
 
-class FunctionWrapper:
-    def __init__(self, func, eps=1.0e-8):
-        """
-
-        Parameters
-        ----------
-        func
-        jac
-        eps : float
-            Step sized used for forward-differentiation when Jacobian
-            needs to be computed numerically
-        """
-        self.ncalls = 0
-        self.func = func
-        self.eps = eps
-
-    def eval_func(self, x, *args):
-        """
-        Return function evaluated at given point
-
-        Parameters
-        ----------
-        x
-        args
-        kwargs
-
-        Returns
-        -------
-
-        """
-        fx = self.func(x, *args)
-        self.ncalls += 1
-
-        return fx
-
-    def eval_jac(self, x, *args):
-        """
-        Evaluate the Jacobian at a given point.
-
-        Parameters
-        ----------
-        x : float or array_like
-        args
-        kwargs
-
-        Returns
-        -------
-
-        """
-
-        # No Jacobian provided:
-        # need to forward-differentiate
-        fx = self.func(x, *args)
-        jac = nderiv(self.func, x, fx, eps=self.eps, *args)
-        self.ncalls += (1 + np.atleast_1d(x).shape[0])
-
-        return jac
-
-    def eval_func_jac(self, x, *args):
-        """self
-        Evaluate the function and its Jacobian
-
-        Parameters
-        ----------
-        x : float or array_like
-        args
-        kwargs
-
-        Returns
-        -------
-        fx : float or np.ndarray
-        jac : float or np.ndarray
-        """
-
-        fx = self.func(x, *args)
-        jac = nderiv(self.func, x, fx, self.eps, *args)
-        self.ncalls += (1 + np.atleast_1d(x).shape[0])
-
-        return fx, jac
-
-
-class FunctionJacWrapper:
-    def __init__(self, func):
-        """
-
-        Parameters
-        ----------
-        func
-        jac
-        eps : float
-            Step sized used for forward-differentiation when Jacobian
-            needs to be computed numerically
-        """
-        self.ncalls = 0
-        self.func = func
-
-    def eval_func(self, x, *args):
-        """
-        Return function evaluated at given point
-
-        Parameters
-        ----------
-        x
-        args
-        kwargs
-
-        Returns
-        -------
-
-        """
-        fx, fpx = self.func(x, *args)
-        return fx
-
-    def eval_jac(self, x, *args):
-        """
-        Evaluate the Jacobian at a given point.
-
-        Parameters
-        ----------
-        x : float or array_like
-        args
-        kwargs
-
-        Returns
-        -------
-
-        """
-
-        fx, fpx = self.func(x, *args)
-        return fpx
-
-    def eval_func_jac(self, x, *args):
-        """
-        Evaluate the function and its Jacobian
-
-        Parameters
-        ----------
-        x : float or array_like
-        args
-        kwargs
-
-        Returns
-        -------
-        fx : float or np.ndarray
-        jac : float or np.ndarray
-        """
-
-        fx, fpx = self.func(x, *args)
-
-        return fx, fpx
-
-
+@register_jitable(parallel=False, nogil=True)
 def _nderiv_array(func, x, fx=np.nan, eps=1.0e-8, *args):
     """
     Numerically forward-differentiate function and given point.
@@ -226,15 +76,21 @@ def _nderiv_array(func, x, fx=np.nan, eps=1.0e-8, *args):
     fpx : np.ndarray
     """
 
+    n = len(x) + 1
+    fx_all = np.empty(n, dtype=x.dtype)
+
     if np.isnan(fx):
-        fx = func(x, *args)
+        fx_all[:] = func(x, *args)
+        fx = fx_all[0]
 
     fpx = np.zeros_like(x)
+    xxi = np.empty_like(x)
+
     for i, xi in enumerate(x):
-        xxi = np.copy(x)
+        xxi[:] = np.copy(x)
         xxi[i] += eps
-        fxi = func(xxi, *args)
-        fpx[i] = (fxi - fx) / eps
+        fx_all[:] = func(xxi, *args)
+        fpx[i] = (fx_all[0] - fx) / eps
 
     return fpx
 
@@ -255,10 +111,15 @@ def _nderiv_scalar(func, x, fx=np.nan, eps=1.0e-8, *args):
     fpx : float
     """
 
-    x1d = np.array([x])
-    fpx1d = nderiv(func, x1d, fx, eps, *args)
+    xarr = np.array([x])
+    fx_all = np.empty(2, dtype=xarr.dtype)
 
-    fpx = fpx1d[0]
+    if np.isnan(fx):
+        fx_all[:] = func(x, *args)
+        fx = fx_all[0]
+
+    fx_all[:] = func(x + eps, *args)
+    fpx = (fx_all[0] - fx) / eps
 
     return fpx
 
@@ -281,12 +142,16 @@ def nderiv(func, x, fx=np.nan, eps=1.0e-8, *args):
     """
 
     eps = float(eps)
-    x1d = np.atleast_1d(x)
-
-    fpx = _nderiv_array(func, x1d, fx, eps, *args)
+    if eps <= 0.0:
+        raise ValueError('eps > 0 required')
 
     if np.isscalar(x):
-        fpx = fpx.item()
+        fpx = _nderiv_scalar(func, x, fx, eps, *args)
+    elif np.array(x).ndim == 1:
+        fpx = _nderiv_array(func, x, fx, eps, *args)
+    else:
+        msg = 'Argument x must be either a scalar of a 1d-array'
+        raise ValueError(msg)
 
     return fpx
 
