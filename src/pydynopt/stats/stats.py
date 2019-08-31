@@ -7,7 +7,7 @@ Author: Richard Foltyn
 import numpy as np
 
 
-def gini(states, pmf):
+def gini(states, pmf, assume_sorted=False):
     """
     Compute Gini coefficient from a normalized histogram (or a discrete RV
     with finite support)
@@ -18,6 +18,9 @@ def gini(states, pmf):
     ----------
     states : array_like
     pmf : array_like
+    assume_sorted : bool
+        If true, assume that `states` array is sorted (ignored for higher-
+        dimensional arrays)
 
     Returns
     -------
@@ -27,6 +30,15 @@ def gini(states, pmf):
 
     states = np.atleast_1d(states)
     pmf = np.atleast_1d(pmf)
+
+    needs_sort = states.ndim > 1 or not assume_sorted
+    states = states.reshape((-1, 1))
+    pmf = pmf.reshape((-1, 1))
+
+    if needs_sort:
+        iorder = np.argsort(states)
+        states = states[iorder]
+        pmf = pmf[iorder]
 
     S = np.cumsum(pmf*states)
     S = np.insert(S, 0, 0.0)
