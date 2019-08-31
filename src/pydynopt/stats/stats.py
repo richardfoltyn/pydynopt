@@ -12,15 +12,19 @@ def gini(states, pmf, assume_sorted=False):
     Compute Gini coefficient from a normalized histogram (or a discrete RV
     with finite support)
 
-    Formula taken directory from Wikipedia.
+    Formula taken directly from Wikipedia.
 
     Parameters
     ----------
     states : array_like
+        State space of discrete random variable, or histogam bin midpoints.
+        Higher-dimensional arrays will be flattened.
     pmf : array_like
+        Probability corresponding to each element in `states`.
+        Higher-dimensional arrays will be flattened.
     assume_sorted : bool
         If true, assume that `states` array is sorted (ignored for higher-
-        dimensional arrays)
+        dimensional arrays which are always sorted)
 
     Returns
     -------
