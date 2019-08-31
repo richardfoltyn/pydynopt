@@ -32,8 +32,8 @@ def gini(states, pmf, assume_sorted=False):
     pmf = np.atleast_1d(pmf)
 
     needs_sort = states.ndim > 1 or not assume_sorted
-    states = states.reshape((-1, 1))
-    pmf = pmf.reshape((-1, 1))
+    states = states.reshape((-1, ))
+    pmf = pmf.reshape((-1, ))
 
     if needs_sort:
         iorder = np.argsort(states)
