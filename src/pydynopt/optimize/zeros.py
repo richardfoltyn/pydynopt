@@ -422,7 +422,16 @@ def _newton_bisect(func, x0, a=-np.inf, b=np.inf, args=(), jac=False,
         if jac:
             fpx = fx_all[1]
         else:
-            fpx = nderiv(func, x, fx, eps, *args)
+            if (x + eps) < b or (x - eps) <= a:
+                # Compute numerical derivative as (f(x+eps)-f(x)) / eps
+                # either if x+eps < xub, which avoids evaluating the function
+                # outside of the original bounded interval.
+                # If either step takes us out of (a,b), then use this as
+                # the fallback and hope for the best.
+                fpx = nderiv(func, x, fx, eps, *args)
+            else:
+                # Evaluate numerical derivative as (f(x-eps) - f(x))/-eps
+                fpx = nderiv(func, x, fx, -eps, *args)
             nfev += 1
 
         # Exit if tolerance level on function domain is achieved

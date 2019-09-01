@@ -142,8 +142,6 @@ def nderiv(func, x, fx=np.nan, eps=1.0e-8, *args):
     """
 
     eps = float(eps)
-    if eps <= 0.0:
-        raise ValueError('eps > 0 required')
 
     if np.isscalar(x):
         fpx = _nderiv_scalar(func, x, fx, eps, *args)
