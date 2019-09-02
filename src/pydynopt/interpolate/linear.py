@@ -126,7 +126,8 @@ def interp1d(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
         raise ValueError(msg)
 
     # Recover "true" axis along which to interpolate
-    axis += fp.ndim
+    if axis < 0:
+        axis += fp.ndim
 
     out_shp = list(fp.shape[:axis]) + list(fp.shape[axis+1:]) + list(xx.shape)
     out_shp = tuple(out_shp)
