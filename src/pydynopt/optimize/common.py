@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from pydynopt.numba import overload, jitclass, register_jitable
+from pydynopt.numba import jit, overload, jitclass, register_jitable
 from pydynopt.numba import int64, float64
 
 
@@ -56,6 +56,37 @@ class OptimResult:
 
         s = '\n'.join(tokens)
         return s
+
+
+def _extract_arg_identity(arg, index=0):
+    return arg
+
+
+def _extract_arg_by_index(arg, index=0):
+    return arg[index]
+
+
+def _extract_arg(arg, index=0):
+    if isinstance(arg, tuple):
+        return arg[index]
+    else:
+        return arg
+
+
+@overload(_extract_arg, jit_options={'nogil': True})
+def _extract_arg_generic(arg, index=0):
+
+    from numba.types import Number
+    from numba.types.npytypes import Array
+
+    f = None
+    if isinstance(arg, Number):
+        f = _extract_arg_identity
+    elif isinstance(arg, Array):
+        f = _extract_arg_identity
+    else:
+        f = _extract_arg_by_index
+    return f
 
 
 @register_jitable(parallel=False, nogil=True)
@@ -120,6 +151,38 @@ def _nderiv_scalar(func, x, fx=np.nan, eps=1.0e-8, *args):
 
     fx_all[:] = func(x + eps, *args)
     fpx = (fx_all[0] - fx) / eps
+
+    return fpx
+
+
+@register_jitable(nogil=True, parallel=False)
+def nderiv_multi(func, x, fx=None, eps=1.0e-8, *args):
+    """
+    Compute derivative of scalar function on scalar domain at multiple values
+    at once.
+
+    Parameters
+    ----------
+    func : callable
+    x : np.ndarray
+    fx : np.ndarray
+    eps : float
+    args
+
+    Returns
+    -------
+    fpx : np.ndarray
+    """
+
+    if fx is None:
+        obj = func(x, *args)
+        fx0 = _extract_arg(obj)
+    else:
+        fx0 = fx
+
+    obj = func(x + eps, *args)
+    fx_eps = _extract_arg(obj)
+    fpx = (fx_eps - fx0) / eps
 
     return fpx
 
