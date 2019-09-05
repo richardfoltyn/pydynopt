@@ -183,8 +183,8 @@ def interp1d_eval_array(index, weight, fp, extrapolate=True, left=np.nan,
     return lout
 
 
-def interp1d_scalar(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
-                    out=None):
+def interp1d_scalar(x, xp, fp, ilb=0, extrapolate=True, left=np.nan,
+                    right=np.nan, out=None):
     """
     Combined routine to both locate and evaluate linear interpolant
     at a single sample point.
@@ -204,7 +204,7 @@ def interp1d_scalar(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
 
     """
 
-    ilb, wgt = interp1d_locate_scalar(x, xp)
+    ilb, wgt = interp1d_locate_scalar(x, xp, ilb)
     fx = interp1d_eval_scalar(ilb, wgt, fp, extrapolate, left, right, out)
 
     return fx

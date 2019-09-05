@@ -27,7 +27,7 @@ JIT_OPTIONS = {'parallel': False, 'nogil': True, 'cache': True}
 
 
 @overload(interp1d, jit_options=JIT_OPTIONS)
-def _interp1d_generic(x, xp, fp, extrapolate=True, left=np.nan,
+def _interp1d_generic(x, xp, fp, ilb=0, extrapolate=True, left=np.nan,
                      right=np.nan, out=None):
     from numba.types.scalars import Number
     from numba.types.npytypes import Array

@@ -99,7 +99,7 @@ def interp1d_eval(index, weight, fp, extrapolate=True,
     return out
 
 
-def interp1d(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
+def interp1d(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan,
              out=None, axis=-1):
     """
 
@@ -160,7 +160,7 @@ def interp1d(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
     index = np.empty_like(xx, dtype=np.int64)
     weight = np.empty_like(xx)
 
-    interp1d_locate_jit(xx, xp, index_out=index, weight_out=weight)
+    interp1d_locate_jit(xx, xp, ilb, index_out=index, weight_out=weight)
 
     fp1d = np.empty_like(fp_work[0])
     out1d = np.empty(out_work.shape[1:])
