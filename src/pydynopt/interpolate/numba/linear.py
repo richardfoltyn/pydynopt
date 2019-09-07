@@ -210,7 +210,7 @@ def interp1d_scalar(x, xp, fp, ilb=0, extrapolate=True, left=np.nan,
     return fx
 
 
-def interp1d_array(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
+def interp1d_array(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan,
                    out=None):
     """
     Combined routine to both locate and evaluate linear interpolant
@@ -234,10 +234,9 @@ def interp1d_array(x, xp, fp, extrapolate=True, left=np.nan, right=np.nan,
     lout = np.empty_like(x, dtype=x.dtype) if out is None else out
     lout_flat = lout.reshape((-1, 1))
 
-    ilb = 0
     for i, xi in enumerate(x.flat):
         ilb, wgt = interp1d_locate_scalar(xi, xp, ilb)
-        fx = interp1d_eval_scalar(ilb, wgt, fp, extrapolate, left, right, lout)
+        fx = interp1d_eval_scalar(ilb, wgt, fp, extrapolate, left, right)
 
         lout_flat[i] = fx
 
