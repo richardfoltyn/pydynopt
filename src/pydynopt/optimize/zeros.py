@@ -456,6 +456,20 @@ def _newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
         fx_all[:] = func(x, *args)
         fx = fx_all[0]
         nfev += 1
+
+        # Exit if tolerance level on function domain is achieved
+        # We do this AFTER computing fx, which needs to be returned, but
+        # before potentially numerically differentiating, which may no longer
+        # be necessary.
+        if np.abs(x - x0) < xtol:
+            res.converged = True
+            res.root = x
+            res.fx = fx
+            res.iterations = it
+            res.function_calls = nfev
+            res.flag = _ECONVERGED
+            return x, res
+
         if jac:
             fpx = fx_all[1]
         else:
@@ -470,16 +484,6 @@ def _newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
                 # Evaluate numerical derivative as (f(x-eps) - f(x))/-eps
                 fpx = nderiv(func, x, fx, -eps, *args)
             nfev += 1
-
-        # Exit if tolerance level on function domain is achieved
-        if np.abs(x - x0) < xtol:
-            res.converged = True
-            res.root = x
-            res.fx = fx
-            res.iterations = it
-            res.function_calls = nfev
-            res.flag = _ECONVERGED
-            return x, res
 
         s = slb*np.sign(fx)
         if not has_bracket:
