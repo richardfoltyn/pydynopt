@@ -350,6 +350,9 @@ def _newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
     x = x0
     xstart = x0
 
+    xa = -np.inf if a is None else a
+    xb = np.inf if b is None else b
+
     xarr = np.array(x)
     fx_all = np.empty(2, dtype=xarr.dtype)
 
@@ -359,7 +362,16 @@ def _newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
     if jac:
         fpx = fx_all[1]
     else:
-        fpx = nderiv(func, x, fx, eps, *args)
+        if (x + eps) < xb or (x - eps) <= xa:
+            # Compute numerical derivative as (f(x+eps)-f(x)) / eps
+            # either if x+eps < xub, which avoids evaluating the function
+            # outside of the original bounded interval.
+            # If either step takes us out of (xa,xb), then use this as
+            # the fallback and hope for the best.
+            fpx = nderiv(func, x, fx, eps, *args)
+        else:
+            # Evaluate numerical derivative as (f(x-eps) - f(x))/-eps
+            fpx = nderiv(func, x, fx, -eps, *args)
         nfev += 1
 
     if np.abs(fx) < tol:
@@ -373,9 +385,6 @@ def _newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
 
     fa = 0.0
     fb = 0.0
-
-    xa = -np.inf if a is None else a
-    xb = np.inf if b is None else b
 
     if np.isfinite(xa):
         fx_all[:] = func(xa, *args)
