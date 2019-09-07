@@ -150,7 +150,9 @@ def _nderiv_scalar(func, x, fx=np.nan, eps=1.0e-8, *args):
         fx = fx_all[0]
 
     fx_all[:] = func(x + eps, *args)
-    fpx = (fx_all[0] - fx) / eps
+    dfx = fx_all[0] - fx
+    dx = eps
+    fpx = dfx / dx
 
     return fpx
 
