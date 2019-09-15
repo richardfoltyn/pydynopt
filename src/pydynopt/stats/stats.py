@@ -97,7 +97,12 @@ def quantile(x, pmf, qrank):
         # trim (constant) right tail as that confuses digitize()
         ii = np.where(np.abs(cdf - 1.0) > 1.0e-14)[0]
         cdf = cdf[ii]
-        ii = np.digitize(qrank, cdf) - 1
+        cdf[-1] = 1.0
+        # trim (constant) left tail
+        ii = np.where(cdf > 0.0)[0]
+        imin = max(0, ii[0] - 1)
+        cdf = cdf[imin:]
+        ii = np.digitize(qrank, cdf) - 1 + imin
         ii = np.fmin(ii, len(pmf) - 1)
         pctl = x[ii]
 
