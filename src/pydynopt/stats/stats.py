@@ -4,6 +4,7 @@ Module providing core statistical functions
 Author: Richard Foltyn
 """
 
+from pydynopt.numba import jit
 import numpy as np
 
 
@@ -52,7 +53,29 @@ def gini(states, pmf, assume_sorted=False):
     return gini
 
 
-def quantile(x, pmf, qrank):
+@jit(nopython=True, nogil=True)
+def collapse_pmf_helper(x, pmf):
+
+    xuniq = np.unique(x)
+    if len(xuniq) == len(x) and np.all(xuniq == x):
+        return x, pmf
+
+    pmf_uniq = np.zeros_like(xuniq)
+
+    j = 0
+    nx = len(x)
+
+    for i, xi in enumerate(xuniq):
+        while j < nx and (xi == x[j]):
+            pmf_uniq[i] += pmf[j]
+            j += 1
+
+    pmf_uniq /= np.sum(pmf_uniq)
+
+    return xuniq, pmf_uniq
+
+
+def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     """
     Compute quantiles of a given distribution characterized by its (finite)
     state space and PMF.
@@ -75,6 +98,10 @@ def quantile(x, pmf, qrank):
     pmf : array_like
     qrank : array_like or float
         Quantile ranks (valid range: [0,1])
+    assume_sorted : bool
+        If true, assume that state space `x` is sorted.
+    assume_unique : bool
+        If true, assume that elements in state space `x` are unique.
 
     Returns
     -------
@@ -92,11 +119,20 @@ def quantile(x, pmf, qrank):
         # Assume that RV is discrete and that x contains the discrete support
         # with corresponding probabilities stored in pmf
 
+        if not assume_sorted:
+            iorder = np.argsort(x)
+            x = x[iorder]
+            pmf = pmf[iorder]
+
+        if not assume_unique:
+            x, pmf = collapse_pmf_helper(x, pmf)
+
         cdf = np.hstack((0.0, np.cumsum(pmf)))
         cdf /= cdf[-1]
         # trim (constant) right tail as that confuses digitize()
-        ii = np.where(np.abs(cdf - 1.0) > 1.0e-14)[0]
-        cdf = cdf[ii]
+        ii = np.where(cdf > (1.0 - 1.0e-14))[0]
+        imax = ii[0]
+        cdf = cdf[:imax+1]
         cdf[-1] = 1.0
         # trim (constant) left tail
         ii = np.where(cdf > 0.0)[0]
