@@ -54,7 +54,24 @@ def gini(states, pmf, assume_sorted=False):
 
 
 @jit(nopython=True, nogil=True)
-def collapse_pmf_helper(x, pmf):
+def create_unique_pmf(x, pmf):
+    """
+    Collapses discrete distribution with potentially duplicate values in the
+    state space to a state space with unique values and appropriately summed
+    up probabilities.
+
+    Parameters
+    ----------
+    x : np.ndarray
+    pmf : np.ndarray
+
+    Returns
+    -------
+    xuniq : np.ndarray
+        Sorted, unique state space
+    pmf_uniq: np.ndarray
+        Probabilities corresponding to unique states
+    """
 
     xuniq = np.unique(x)
     if len(xuniq) == len(x) and np.all(xuniq == x):
@@ -125,7 +142,7 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
             pmf = pmf[iorder]
 
         if not assume_unique:
-            x, pmf = collapse_pmf_helper(x, pmf)
+            x, pmf = create_unique_pmf(x, pmf)
 
         cdf = np.hstack((0.0, np.cumsum(pmf)))
         cdf /= cdf[-1]
