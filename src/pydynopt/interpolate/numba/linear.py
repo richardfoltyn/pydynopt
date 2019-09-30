@@ -246,25 +246,38 @@ def interp1d_array(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan
 def interp2d_locate_scalar(x0, x1, xp0, xp1, ilb=None, index_out=None,
                            weight_out=None):
 
-    lind_out = np.empty(2, dtype=np.int64) if index_out is None else index_out
-    lwgt_out = np.empty(2, dtype=np.float64) if weight_out is None else weight_out
+    if index_out is None:
+        lind_out = np.empty(2, dtype=np.int64)
+    else:
+        lind_out = index_out
 
-    ilb0 = 0
-    ilb1 = 0
+    if weight_out is None:
+        lwgt_out = np.empty(2, dtype=np.float64)
+    else:
+        lwgt_out = weight_out
 
     if ilb is not None:
-        ilb0, ilb1 = ilb[0], ilb[1]
+        lilb = np.zeros(2, dtype=np.int64)
+    else:
+        lilb = ilb
+
+    interp2d_locate_scalar_impl(x0, x1, xp0, xp1, lilb, lind_out, lwgt_out)
+
+    return lind_out, lwgt_out
+
+
+@register_jitable(nogil=True)
+def interp2d_locate_scalar_impl(x0, x1, xp0, xp1, ilb, index_out, weight_out):
+
+    ilb0, ilb1 = ilb[0], ilb[1]
 
     ilb0, wgt0 = interp1d_locate_scalar(x0, xp0, ilb0)
     ilb1, wgt1 = interp1d_locate_scalar(x1, xp1, ilb1)
 
-    lind_out[0] = ilb0
-    lind_out[1] = ilb1
+    index_out[0], index_out[1] = ilb0, ilb1
+    weight_out[0], weight_out[1] = wgt0, wgt1
 
-    lwgt_out[0] = wgt0
-    lwgt_out[1] = wgt1
-
-    return lind_out, lwgt_out
+    return index_out, weight_out
 
 
 def interp2d_locate_array(x0, x1, xp0, xp1, ilb=None, index_out=None,

@@ -89,12 +89,29 @@ def _interp2d_locate_generic(x0, x1, xp0, xp1, ilb=None, index_out=None,
                             weight_out=None):
     from numba.types.scalars import Number
     from numba.types.npytypes import Array
+
     f = None
 
     if isinstance(x0, Number):
-        f = interp2d_locate_scalar
+        if ilb is None or index_out is None or weight_out is None:
+            f = interp2d_locate_scalar
     elif isinstance(x0, Array):
         f = interp2d_locate_array
+
+    return f
+
+
+@overload(interp2d_locate, jit_options=JIT_OPTIONS)
+def _interp2d_locate_impl_generic(x0, x1, xp0, xp1, ilb, index_out, weight_out):
+    from numba.types.scalars import Number
+    from numba.types.npytypes import Array
+
+    from .numba.linear import interp2d_locate_scalar_impl
+
+    f = None
+
+    if isinstance(x0, Number):
+        f = interp2d_locate_scalar_impl
 
     return f
 
