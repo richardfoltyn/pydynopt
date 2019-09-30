@@ -10,8 +10,10 @@ from pydynopt.numba import overload
 from .numba import _insert
 from .base import powerspace
 
+from .base import ind2sub
+
 __all__ = ['insert', 'unravel_index', 'ravel_multi_index',
-           'powerspace']
+           'powerspace', 'ind2sub']
 
 JIT_OPTIONS = {'parallel': False, 'nogil': True, 'cache': True}
 
@@ -61,5 +63,38 @@ def unravel_index_generic(indices, shape, order='C'):
         f = _unravel_index_scalar
     elif isinstance(indices, Array):
         f = _unravel_index_array
+
+    return f
+
+
+@overload(ind2sub, jit_options=JIT_OPTIONS)
+def ind2sub_impl_generic(indices, shape, out):
+    from numba.types import Integer
+    from numba.types.npytypes import Array
+
+    from .numba.arrays import ind2sub_array_impl, ind2sub_scalar_impl
+
+    f = None
+    if isinstance(indices, Integer) and out is not None:
+        f = ind2sub_scalar_impl
+    elif isinstance(indices, Array) and out is not None:
+        f = ind2sub_array_impl
+
+    return f
+
+
+@overload(ind2sub, jit_options=JIT_OPTIONS)
+def ind2sub_generic(indices, shape, out=None):
+
+    from numba.types import Integer
+    from numba.types.npytypes import Array
+
+    from .numba.arrays import ind2sub_array, ind2sub_scalar
+
+    f = None
+    if isinstance(indices, Integer) and out is None:
+        f = ind2sub_scalar
+    elif isinstance(indices, Array) and out is None:
+        f = ind2sub_array
 
     return f

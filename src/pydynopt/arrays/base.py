@@ -5,7 +5,12 @@ Author: Richard Foltyn
 """
 import numpy as np
 
-from pydynopt.numba import register_jitable
+from pydynopt.numba import register_jitable, jit
+from .numba.arrays import ind2sub_array, ind2sub_scalar
+
+
+JIT_OPTIONS = {'nopython': True, 'nogil': True, 'parallel': False,
+               'cache': True}
 
 
 @register_jitable(parallel=False)
@@ -40,3 +45,17 @@ def powerspace(xmin, xmax, n, exponent):
     xx[-1] = fxmax
 
     return xx
+
+
+ind2sub_scalar_jit = jit(ind2sub_scalar, **JIT_OPTIONS)
+ind2sub_array_jit = jit(ind2sub_array, **JIT_OPTIONS)
+
+
+def ind2sub(indices, shape, out=None):
+
+    if np.isscalar(indices):
+        out = ind2sub_scalar_jit(indices, shape, out)
+    else:
+        out = ind2sub_array_jit(indices, shape, out)
+
+    return out
