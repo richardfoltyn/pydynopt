@@ -9,7 +9,10 @@ from pydynopt.numba import jit, jitclass, int64
 __all__ = ['bsearch', 'bsearch_impl']
 
 
-@jit(nopython=True)
+JIT_OPTIONS = {'nopython': True, 'nogil': True, 'parallel': False}
+
+
+@jit(**JIT_OPTIONS)
 def bsearch(needle, haystack, ilb=0):
     """
     Return the index of the lower bound of a bracketing interval which contains
@@ -49,7 +52,7 @@ def bsearch(needle, haystack, ilb=0):
     return ilb
 
 
-@jit(nopython=True)
+@jit(**JIT_OPTIONS)
 def bsearch_impl(needle, haystack, ilb=0):
     """
 

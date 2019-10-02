@@ -12,7 +12,7 @@ from pydynopt.numba import jit, register_jitable
 from .search import bsearch_impl
 
 
-@register_jitable(parallel=False)
+@register_jitable(parallel=False, nogil=True)
 def interp1d_locate_scalar(x, xp, ilb=0, index_out=None, weight_out=None):
     """
     Numba implementation for computing the interpolation bracketing interval
@@ -47,7 +47,7 @@ def interp1d_locate_scalar(x, xp, ilb=0, index_out=None, weight_out=None):
     return ilb, weight
 
 
-@register_jitable(parallel=False)
+@register_jitable(parallel=False, nogil=True)
 def interp1d_locate_array(x, xp, ilb=0, index_out=None, weight_out=None):
     """
     Numba implementation for computing the interpolation bracketing intervals
@@ -92,7 +92,7 @@ def interp1d_locate_array(x, xp, ilb=0, index_out=None, weight_out=None):
     return lind_out, lwgt_out
 
 
-@register_jitable(parallel=False)
+@register_jitable(parallel=False, nogil=True)
 def interp1d_eval_scalar(index, weight, fp, extrapolate=True, left=np.nan,
                          right=np.nan, out=None):
     """
@@ -132,7 +132,7 @@ def interp1d_eval_scalar(index, weight, fp, extrapolate=True, left=np.nan,
     return fx
 
 
-@register_jitable(parallel=False)
+@register_jitable(parallel=False, nogil=True)
 def interp1d_eval_array(index, weight, fp, extrapolate=True, left=np.nan,
                         right=np.nan, out=None):
     """
@@ -266,7 +266,7 @@ def interp2d_locate_scalar(x0, x1, xp0, xp1, ilb=None, index_out=None,
     return lind_out, lwgt_out
 
 
-@register_jitable(nogil=True)
+@register_jitable(nogil=True, parallel=False)
 def interp2d_locate_scalar_impl(x0, x1, xp0, xp1, ilb, index_out, weight_out):
 
     ilb0, ilb1 = ilb[0], ilb[1]
@@ -276,8 +276,6 @@ def interp2d_locate_scalar_impl(x0, x1, xp0, xp1, ilb, index_out, weight_out):
 
     index_out[0], index_out[1] = ilb0, ilb1
     weight_out[0], weight_out[1] = wgt0, wgt1
-
-    return index_out, weight_out
 
 
 def interp2d_locate_array(x0, x1, xp0, xp1, ilb=None, index_out=None,
