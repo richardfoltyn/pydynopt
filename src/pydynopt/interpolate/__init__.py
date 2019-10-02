@@ -41,6 +41,23 @@ def _interp1d_generic(x, xp, fp, ilb=0, extrapolate=True, left=np.nan,
     return f
 
 
+@overload(interp1d, jit_options=JIT_OPTIONS)
+def _interp1d_impl_generic(x, xp, fp, out, ilb=0, extrapolate=True, left=np.nan,
+                           right=np.nan):
+    from numba.types.scalars import Number
+    from numba.types.npytypes import Array
+    f = None
+
+    from .numba.linear import interp1d_array_impl
+
+    if isinstance(x, Number):
+        pass
+    elif isinstance(x, Array):
+        f = interp1d_array_impl
+
+    return f
+
+
 @overload(interp1d_locate, jit_options=JIT_OPTIONS)
 def _interp1d_locate_generic(x, xp, ilb=0, index_out=None, weight_out=None):
     from numba.types.scalars import Number

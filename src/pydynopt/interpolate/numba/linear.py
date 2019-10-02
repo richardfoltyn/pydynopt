@@ -232,15 +232,41 @@ def interp1d_array(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan
     """
 
     lout = np.empty_like(x, dtype=x.dtype) if out is None else out
-    lout_flat = lout.reshape((-1, 1))
+
+    interp1d_array_impl(x, xp, fp, lout, ilb, extrapolate, left, right)
+
+    return lout
+
+
+@register_jitable(nogil=True, parallel=False)
+def interp1d_array_impl(x, xp, fp, out, ilb=0, extrapolate=True, left=np.nan,
+                        right=np.nan):
+    """
+    Combined routine to both locate and evaluate linear interpolant
+    at a collection of sample points.
+
+    Parameters
+    ----------
+    x
+    xp
+    fp
+    extrapolate
+    left
+    right
+    out
+
+    Returns
+    -------
+
+    """
+
+    out_flat = out.reshape((-1, 1))
 
     for i, xi in enumerate(x.flat):
         ilb, wgt = interp1d_locate_scalar(xi, xp, ilb)
         fx = interp1d_eval_scalar(ilb, wgt, fp, extrapolate, left, right)
 
-        lout_flat[i] = fx
-
-    return lout
+        out_flat[i] = fx
 
 
 def interp2d_locate_scalar(x0, x1, xp0, xp1, ilb=None, index_out=None,
