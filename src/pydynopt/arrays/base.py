@@ -36,13 +36,18 @@ def powerspace(xmin, xmax, n, exponent):
     """
 
     N = int(n)
-    fxmin, fxmax = float(xmin), float(xmax)
+    ffrom, fto = float(xmin), float(xmax)
     fexponent = float(exponent)
 
-    xx = np.linspace(0.0, 1.0, N)
-    xx = fxmin + (fxmax - fxmin) * xx**fexponent
-    # Prevent rounding errors
-    xx[-1] = fxmax
+    zz = np.linspace(0.0, 1.0, N)
+    if fto > ffrom:
+        xx = ffrom + (fto - ffrom) * zz**fexponent
+        # Prevent rounding errors
+        xx[-1] = fto
+    else:
+        xx = ffrom - (ffrom - fto) * zz**fexponent
+        xx[0] = ffrom
+        xx = xx[::-1]
 
     return xx
 
