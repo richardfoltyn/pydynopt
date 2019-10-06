@@ -326,3 +326,113 @@ def ind2sub_scalar_impl(indices, shape, out):
         idx += idx_step
 
     return out
+
+
+def sub2ind_array(coords, shape, out=None):
+    """
+    Converts an array of indices (coordinates) into a multi-dimensional array
+    into an array of flat indices.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        2-dimensional integer array of coordinates. Each row contains the
+        coordinates for one dimension.
+    shape : array_like
+        Shape of array into which indices from `coords` apply.
+    out : np.ndarray or None
+        Optional output array of flat indices.
+
+    Returns
+    -------
+    out : np.ndarray
+        Array of indices into flatted array.
+    """
+
+    N = coords.shape[1]
+
+    if out is not None:
+        sub2ind_array_impl(coords, shape, out)
+        return out
+    else:
+        lout = np.empty((N, ), dtype=coords.dtype)
+        sub2ind_array_impl(coords, shape, lout)
+        return lout
+
+
+@register_jitable(nogil=True, parallel=False)
+def sub2ind_array_impl(coords, shape, out):
+    """
+    Implementation of sub2ind with mandatory `out` argument.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        2-dimensional integer array of coordinates. Each row contains the
+        coordinates for one dimension.
+    shape : array_like
+        Shape of array into which indices from `coords` apply.
+    out : np.ndarray
+        Array of indices into flatted array.
+    """
+
+    ndim = len(shape)
+    stride = np.empty(ndim, dtype=np.int64)
+    stride[-1] = 1
+
+    for j in range(1, ndim):
+        stride[ndim - j - 1] = shape[j]*stride[ndim - j]
+
+    out[...] = 0
+    N = coords.shape[1]
+
+    for i in range(N):
+        lidx = 0
+        for j in range(ndim):
+            k = coords[j, i]
+            if k < 0 or k >= shape[j]:
+                raise ValueError('Invalid coordinates')
+            lidx += coords[j]*stride[j]
+
+        out[i] = lidx
+
+
+@register_jitable(nogil=True, parallel=False)
+def sub2ind_scalar(coords, shape, out):
+    """
+    Convert a tuple of indices (coordinates) into a multi-dimension array
+    to an index into a flat array.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        1d-array of indices (coordinates) into multi-dimensional array.
+    shape : array_like
+        Shape of array into which indices from `coords` apply.
+    out : object
+        Ignored, only present for API-compativility with array-values
+        version of this function.
+
+    Returns
+    -------
+    out : int
+        Index into flat array.
+    """
+
+    ndim = len(shape)
+    stride = np.empty(ndim, dtype=np.int64)
+    stride[-1] = 1
+
+    for j in range(1, ndim):
+        stride[ndim-j-1] = shape[j] * stride[ndim-j]
+
+    out = 0
+
+    for j in range(ndim):
+        k = coords[j]
+        if k < 0 or k >= shape[j]:
+            raise ValueError('Invalid coordinates')
+        out += coords[j] * stride[j]
+
+    return out
+

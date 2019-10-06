@@ -7,6 +7,7 @@ import numpy as np
 
 from pydynopt.numba import register_jitable, jit
 from .numba.arrays import ind2sub_array, ind2sub_scalar
+from .numba.arrays import sub2ind_array, sub2ind_scalar
 
 
 JIT_OPTIONS = {'nopython': True, 'nogil': True, 'parallel': False,
@@ -62,5 +63,19 @@ def ind2sub(indices, shape, out=None):
         out = ind2sub_scalar_jit(indices, shape, out)
     else:
         out = ind2sub_array_jit(indices, shape, out)
+
+    return out
+
+
+sub2ind_scalar_jit = jit(sub2ind_scalar, **JIT_OPTIONS)
+sub2ind_array_jit = jit(sub2ind_array, **JIT_OPTIONS)
+
+
+def sub2ind(coords, shape, out=None):
+
+    if np.isscalar(coords):
+        out = ind2sub_scalar_jit(coords, shape, out)
+    else:
+        out = ind2sub_array_jit(coords, shape, out)
 
     return out
