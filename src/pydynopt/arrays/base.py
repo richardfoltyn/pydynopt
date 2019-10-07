@@ -58,6 +58,28 @@ ind2sub_array_jit = jit(ind2sub_array, **JIT_OPTIONS)
 
 
 def ind2sub(indices, shape, out=None):
+    """
+    Converts a flat index or array of flat indices into a tuple of coordinate
+    arrays.
+
+    Equivalent to Numpy's unravel_index(), but with fewer features and thus
+    hopefully faster.
+
+    Parameters
+    ----------
+    indices : int or array_like
+        An integer or integer array whose elements are indices into the
+        flattened version of an array of dimensions `shape`.
+    shape : array_like
+        The shape of the array to use for unraveling indices.
+    out : np.ndarray or None
+        Optional output array (only Numpy arrays supported in Numba mode)
+
+    Returns
+    -------
+    coords : int or np.ndarray
+        Array of coordinates
+    """
 
     if np.isscalar(indices):
         out = ind2sub_scalar_jit(indices, shape, out)
@@ -72,10 +94,31 @@ sub2ind_array_jit = jit(sub2ind_array, **JIT_OPTIONS)
 
 
 def sub2ind(coords, shape, out=None):
+    """
+    Converts an array of indices (coordinates) into a multi-dimensional array
+    into an array of flat indices.
 
-    if np.isscalar(coords):
-        out = ind2sub_scalar_jit(coords, shape, out)
-    else:
-        out = ind2sub_array_jit(coords, shape, out)
+    Parameters
+    ----------
+    coords : np.ndarray
+        Integer array of coordinates. Coordinates for each dimension are
+        arranged along the first axis.
+    shape : array_like
+        Shape of array into which indices from `coords` apply.
+    out : np.ndarray or None
+        Optional output array of flat indices.
+
+    Returns
+    -------
+    out : np.ndarray
+        Array of indices into flatted array.
+    """
+
+    coords = np.atleast_1d(coords)
+
+    if coords.ndim == 1:
+        out = sub2ind_scalar_jit(coords, shape, out)
+    elif coords.ndim == 2:
+        out = sub2ind_array_jit(coords, shape, out)
 
     return out

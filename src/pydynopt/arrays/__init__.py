@@ -103,30 +103,30 @@ def ind2sub_generic(indices, shape, out=None):
 @overload(sub2ind, jit_options=JIT_OPTIONS)
 def sub2ind_generic(coords, shape, out=None):
 
-    from numba.types import Integer
     from numba.types.npytypes import Array
 
     from .numba.arrays import sub2ind_array, sub2ind_scalar
 
     f = None
-    if isinstance(coords, Integer):
-        f = sub2ind_scalar
-    elif isinstance(coords, Array) and out is None:
-        f = sub2ind_array
+    if isinstance(coords, Array) and out is None:
+        if coords.ndim == 1:
+            f = sub2ind_scalar
+        elif coords.ndim >= 2:
+            f = sub2ind_array
 
     return f
 
 
 @overload(sub2ind, jit_options=JIT_OPTIONS)
 def sub2ind_impl_generic(coords, shape, out):
-    from numba.types import Integer
     from numba.types.npytypes import Array
 
     from .numba.arrays import sub2ind_array_impl
 
     f = None
     if isinstance(coords, Array) and out is not None:
-        f = sub2ind_array_impl
+        if coords.ndim >= 2:
+            f = sub2ind_array_impl
 
     return f
 

@@ -349,13 +349,12 @@ def sub2ind_array(coords, shape, out=None):
         Array of indices into flatted array.
     """
 
-    N = coords.shape[1]
-
     if out is not None:
         sub2ind_array_impl(coords, shape, out)
         return out
     else:
-        lout = np.empty((N, ), dtype=coords.dtype)
+        shp = coords.shape[1:]
+        lout = np.empty(shp, dtype=coords.dtype)
         sub2ind_array_impl(coords, shape, lout)
         return lout
 
@@ -384,21 +383,23 @@ def sub2ind_array_impl(coords, shape, out):
         stride[ndim - j - 1] = shape[j]*stride[ndim - j]
 
     out[...] = 0
-    N = coords.shape[1]
+    out_flat = out.reshape((-1, ))
+    coords_flat = coords.reshape((ndim, -1))
 
-    for i in range(N):
-        lidx = 0
-        for j in range(ndim):
-            k = coords[j, i]
+    N = coords_flat.shape[1]
+
+    for j in range(ndim):
+        stride_j = stride[j]
+
+        for i in range(N):
+            k = coords_flat[j, i]
             if k < 0 or k >= shape[j]:
                 raise ValueError('Invalid coordinates')
-            lidx += coords[j]*stride[j]
-
-        out[i] = lidx
+            out_flat[i] += k * stride_j
 
 
 @register_jitable(nogil=True, parallel=False)
-def sub2ind_scalar(coords, shape, out):
+def sub2ind_scalar(coords, shape, out=None):
     """
     Convert a tuple of indices (coordinates) into a multi-dimension array
     to an index into a flat array.
@@ -426,13 +427,13 @@ def sub2ind_scalar(coords, shape, out):
     for j in range(1, ndim):
         stride[ndim-j-1] = shape[j] * stride[ndim-j]
 
-    out = 0
+    lidx = 0
 
     for j in range(ndim):
         k = coords[j]
         if k < 0 or k >= shape[j]:
             raise ValueError('Invalid coordinates')
-        out += coords[j] * stride[j]
+        lidx += coords[j] * stride[j]
 
-    return out
+    return lidx
 
