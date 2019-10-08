@@ -380,7 +380,7 @@ def sub2ind_array_impl(coords, shape, out):
     stride[-1] = 1
 
     for j in range(1, ndim):
-        stride[ndim - j - 1] = shape[j]*stride[ndim - j]
+        stride[ndim - j - 1] = shape[ndim-j] * stride[ndim - j]
 
     out[...] = 0
     out_flat = out.reshape((-1, ))
@@ -425,7 +425,7 @@ def sub2ind_scalar(coords, shape, out=None):
     stride[-1] = 1
 
     for j in range(1, ndim):
-        stride[ndim-j-1] = shape[j] * stride[ndim-j]
+        stride[ndim-j-1] = shape[ndim-j] * stride[ndim-j]
 
     lidx = 0
 
