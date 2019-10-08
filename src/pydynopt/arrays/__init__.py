@@ -108,11 +108,16 @@ def sub2ind_generic(coords, shape, out=None):
     from .numba.arrays import sub2ind_array, sub2ind_scalar
 
     f = None
-    if isinstance(coords, Array) and out is None:
-        if coords.ndim == 1:
+    if out is None:
+        if isinstance(coords, Array):
+            if coords.ndim == 1:
+                f = sub2ind_scalar
+            elif coords.ndim >= 2:
+                f = sub2ind_array
+        else:
+            # probably coords argument is a tuple or some other array-like
+            # object that can be indexed. Assume it's one-dimensional.
             f = sub2ind_scalar
-        elif coords.ndim >= 2:
-            f = sub2ind_array
 
     return f
 

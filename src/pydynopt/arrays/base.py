@@ -100,7 +100,7 @@ def sub2ind(coords, shape, out=None):
 
     Parameters
     ----------
-    coords : np.ndarray
+    coords : array_like
         Integer array of coordinates. Coordinates for each dimension are
         arranged along the first axis.
     shape : array_like
