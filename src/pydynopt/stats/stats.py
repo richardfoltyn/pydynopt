@@ -4,8 +4,10 @@ Module providing core statistical functions
 Author: Richard Foltyn
 """
 
-from pydynopt.numba import jit
 import numpy as np
+
+from pydynopt.numba import jit, register_jitable, overload
+from pydynopt.numba import to_array
 
 
 def gini(states, pmf, assume_sorted=False):
@@ -92,7 +94,7 @@ def create_unique_pmf(x, pmf):
     return xuniq, pmf_uniq
 
 
-def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
+def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     """
     Compute quantiles of a given distribution characterized by its (finite)
     state space and PMF.
@@ -113,6 +115,122 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     ----------
     x : array_like
     pmf : array_like
+    qrank : array_like
+        Quantile ranks (valid range: [0,1])
+    assume_sorted : bool
+        If true, assume that state space `x` is sorted.
+    assume_unique : bool
+        If true, assume that elements in state space `x` are unique.
+
+    Returns
+    -------
+    q : np.ndarray
+        Quantile corresponding to given quantile ranks.
+    """
+
+    x1d = np.atleast_1d(x).flatten()
+    pmf1d = np.atleast_1d(pmf).flatten()
+    qrank1d = np.atleast_1d(qrank).flatten()
+
+    if np.any(qrank1d < 0.0) or np.any(qrank1d > 1.0):
+        raise ValueError('Invalid percentile rank argument')
+
+    if len(x1d) == len(pmf1d):
+        # Assume that RV is discrete and that x contains the discrete support
+        # with corresponding probabilities stored in pmf
+
+        if not assume_sorted:
+            iorder = np.argsort(x1d)
+            x1d = x1d[iorder]
+            pmf1d = pmf1d[iorder]
+
+        if not assume_unique:
+            x1d, pmf1d = create_unique_pmf(x1d, pmf1d)
+
+        cdf = np.empty((pmf1d.size + 1, ), dtype=pmf1d.dtype)
+        cdf[0] = 0.0
+        cdf[1:] = np.cumsum(pmf1d)
+        cdf /= cdf[-1]
+
+        # trim (constant) right tail as that confuses digitize()
+        # Note that there is at least one such element as we set the last
+        # element to 1.0
+        ii = np.where(cdf > (1.0 - 1.0e-14))[0]
+        imax = ii[0]
+        cdf = cdf[:imax+1]
+        cdf[-1] = 1.0
+
+        # trim (constant) left tail
+        ii = np.where(cdf > 0.0)[0]
+        imin = max(0, ii[0] - 1)
+        cdf = cdf[imin:]
+        ii = np.digitize(qrank1d, cdf)
+        ii += (imin - 1)
+        ii = np.fmin(ii, pmf1d.size - 1)
+        q = x1d[ii]
+
+    elif len(x1d) == (len(pmf1d) + 1):
+
+        cdf = np.empty((pmf1d.size + 1,), dtype=pmf1d.dtype)
+        cdf[0] = 0.0
+        cdf[1:] = np.cumsum(pmf1d)
+        cdf /= cdf[-1]
+
+        # trim (constant) right tail as that confuses digitize()
+        iub = np.amin(np.where(cdf == 1.0)[0]) + 1
+        cdf = cdf[:iub]
+        x1d = x1d[:iub]
+        cdf[-1] = 1.0
+        ii = np.digitize(qrank1d, cdf)
+        ii -= 1
+        # include only CDF values that bracket percentiles of interest.
+        # This is a work-around as Numba does not support np.union1d()
+        iip1 = np.fmin(ii + 1, cdf.size - 1)
+        ii = np.hstack((ii, iip1))
+        ii = np.unique(ii)
+        # linearly interpolate *within* brackets
+        q = np.interp(qrank1d, cdf[ii], x1d[ii])
+    else:
+        raise ValueError('Non-conformable arrays')
+
+    return q
+
+
+def quantile_scalar(x, pmf, qrank, assume_sorted=False, assume_unique=False):
+    """
+    Implementation of quantile() function for scalar-valued `qrank` arguments.
+
+    Parameters
+    ----------
+    x : array_like
+    pmf : array_like
+    qrank : float
+    assume_sorted : bool
+    assume_unique : bool
+
+    Returns
+    -------
+    q : float
+    """
+    qrank1d = np.array(qrank)
+    q1d = quantile(x, pmf, qrank1d, assume_sorted, assume_unique)
+
+    q = q1d[0]
+
+    return q
+
+
+def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
+    """
+    Compute quantiles of a given distribution characterized by its (finite)
+    state space and PMF.
+
+    For implementation details see the documentation for quantile_array().
+
+    Parameters
+    ----------
+    x : array_like
+    pmf : array_like
     qrank : array_like or float
         Quantile ranks (valid range: [0,1])
     assume_sorted : bool
@@ -122,64 +240,33 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
 
     Returns
     -------
-    pctl : np.ndarray or float
-        Quantile corresponding to given percentile ranks.
+    q : np.ndarray or float
+        Quantile corresponding to given quantile ranks.
     """
 
-    x = np.atleast_1d(x).flatten()
-    pmf = np.atleast_1d(pmf).flatten()
-    if np.any(qrank < 0.0) or np.any(qrank > 1.0):
-        msg = 'Invalid percentile rank argument'
-        raise ValueError(msg)
+    qrank1d = np.array(qrank)
+    q = quantile_array(x, pmf, qrank1d, assume_sorted, assume_unique)
 
-    if len(x) == len(pmf):
-        # Assume that RV is discrete and that x contains the discrete support
-        # with corresponding probabilities stored in pmf
+    if np.isscalar(qrank):
+        q = q.item()
 
-        if not assume_sorted:
-            iorder = np.argsort(x)
-            x = x[iorder]
-            pmf = pmf[iorder]
+    return q
 
-        if not assume_unique:
-            x, pmf = create_unique_pmf(x, pmf)
 
-        cdf = np.hstack((0.0, np.cumsum(pmf)))
-        cdf /= cdf[-1]
-        # trim (constant) right tail as that confuses digitize()
-        ii = np.where(cdf > (1.0 - 1.0e-14))[0]
-        imax = ii[0]
-        cdf = cdf[:imax+1]
-        cdf[-1] = 1.0
-        # trim (constant) left tail
-        ii = np.where(cdf > 0.0)[0]
-        imin = max(0, ii[0] - 1)
-        cdf = cdf[imin:]
-        ii = np.digitize(qrank, cdf) - 1 + imin
-        ii = np.fmin(ii, len(pmf) - 1)
-        pctl = x[ii]
+@overload(quantile, jit_options={'nogil': True, 'parallel': False})
+def quantile_generic(x, pmf, qrank, assume_sorted=False, assume_unique=False):
+    from numba.types import Number
 
-    elif len(x) == (len(pmf) + 1):
-        cdf = np.hstack((0.0, np.cumsum(pmf)))
-        cdf /= cdf[-1]
-        # trim (constant) right tail as that confuses digitize()
-        iub = np.amin(np.where(cdf == 1.0)[0]) + 1
-        cdf = cdf[:iub]
-        x = x[:iub]
-        cdf[-1] = 1.0
-        ii = np.digitize(qrank, cdf) - 1
-        # include only CDF values that bracket percentiles of interest.
-        ii = np.union1d(ii, np.fmin(ii + 1, len(cdf) - 1))
-        # linearly interpolate *within* brackets
-        pctl = np.interp(qrank, cdf[ii], x[ii])
+    f = None
+    if isinstance(qrank, Number):
+        f = quantile_scalar
     else:
-        msg = 'Non-conformable arrays'
-        raise ValueError(msg)
+        f = quantile_array
 
-    return pctl
+    return f
 
 
-def percentile(x, pmf, prank):
+def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False):
     """
     Convenience wrapper around quantile() function that accepts percentile
     rank argument in the interval [0,100] instead of quantile ranks
@@ -191,21 +278,81 @@ def percentile(x, pmf, prank):
     pmf : array_like
     prank : array_like or float
         Percentile ranks (valid range: [0,100])
+    assume_sorted : bool
+        If true, assume that state space `x` is sorted.
+    assume_unique : bool
+        If true, assume that elements in state space `x` are unique.
 
     Returns
     -------
-    pctl : float or np.ndarray
+    pctl : np.ndarray
         Percentiles corresponding to given percentile ranks
     """
 
-    isscalar = np.isscalar(prank)
-    qrank = np.array(prank) / 100.0
-    pctl = quantile(x, pmf, qrank)
-
-    if isscalar:
-        pctl = np.asscalar(pctl)
+    qrank = to_array(prank)
+    qrank /= 100.0
+    pctl = quantile(x, pmf, qrank, assume_sorted, assume_unique)
 
     return pctl
+
+
+def percentile_scalar(x, pmf, prank, assume_sorted=False, assume_unique=False):
+
+    qrank = np.array(prank)
+    qrank /= 100.0
+    pctl1d = quantile(x, pmf, qrank, assume_sorted, assume_unique)
+
+    pctl = pctl1d[0]
+
+    return pctl
+
+
+def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False):
+    """
+    Compute percentiles of a given distribution characterized by its (finite)
+    state space and PMF.
+
+    See documentation for quantile() for implementation details.
+
+    Parameters
+    ----------
+    x : array_like
+    pmf : array_like
+    prank : array_like or float
+        Percentile ranks (valid range: [0,100])
+    assume_sorted : bool
+        If true, assume that state space `x` is sorted.
+    assume_unique : bool
+        If true, assume that elements in state space `x` are unique.
+
+    Returns
+    -------
+    pctl : np.ndarray or float
+        Percentiles corresponding to given percentile ranks.
+    """
+
+    qrank = np.array(prank)
+    qrank /= 100.0
+    pctl = quantile_array(x, pmf, qrank, assume_sorted, assume_unique)
+
+    if np.isscalar(prank):
+        pctl = pctl.item()
+
+    return pctl
+
+
+@overload(percentile, jit_options={'nogil': True, 'parallel': False})
+def percentile_generic(x, pmf, prank, assume_sorted=False, assume_unique=False):
+
+    from numba.types import Number
+
+    f = None
+    if isinstance(prank, Number):
+        f = percentile_scalar
+    else:
+        f = percentile_array
+
+    return f
 
 
 def quantile_rank(x, pmf, qntl):
