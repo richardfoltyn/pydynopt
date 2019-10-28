@@ -369,7 +369,8 @@ class AbstractStyle(object):
             value = (value, )
         else:
             value = tuple(value)
-        self._markersize = ConstFillProperty(cls.MARKERSIZE, value)
+        default = value[len(value)-1]
+        self._markersize = ConstFillProperty(default, value)
 
     @property
     def mec(self):
