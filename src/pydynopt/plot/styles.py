@@ -503,6 +503,37 @@ class Presentation(DefaultStyle):
         self._mec = Colors((None, 'White', 'White', None, 'White'))
 
 
+class AlternatingStyle(DefaultStyle):
+    """
+    Style definition that alternates solid colored lines with black lines
+    with dashed/dotted/etc. line styles.
+    """
+    def __init__(self):
+
+        super().__init__()
+
+        colors = ['#0570b0', '#e31a1c', '#238443', '#88419d', '#252525']
+        # colors = ['#0570b0', '#d94801', '#41ae76', '#6a51a3', '#d7301f']
+        ls_colors = ['-'] * len(colors)
+        lw_colors = [1.5] * len(colors)
+        alpha_color = [0.8] * len(colors)
+
+        ls_black = ['-', '--', '-.', ':', (0, (2, 1))]
+        lw_black = [1.0, 1.0, 1.0, 1.25, 1.0]
+        black = ['black'] * len(ls_black)
+        alpha_black = [0.8, 0.8, 0.8, 0.9, 0.8]
+
+        colors = it.chain(*zip(colors, black))
+        ls = it.chain(*zip(ls_colors, ls_black))
+        lw = it.chain(*zip(lw_colors, lw_black))
+        alpha = it.chain(*zip(alpha_color, alpha_black))
+
+        self.color = colors
+        self.linestyle = ls
+        self.linewidth = lw
+        self.alpha = alpha
+
+
 MPL_VERSION = matplotlib.__version__.split('.')
 try:
     major = int(MPL_VERSION[0])
