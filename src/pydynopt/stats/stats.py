@@ -331,7 +331,7 @@ def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False):
         Percentiles corresponding to given percentile ranks.
     """
 
-    qrank = np.array(prank)
+    qrank = np.array(prank, dtype=np.float64)
     qrank /= 100.0
     pctl = quantile_array(x, pmf, qrank, assume_sorted, assume_unique)
 
