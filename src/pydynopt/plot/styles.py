@@ -508,6 +508,15 @@ class AlternatingStyle(DefaultStyle):
     Style definition that alternates solid colored lines with black lines
     with dashed/dotted/etc. line styles.
     """
+
+    GRID_KWARGS = {
+        'color': 'black',
+        'alpha': 0.5,
+        'zorder': -1000,
+        'linestyle': ':',
+        'linewidth': 0.5
+    }
+
     def __init__(self):
 
         super().__init__()
@@ -518,7 +527,7 @@ class AlternatingStyle(DefaultStyle):
         lw_colors = [1.5] * len(colors)
         alpha_color = [0.8] * len(colors)
 
-        ls_black = ['-', '--', '-.', ':', (0, (2, 1))]
+        ls_black = ['--', '-.', ':', (0, (2, 1))]
         lw_black = [1.0, 1.0, 1.0, 1.25, 1.0]
         black = ['black'] * len(ls_black)
         alpha_black = [0.8, 0.8, 0.8, 0.9, 0.8]
