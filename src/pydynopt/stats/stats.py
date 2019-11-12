@@ -132,6 +132,10 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     pmf1d = np.atleast_1d(pmf).flatten()
     qrank1d = np.atleast_1d(qrank).flatten()
 
+    if qrank1d.size == 0:
+        q = np.array([], dtype=np.float64)
+        return q
+
     if np.any(qrank1d < 0.0) or np.any(qrank1d > 1.0):
         raise ValueError('Invalid percentile rank argument')
 
