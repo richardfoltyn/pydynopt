@@ -528,9 +528,9 @@ class AlternatingStyle(DefaultStyle):
         alpha_color = [0.8] * len(colors)
 
         ls_black = ['--', '-.', ':', (0, (2, 1))]
-        lw_black = [1.0, 1.0, 1.0, 1.25, 1.0]
+        lw_black = [1.05] * len(ls_black)
         black = ['black'] * len(ls_black)
-        alpha_black = [0.8, 0.8, 0.8, 0.9, 0.8]
+        alpha_black = [0.75] * len(ls_black)
 
         colors = it.chain(*zip(colors, black))
         ls = it.chain(*zip(ls_colors, ls_black))
