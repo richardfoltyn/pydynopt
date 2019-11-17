@@ -393,7 +393,7 @@ class AbstractStyle(object):
     def mew(self):
         cls = self.__class__
         if self._mew is None:
-            self._mew = LineWidth(0.5)
+            self._mew = LineWidth((0.5, ))
         return self._mew
 
     @mew.setter
