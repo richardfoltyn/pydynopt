@@ -112,8 +112,8 @@ class PlotStyleDict(object):
 
     def __getitem__(self, item):
 
-        keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec', 'markersize',
-                'zorder'}
+        keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec', 'mew',
+                'markersize', 'zorder'}
         res = dict()
 
         for k in keys:
@@ -162,6 +162,7 @@ class AbstractStyle(object):
         self._marker = None
         self._markersize = None
         self._mec = None
+        self._mew = None
         self._zorder = None
         self._figure = cls.FIGURE_KWARGS
 
@@ -183,6 +184,7 @@ class AbstractStyle(object):
         obj._marker = copy.deepcopy(self._marker, memodict)
         obj._markersize = copy.deepcopy(self._markersize, memodict)
         obj._mec = copy.deepcopy(self._mec, memodict)
+        obj._mew = copy.deepcopy(self._mew, memodict)
         obj._zorder = copy.deepcopy(self._zorder, memodict)
         # Omit updating _figure since we do not permit updating by user code
 
@@ -386,6 +388,21 @@ class AbstractStyle(object):
         else:
             value = tuple(value)
         self._mec = ConstFillProperty('none', value)
+
+    @property
+    def mew(self):
+        cls = self.__class__
+        if self._mew is None:
+            self._mew = LineWidth(0.5)
+        return self._mew
+
+    @mew.setter
+    def mew(self, value):
+        if np.isscalar(value):
+            value = (value, )
+        else:
+            value = tuple(value)
+        self._mew = LineWidth(value)
 
     @property
     def zorder(self):
