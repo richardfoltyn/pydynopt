@@ -451,3 +451,60 @@ def percentile_rank(x, pmf, pctl):
     rank *= 100.0
 
     return rank
+
+
+def discretize_rv(n=None, q=None, dist=None, **kwargs):
+    """
+    Discretize a continuous random variable onto a finite set of bins,
+    using the expected value conditional on being in a bin as discrete
+    realizations.
+
+    Parameters
+    ----------
+    n : int or None
+        Number of bins to create
+    q : array_like or None
+        Quantiles in [0,1] used to describe bin edges in terms of CDF.
+        Takes precedence over `n` argument if present.
+    dist : object or None
+        Object implementing a continuous random variable as used in
+        scipy.stats package.
+    kwargs : dict
+        Keyword parameters passed directly to ppf() and expect() methods
+        of underlying distribution
+
+    Returns
+    -------
+    grid : np.ndarray
+    pmf : np.ndarray
+    """
+
+    if dist is None:
+        from scipy.stats import norm
+        dist = norm
+
+    if n is None and q is None:
+        n = 1
+
+    if q is not None:
+        q = np.atleast_1d(q)
+        n = len(q) - 1
+    else:
+        # Create equidistant bins in terms of quantile ranks
+        q = np.linspace(0.0, 1.0, n+1)
+
+    edges = dist.ppf(q, **kwargs)
+
+    grid = np.empty(n)
+    pmf = q[1:] - q[:-1]
+    pmf /= np.sum(pmf)
+
+    for i in range(n):
+        lb, ub = edges[i], edges[i+1]
+
+        # Compute conditional expectation
+        xcond = dist.expect(lambda x: x, lb=lb, ub=ub, conditional=True, **kwargs)
+
+        grid[i] = xcond.item()
+
+    return grid, pmf
