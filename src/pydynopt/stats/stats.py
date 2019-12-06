@@ -56,7 +56,7 @@ def gini(states, pmf, assume_sorted=False):
 
 
 @jit(nopython=True, nogil=True)
-def create_unique_pmf(x, pmf):
+def create_unique_pmf(x, pmf, assume_sorted=False):
     """
     Collapses discrete distribution with potentially duplicate values in the
     state space to a state space with unique values and appropriately summed
@@ -66,6 +66,8 @@ def create_unique_pmf(x, pmf):
     ----------
     x : np.ndarray
     pmf : np.ndarray
+    assume_sorted : bool
+        If true, assume that `x` is sorted in ascending order
 
     Returns
     -------
@@ -75,10 +77,12 @@ def create_unique_pmf(x, pmf):
         Probabilities corresponding to unique states
     """
 
-    xuniq = np.unique(x)
-    if len(xuniq) == len(x) and np.all(xuniq == x):
-        return x, pmf
+    if not assume_sorted:
+        iorder = np.argsort(x)
+        x = x[iorder]
+        pmf = pmf[iorder]
 
+    xuniq = np.unique(x)
     pmf_uniq = np.zeros_like(xuniq)
 
     j = 0
@@ -133,7 +137,7 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     qrank1d = np.atleast_1d(qrank).flatten()
 
     if qrank1d.size == 0:
-        q = np.array([], dtype=np.float64)
+        q = np.empty(0, dtype=x.dtype)
         return q
 
     if np.any(qrank1d < 0.0) or np.any(qrank1d > 1.0):
@@ -149,7 +153,7 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False):
             pmf1d = pmf1d[iorder]
 
         if not assume_unique:
-            x1d, pmf1d = create_unique_pmf(x1d, pmf1d)
+            x1d, pmf1d = create_unique_pmf(x1d, pmf1d, assume_sorted=True)
 
         cdf = np.empty((pmf1d.size + 1, ), dtype=pmf1d.dtype)
         cdf[0] = 0.0
@@ -216,7 +220,7 @@ def quantile_scalar(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     -------
     q : float
     """
-    qrank1d = np.array(qrank)
+    qrank1d = np.asarray(qrank)
     q1d = quantile(x, pmf, qrank1d, assume_sorted, assume_unique)
 
     q = q1d[0]
@@ -248,7 +252,7 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
         Quantile corresponding to given quantile ranks.
     """
 
-    qrank1d = np.array(qrank)
+    qrank1d = np.asarray(qrank)
     q = quantile_array(x, pmf, qrank1d, assume_sorted, assume_unique)
 
     if np.isscalar(qrank):
@@ -293,7 +297,7 @@ def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False):
         Percentiles corresponding to given percentile ranks
     """
 
-    qrank = to_array(prank)
+    qrank = np.asarray(prank, dtype=np.float64).copy()
     qrank /= 100.0
     pctl = quantile(x, pmf, qrank, assume_sorted, assume_unique)
 
@@ -302,7 +306,7 @@ def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False):
 
 def percentile_scalar(x, pmf, prank, assume_sorted=False, assume_unique=False):
 
-    qrank = np.array(prank)
+    qrank = np.asarray(prank, dtype=np.float64).copy()
     qrank /= 100.0
     pctl1d = quantile(x, pmf, qrank, assume_sorted, assume_unique)
 
