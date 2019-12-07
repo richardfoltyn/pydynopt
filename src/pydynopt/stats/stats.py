@@ -7,9 +7,9 @@ Author: Richard Foltyn
 import numpy as np
 
 from pydynopt.numba import jit, register_jitable, overload
-from pydynopt.numba import to_array
 
 
+@jit(nopython=True, nogil=True, parallel=False)
 def gini(states, pmf, assume_sorted=False):
     """
     Compute Gini coefficient from a normalized histogram (or a discrete RV
@@ -35,22 +35,24 @@ def gini(states, pmf, assume_sorted=False):
         Gini coefficient for given PMF or histogram
     """
 
-    states = np.atleast_1d(states)
-    pmf = np.atleast_1d(pmf)
+    states_arr = np.atleast_1d(states)
+    pmf_arr = np.atleast_1d(pmf)
 
-    needs_sort = states.ndim > 1 or not assume_sorted
-    states = states.reshape((-1, ))
-    pmf = pmf.reshape((-1, ))
+    needs_sort = states_arr.ndim > 1 or not assume_sorted
+    states1d = states_arr.reshape((-1, ))
+    pmf1d = pmf_arr.reshape((-1, ))
 
     if needs_sort:
         iorder = np.argsort(states)
-        states = states[iorder]
-        pmf = pmf[iorder]
+        states1d = states1d[iorder]
+        pmf1d = pmf1d[iorder]
 
-    S = np.cumsum(pmf*states)
-    S = np.insert(S, 0, 0.0)
+    S = np.cumsum(pmf1d*states1d)
+    # Numba does not support hstack() with scalar args
+    zero = np.zeros(1, dtype=S.dtype)
+    S = np.hstack((zero, S))
     midS = (S[:-1] + S[1:])
-    gini = 1.0 - np.sum(pmf*midS)/S[-1]
+    gini = 1.0 - np.dot(pmf1d, midS)/S[-1]
 
     return gini
 
