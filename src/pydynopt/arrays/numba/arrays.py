@@ -384,15 +384,15 @@ def sub2ind_array_impl(coords, shape, out):
 
     out[...] = 0
     out_flat = out.reshape((-1, ))
-    coords_flat = coords.reshape((ndim, -1))
+    coords_flat = coords.reshape((-1, ndim))
 
-    N = coords_flat.shape[1]
+    N = coords_flat.shape[0]
 
-    for j in range(ndim):
-        stride_j = stride[j]
+    for i in range(N):
+        for j in range(ndim):
+            stride_j = stride[j]
 
-        for i in range(N):
-            k = coords_flat[j, i]
+            k = coords_flat[i, j]
             if k < 0 or k >= shape[j]:
                 raise ValueError('Invalid coordinates')
             out_flat[i] += k * stride_j
