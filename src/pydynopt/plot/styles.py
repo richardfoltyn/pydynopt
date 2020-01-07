@@ -560,6 +560,32 @@ class AlternatingStyle(DefaultStyle):
         self.alpha = alpha
 
 
+class QualitativeStyle(DefaultStyle):
+    """
+    Style definition that with identical line styles but alternating
+    colors, similar to the qualitative color schemes on colorbrewer2.org
+    """
+
+    GRID_KWARGS = {
+        'color': 'black',
+        'alpha': 0.5,
+        'zorder': -1000,
+        'linestyle': ':',
+        'linewidth': 0.35
+    }
+
+    def __init__(self):
+
+        super().__init__()
+
+        colors = ['#0570b0', 'black', '#e31a1c', '#88419d', '#fc8d59', '#aa5500']
+
+        self.color = colors
+        self.linestyle = ['-']
+        self.linewidth = 1.0
+        self.alpha = [0.8, 0.7, 0.8, 0.8, 0.9, 0.8]
+
+
 MPL_VERSION = matplotlib.__version__.split('.')
 try:
     major = int(MPL_VERSION[0])
