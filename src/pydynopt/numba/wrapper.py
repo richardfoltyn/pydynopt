@@ -8,8 +8,8 @@ from pydynopt import use_numba
 import numpy as np
 
 __all__ = ['jit', 'jitclass', 'overload', 'register_jitable',
-           'float64', 'int64', 'boolean',
-           'prange']
+           'float32', 'float64', 'int8', 'int32', 'int64',
+           'boolean', 'string', 'prange']
 
 
 def jit_dummy(signature_or_function=None, *jit_args, **jit_kwargs):
@@ -93,9 +93,13 @@ class SubscriptableType(np.int64):
         return self
 
 
+int8 = SubscriptableType()
+int32 = SubscriptableType()
 int64 = SubscriptableType()
+float32 = SubscriptableType()
 float64 = SubscriptableType()
 boolean = SubscriptableType()
+string = str
 
 jit = jit_dummy
 jitclass = jitclass_dummy
@@ -107,7 +111,9 @@ if use_numba:
     try:
         from numba import jit, jitclass
         from numba.extending import overload, register_jitable
-        from numba.types import int64, float64, boolean, string
+        from numba.types import int8, int32, int64
+        from numba.types import float32, float64
+        from numba.types import boolean, string
         from numba import prange
     except ImportError:
         # Nothing to do, use the default decorators defined above
