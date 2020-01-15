@@ -250,7 +250,16 @@ class AbstractStyle(object):
     @grid.setter
     def grid(self, value):
         if isinstance(value, bool):
-            self._grid = {'b': value}
+            b = self._grid.get('b', None)
+            if value:
+                if b is not None and not b:
+                    # re-apply default grid params, as just setting b=True will
+                    # not produce any grid once it's been turned off.
+                    # Do this only if b=False, otherwise ignore grid=True
+                    # as it's enabled in some form anyways.
+                    self._grid = self.__class__.GRID_KWARGS
+            else:
+                self._grid = {'b': value}
         else:
             self._grid = dict(value)
 
