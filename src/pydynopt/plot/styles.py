@@ -547,7 +547,7 @@ class AlternatingStyle(DefaultStyle):
 
         super().__init__()
 
-        colors = ['#0570b0', '#e31a1c', '#238443', '#88419d', '#252525']
+        colors = ['#0570b0', '#e31a1c', '#88419d', '#fc8d59', '#252525']
         # colors = ['#0570b0', '#d94801', '#41ae76', '#6a51a3', '#d7301f']
         ls_colors = ['-'] * len(colors)
         lw_colors = [1.5] * len(colors)
