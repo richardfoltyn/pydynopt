@@ -8,7 +8,7 @@ from pydynopt import use_numba
 import numpy as np
 
 __all__ = ['jit', 'jitclass', 'overload', 'register_jitable',
-           'float32', 'float64', 'int8', 'int32', 'int64',
+           'float32', 'float64', 'int8', 'int16', 'int32', 'int64',
            'boolean', 'string', 'prange']
 
 
@@ -94,6 +94,7 @@ class SubscriptableType(np.int64):
 
 
 int8 = SubscriptableType()
+int16 = SubscriptableType()
 int32 = SubscriptableType()
 int64 = SubscriptableType()
 float32 = SubscriptableType()
@@ -111,7 +112,7 @@ if use_numba:
     try:
         from numba import jit, jitclass
         from numba.extending import overload, register_jitable
-        from numba.types import int8, int32, int64
+        from numba.types import int8, int16, int32, int64
         from numba.types import float32, float64
         from numba.types import boolean, string
         from numba import prange
