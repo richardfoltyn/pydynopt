@@ -12,7 +12,7 @@ from pydynopt.numba import jit, register_jitable
 from .search import bsearch_impl
 
 
-@register_jitable(parallel=False, nogil=True)
+@register_jitable(parallel=False, nogil=True, inline='always')
 def interp1d_locate_scalar(x, xp, ilb=0, index_out=None, weight_out=None):
     """
     Numba implementation for computing the interpolation bracketing interval

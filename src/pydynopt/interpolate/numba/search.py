@@ -52,7 +52,7 @@ def bsearch(needle, haystack, ilb=0):
     return ilb
 
 
-@jit(**JIT_OPTIONS)
+@jit(inline='always', **JIT_OPTIONS)
 def bsearch_impl(needle, haystack, ilb=0):
     """
 
