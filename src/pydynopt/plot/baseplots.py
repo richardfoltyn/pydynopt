@@ -14,7 +14,7 @@ def plot_grid(fun, nrow=1, ncol=1,
               sharex=True, sharey=True,
               xlabel=None, ylabel=None, xlim=None, ylim=None,
               legend_at=(0, 0), legend_loc='upper left', legend=False,
-              outfile=None, style=None, aspect=1.0, close_fig=True,
+              outfile=None, style=None, aspect=None, close_fig=True,
               *args, **kwargs):
     """
     Creates a rectangular grid of subplots and calls a user-provided function
@@ -69,7 +69,7 @@ def plot_grid(fun, nrow=1, ncol=1,
         If not None, figure is saved into given file
     style : styles.AbstractStyle
         Instance of AbstractStyle controlling various rendering options.
-    aspect : float
+    aspect : float, optional
         Aspect ratio
     close_fig : bool
         If true (default), close the figure after plotting if an output
@@ -97,6 +97,17 @@ def plot_grid(fun, nrow=1, ncol=1,
 
     if ylim is not None:
         ylim = broadcast_ylim(nrow, ncol, ylim)
+
+    # Obtain aspect ratio: first try whatever is stored in 'aspect' attribute
+    # of style object, then override this with the 'aspect' argument
+    # if it's not None.
+    aspect_default = 1.0
+    if style is not None:
+        aspect_default = getattr(style, 'aspect', 1.0)
+    if aspect is not None:
+        aspect_default = aspect
+
+    aspect = aspect_default
 
     # Aspect ratio is defined as width / height
     fig_kw = {'figsize': (style.cell_size * ncol,

@@ -153,9 +153,11 @@ class AbstractStyle(object):
 
         self.cell_size = 6
         self.dpi = 96
+        self.aspect = 1.0
         self._grid = cls.GRID_KWARGS
         self._color = None
         self._facecolor = None
+        self._facealpha = None
         self._linewidth = None
         self._linestyle = None
         self._alpha = None
@@ -174,10 +176,12 @@ class AbstractStyle(object):
 
         obj.cell_size = self.cell_size
         obj.dpi = self.dpi
+        obj.aspect = self.aspect
 
         obj._grid = copy.deepcopy(self._grid, memodict)
         obj._color = copy.deepcopy(self._color, memodict)
         obj._facecolor = copy.deepcopy(self._facecolor, memodict)
+        obj._facealpha = copy.deepcopy(self._facealpha, memodict)
         obj._linestyle = copy.deepcopy(self._linestyle, memodict)
         obj._linewidth = copy.deepcopy(self._linewidth, memodict)
         obj._alpha = copy.deepcopy(self._alpha, memodict)
@@ -297,6 +301,21 @@ class AbstractStyle(object):
         else:
             value = tuple(value)
         self._facecolor = Colors(colors=value)
+
+    @property
+    def facealpha(self):
+        cls = self.__class__
+        if self._facealpha is None:
+            self._facealpha = Colors(cls.ALPHAS)
+        return self._facealpha
+
+    @facealpha.setter
+    def facealpha(self, value):
+        if np.isscalar(value):
+            value = (value,)
+        else:
+            value = tuple(value)
+        self._facealpha = Colors(colors=value)
 
     @property
     def linewidth(self):
