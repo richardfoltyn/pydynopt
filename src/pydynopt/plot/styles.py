@@ -113,7 +113,7 @@ class PlotStyleDict(object):
     def __getitem__(self, item):
 
         keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec', 'mew',
-                'markersize', 'zorder'}
+                'markersize', 'markevery',  'zorder'}
         res = dict()
 
         for k in keys:
@@ -163,6 +163,7 @@ class AbstractStyle(object):
         self._alpha = None
         self._marker = None
         self._markersize = None
+        self._markevery = None
         self._mec = None
         self._mew = None
         self._zorder = None
@@ -187,6 +188,7 @@ class AbstractStyle(object):
         obj._alpha = copy.deepcopy(self._alpha, memodict)
         obj._marker = copy.deepcopy(self._marker, memodict)
         obj._markersize = copy.deepcopy(self._markersize, memodict)
+        obj._markevery = copy.deepcopy(self._markevery, memodict)
         obj._mec = copy.deepcopy(self._mec, memodict)
         obj._mew = copy.deepcopy(self._mew, memodict)
         obj._zorder = copy.deepcopy(self._zorder, memodict)
@@ -401,6 +403,21 @@ class AbstractStyle(object):
             value = tuple(value)
         default = value[len(value)-1]
         self._markersize = ConstFillProperty(default, value)
+
+    @property
+    def markevery(self):
+        if self._markevery is None:
+            self._markevery = ConstFillProperty(const=1)
+        return self._markevery
+
+    @markevery.setter
+    def markevery(self, value):
+        if np.isscalar(value):
+            value = (value, )
+        else:
+            value = tuple(value)
+        default = 1
+        self._markevery = ConstFillProperty(default, value)
 
     @property
     def mec(self):
