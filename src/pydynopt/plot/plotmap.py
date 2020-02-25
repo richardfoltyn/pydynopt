@@ -1079,7 +1079,7 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
         # iterate over all potential label locations in subplot,
         # check whether something should be plotted there, at plot it.
         # There is a possibly empty list in each array cell.
-        for iv, ih in np.broadcast(range(3), range(3)):
+        for iv, ih in np.broadcast(np.arange(3)[:, None], np.arange(3)[None]):
             for lbl in label_kwargs[i, j, iv, ih]:
                 # Add this otherwise position relative to current
                 # axes will not work
