@@ -57,21 +57,27 @@ def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
         sigma_z = sigma
         sigma_e = sigma_z * np.sqrt(1 - rho**2)
 
-    z = np.linspace(-sigma_z * m, sigma_z * m, n)
-    w2 = (z[1] - z[0])/2
+    if n > 1:
+        z = np.linspace(-sigma_z * m, sigma_z * m, n)
+        w2 = (z[1] - z[0])/2
 
-    transm = np.empty((n, n), dtype=np.float64)
+        transm = np.empty((n, n), dtype=np.float64)
 
-    for j in range(n):
-        for k in range(1, n-1):
-            zjk = z[k] - rho * z[j]
-            transm[j, k] = norm.cdf((zjk + w2) / sigma_e) - \
-                           norm.cdf((zjk - w2) / sigma_e)
+        for j in range(n):
+            for k in range(1, n-1):
+                zjk = z[k] - rho * z[j]
+                transm[j, k] = norm.cdf((zjk + w2) / sigma_e) - \
+                               norm.cdf((zjk - w2) / sigma_e)
 
-        zj1 = z[0] - rho * z[j]
-        zjn = z[n-1] - rho * z[j]
-        transm[j, 0] = norm.cdf((zj1 + w2) / sigma_e)
-        transm[j, n-1] = 1 - norm.cdf((zjn - w2) / sigma_e)
+            zj1 = z[0] - rho * z[j]
+            zjn = z[n-1] - rho * z[j]
+            transm[j, 0] = norm.cdf((zj1 + w2) / sigma_e)
+            transm[j, n-1] = 1 - norm.cdf((zjn - w2) / sigma_e)
+    elif n == 1:
+        transm = np.ones((1, 1))
+        z = np.zeros(1)
+    else:
+        raise ValueError('Invalid number of states: n={:d}'.format(n))
 
     assert np.all(np.abs(np.sum(transm, axis=1) - 1) < 1e-12)
 
