@@ -110,7 +110,13 @@ prange = range
 
 if use_numba:
     try:
-        from numba import jit, jitclass
+        from numba import jit
+        try:
+            # Move to numba.experimental in newer Numba releases, try this first
+            # to avoid warnings
+            from numba.experimental import jitclass
+        except ImportError:
+            from numba import jitclass
         from numba.extending import overload, register_jitable
         from numba.types import int8, int16, int32, int64
         from numba.types import float32, float64
