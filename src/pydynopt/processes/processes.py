@@ -161,35 +161,45 @@ def markov_moments(states, transm, ergodic_dist=None, moments=False,
         (unconditional) moments: [mean, variance, skewness, kurtosis]
     """
 
-    if ergodic_dist is None:
-        ergodic_dist = markov_ergodic_dist(transm, *args, **kwargs)
-    else:
-        ergodic_dist = np.atleast_1d(ergodic_dist)
-
-    x = np.atleast_1d(states)
+    n = len(states)
 
     # unconditional centered moments
     # include the 0-th moment so that m[i] gives the i-th moment
     m = np.zeros(5)
-    m[1] = np.dot(ergodic_dist, x)
-    m[2] = np.dot(np.power(x - m[1], 2), ergodic_dist)
-    # Compute skewness and kurtosis only if requested
-    if moments:
-        for k in range(3, 5):
-            m[k] = np.dot(np.power(x - m[1], k), ergodic_dist) / m[2] ** (k/2.0)
 
-    x_demeaned = x - m[1]
-    x_m1 = np.outer(x_demeaned, x_demeaned)
-    wgt = transm * ergodic_dist.reshape((-1, 1))
+    if n > 1:
+        if ergodic_dist is None:
+            ergodic_dist = markov_ergodic_dist(transm, *args, **kwargs)
+        else:
+            ergodic_dist = np.atleast_1d(ergodic_dist)
 
-    # Autocovariance
-    autocov = np.sum(np.sum(x_m1 * wgt))
+        x = np.atleast_1d(states)
 
-    # implied autocorrelation and variance of error term of discretized
-    # process
-    autocorr = autocov / m[2]
-    sigma_e = np.sqrt((1-autocorr**2) * m[2])
-    sigma_x = np.sqrt(m[2])
+        m[1] = np.dot(ergodic_dist, x)
+        m[2] = np.dot(np.power(x - m[1], 2), ergodic_dist)
+        # Compute skewness and kurtosis only if requested
+        if moments:
+            for k in range(3, 5):
+                m[k] = np.dot(np.power(x - m[1], k), ergodic_dist) / m[2] ** (k/2.0)
+
+        x_demeaned = x - m[1]
+        x_m1 = np.outer(x_demeaned, x_demeaned)
+        wgt = transm * ergodic_dist.reshape((-1, 1))
+
+        # Autocovariance
+        autocov = np.sum(np.sum(x_m1 * wgt))
+
+        # implied autocorrelation and variance of error term of discretized
+        # process
+        autocorr = autocov / m[2]
+        sigma_e = np.sqrt((1-autocorr**2) * m[2])
+        sigma_x = np.sqrt(m[2])
+    elif n == 1:
+        autocorr = 1.0
+        sigma_e = 0.0
+        sigma_x = 0.0
+    else:
+        raise ValueError('Invalid number of states: {:d}'.format(n))
 
     if moments:
         # do not return the 0-th moment
