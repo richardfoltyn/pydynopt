@@ -601,45 +601,53 @@ class PlotMap(object):
         setattr(self, kind, pd)
         self.mapped[pd.dim] = pd
 
-    def plot(self, data, **kwargs):
+    def plot(self, data, style=DefaultStyle(), trim_iqr=2.0, xlim=None,
+             ylim=None, extendy=0.01, extendx=0.01, identity=False, sharey=True,
+             legend=True, xlabel=None, ylabel=None, callback=None, **kwargs):
 
         """
         Plot data array using mappings specified prior to calling this method.
 
         Parameters
         ----------
-        data: ndarray
-            Data array
-
-        style: pydynopt.plot.styles.AbstractStyle
-            Style to be applied to plot (optional)
-
-        trim_iqr: float
+        data : array_like
+            Data to be plotted. Can be specified as list of several Numpy arrays.
+        style : array_like or pydynopt.plot.styles.AbstractStyle, optional
+            List of style to be applied to plots.
+        trim_iqr : float, optional
             If not None, all observations outside of the interval
-            defined by the median +/- `trim_iqr` * IQR will not be plotted. (optional)
-
-        ylim: tuple
-            Plot limits along y-axis (optional)
-
-        xlim: tuple
-            Plot limits along x-axis (optional)
-
-        extendy: float
-            if not None, limits of x- and y-axis will be extended by a fraction
-            `extendy' of the limits obtained from the data array. (optional)
-
-        identity: bool
+            defined by the median +/- `trim_iqr` * IQR will not be plotted.
+        xlim : tuple
+            Plot limits along x-axis
+        ylim : tuple, optional
+            Plot limits along y-axis
+        extendx : float, optional
+            If not None, limits of x-axis will be extended by a fraction
+            `extendx' of the limits obtained from the data array.
+        extendy : float
+            If not None, limits of y-axis will be extended by a fraction
+            `extendy' of the limits obtained from the data array.
+        identity : bool
             Add identity function (45° line) to plot background. (optional)
-
-        kwargs: dict
+        sharey : bool, optional
+            If true, share common plot range on y-axis.
+        legend : bool, optional
+            It true, plot legend.
+        xlabel : str, optional
+            X-axis label.
+        ylabel : str, optional
+            Y-axis label.
+        callback : callable, optional
+            If not None, this function will be invoked for each panel within
+            the graph, proving access to the axis object, allowing for further
+            customization.
+        kwargs:
             Parameters passed to plot_grid.
 
-        Returns
-        -------
-        Nothing
-
         """
-        plot_pm(self, data, **kwargs)
+
+        plot_pm(self, data, style, trim_iqr, xlim, ylim, extendx, extendy,
+                identity, sharey, legend, xlabel, ylabel, callback, **kwargs)
 
 
 class LabelArgs:
@@ -976,10 +984,55 @@ def axis_plot_args(maps, styles):
     return plot_kwargs
 
 
-def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
-            xlim=None, extendy=0.01, extendx=0.01, label_first_only=True,
-            identity=False, sharey=True, legend=True, xlabel=None,
-            callback=None, **kwargs):
+def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, xlim=None, ylim=None,
+            extendx=0.01, extendy=0.01, identity=False, sharey=True,
+            legend=True, xlabel=None, ylabel=None, callback=None,
+            label_first_only=True, **kwargs):
+    """
+    Plot multiple sets of data using their corrsponding plot maps and styles.
+
+    Parameters
+    ----------
+    pm : array_like or PlotMap
+        Mapping from data to plots. Accepts list of multile mappings.
+    data : array_like
+        Data to be plotted. Can be specified as list of several Numpy arrays.
+    style : array_like or pydynopt.plot.styles.AbstractStyle, optional
+        List of style to be applied to plots.
+    trim_iqr : float, optional
+        If not None, all observations outside of the interval
+        defined by the median +/- `trim_iqr` * IQR will not be plotted.
+    xlim : tuple
+        Plot limits along x-axis
+    ylim : tuple, optional
+        Plot limits along y-axis
+    extendx : float, optional
+        If not None, limits of x-axis will be extended by a fraction
+        `extendx' of the limits obtained from the data array.
+    extendy : float
+        If not None, limits of y-axis will be extended by a fraction
+        `extendy' of the limits obtained from the data array.
+    identity : bool
+        Add identity function (45° line) to plot background. (optional)
+    sharey : bool, optional
+        If true, share common plot range on y-axis.
+    legend : bool, optional
+        It true, plot legend.
+    xlabel : str, optional
+        X-axis label.
+    ylabel : str, optional
+        Y-axis label.
+    callback : callable, optional
+        If not None, this function will be invoked for each panel within
+        the graph, proving access to the axis object, allowing for further
+        customization.
+    label_first_only : bool, optional
+        If true, print annotations only for the first data set if multiple
+        data sets are given.
+    kwargs:
+        Parameters passed to plot_grid.
+
+    """
 
     # Convert input arguments to sequences.
     if not isinstance(data, (list, tuple)):
@@ -1093,4 +1146,5 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, ylim=None,
         ax.ticklabel_format(style='sci', axis='both', scilimits=(-2, 3))
 
     plot_grid(subplot, nrow=nrow, ncol=ncol, style=style[0], sharey=sharey,
-              legend=legend, xlabel=xlabel, xlim=xlim, ylim=ylim, **kwargs)
+              legend=legend, xlabel=xlabel, ylabel=ylabel, xlim=xlim, ylim=ylim,
+              **kwargs)
