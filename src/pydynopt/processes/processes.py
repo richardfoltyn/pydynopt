@@ -1,6 +1,5 @@
 
 import numpy as np
-from numpy import pad
 
 from ..common import ConvergenceError
 
@@ -52,7 +51,7 @@ def rouwenhorst(n, mu, rho, sigma):
     Pi = np.array([[p, 1-p], [1-p, p]])
 
     for i in range(Pi.shape[0], n):
-        tmp = pad(Pi, 1, mode='constant', constant_values=0)
+        tmp = np.pad(Pi, 1, mode='constant', constant_values=0)
         Pi = p * tmp[1:, 1:] + (1-p) * tmp[1:, :-1] + \
              (1-p) * tmp[:-1, 1:] + p * tmp[:-1, :-1]
         Pi[1:-1, :] /= 2
