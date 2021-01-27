@@ -588,21 +588,25 @@ class AlternatingStyle(DefaultStyle):
         ls_colors = ['-'] * len(colors)
         lw_colors = [1.5] * len(colors)
         alpha_color = [0.8] * len(colors)
+        markers_color = [None, 'o', 'X', 'D', None]
 
-        ls_black = ['--', '-.', ':', (0, (2, 1))]
+        ls_black = ['-', '--', '-.', '-', (0, (2, 1))]
         lw_black = [1.05] * len(ls_black)
         black = ['black'] * len(ls_black)
         alpha_black = [0.75] * len(ls_black)
+        markers_black = [None, None, None, 'o', None]
 
         colors = it.chain(*zip(colors, black))
         ls = it.chain(*zip(ls_colors, ls_black))
         lw = it.chain(*zip(lw_colors, lw_black))
         alpha = it.chain(*zip(alpha_color, alpha_black))
+        markers = it.chain(*zip(markers_color, markers_black))
 
         self.color = colors
         self.linestyle = ls
         self.linewidth = lw
         self.alpha = alpha
+        self.marker = markers
 
 
 class QualitativeStyle(DefaultStyle):
