@@ -1,4 +1,4 @@
-from __future__ import print_function, division, absolute_import
+
 
 __author__ = 'Richard Foltyn'
 
@@ -528,13 +528,13 @@ class DefaultStyle(AbstractStyle):
     }
 
     LINESTYLES = ['-', '--', '-', '--']
-    ALPHAS = [.7, 0.9, 0.7, 1.0]
+    ALPHAS = [.9, 0.7, 0.7, 1.0]
     MARKERS = [None]
     LINEWIDTH = [2]
     MARKERSIZE = 5
     MEC = ['white']
-    COLORS = ['#e41a1c', '#377eb8', '#4daf4a', '#ff7f00', '#f781bf']
-    FACECOLORS = ['#e41a1c', '#377eb8', '#4daf4a', '#ff7f00', '#f781bf']
+    COLORS = ['#377eb8', '#e41a1c', '#4daf4a', '#ff7f00', '#f781bf']
+    FACECOLORS = ['#377eb8', '#e41a1c', '#4daf4a', '#ff7f00', '#f781bf']
 
     def __init__(self):
 
