@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 __author__ = 'Richard Foltyn'
 
 import numpy as np
@@ -13,9 +11,9 @@ def plot_grid(fun, nrow=1, ncol=1,
               figure_kw=None, subplot_kw=None,
               sharex=True, sharey=True,
               xlabel=None, ylabel=None, xlim=None, ylim=None,
-              legend_at=(0, 0), legend_loc='upper left', legend=False,
+              legend_at=(0, 0), legend_loc='best', legend=False,
               outfile=None, style=None, aspect=None, close_fig=True,
-              *args, **kwargs):
+              pass_style=False, *args, **kwargs):
     """
     Creates a rectangular grid of subplots and calls a user-provided function
     for each subplot to render user-supplied content.
@@ -75,9 +73,12 @@ def plot_grid(fun, nrow=1, ncol=1,
         If true (default), close the figure after plotting if an output
         file is specified. This can be disabled if the figure should
         be shown on screen after being saved in a file.
-    args : tuple
+    pass_style : bool, optional
+        If true and style is not None, add style to kwargs when calling
+        plotting function.
+    args :
         Positional arguments passed directly to `fun`
-    kwargs : dict
+    kwargs :
         Keyword arguments passed directly to `fun`
     """
 
@@ -108,6 +109,10 @@ def plot_grid(fun, nrow=1, ncol=1,
         aspect_default = aspect
 
     aspect = aspect_default
+
+    if pass_style and style is not None:
+        kwargs = kwargs.copy()
+        kwargs['style'] = style
 
     # Aspect ratio is defined as width / height
     fig_kw = {'figsize': (style.cell_size * ncol,
