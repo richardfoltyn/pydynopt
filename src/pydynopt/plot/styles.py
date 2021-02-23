@@ -499,7 +499,7 @@ class DefaultStyle(AbstractStyle):
     }
 
     # Keyword arguments (other than font properties) for various objects
-    LEG_KWARGS = {'framealpha': .7}
+    LEG_KWARGS = {'framealpha': .7, 'frameon': False}
 
     LBL_KWARGS = {}
     TITLE_KWARGS = {}
