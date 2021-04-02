@@ -100,7 +100,8 @@ def create_unique_pmf(x, pmf, assume_sorted=False):
     return xuniq, pmf_uniq
 
 
-def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False):
+def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
+                   interpolation='nearest'):
     """
     Compute quantiles of a given distribution characterized by its (finite)
     state space and PMF.
@@ -127,6 +128,9 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False):
         If true, assume that state space `x` is sorted.
     assume_unique : bool
         If true, assume that elements in state space `x` are unique.
+    interpolation : str, optional
+        Interpolation method to use when desired quantile is between
+        two data points. Interpretation depends on size of `x`.
 
     Returns
     -------
@@ -137,6 +141,8 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     x1d = np.atleast_1d(x).flatten()
     pmf1d = np.atleast_1d(pmf).flatten()
     qrank1d = np.atleast_1d(qrank).flatten()
+
+    interpolation = interpolation.lower()
 
     if qrank1d.size == 0:
         q = np.empty(0, dtype=x.dtype)
@@ -174,10 +180,15 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False):
         ii = np.where(cdf > 0.0)[0]
         imin = max(0, ii[0] - 1)
         cdf = cdf[imin:]
-        ii = np.digitize(qrank1d, cdf)
-        ii += (imin - 1)
-        ii = np.fmin(ii, pmf1d.size - 1)
-        q = x1d[ii]
+        if interpolation == 'nearest':
+            ii = np.digitize(qrank1d, cdf)
+            ii += (imin - 1)
+            ii = np.fmin(ii, pmf1d.size - 1)
+            q = x1d[ii]
+        elif interpolation == 'linear':
+            q = np.interp(qrank1d, cdf, x1d[imin:imax+1], left=np.nan, right=np.nan)
+        else:
+            raise ValueError('Unsupported interpolation method')
 
     elif len(x1d) == (len(pmf1d) + 1):
 
@@ -206,7 +217,8 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     return q
 
 
-def quantile_scalar(x, pmf, qrank, assume_sorted=False, assume_unique=False):
+def quantile_scalar(x, pmf, qrank, assume_sorted=False, assume_unique=False,
+                    interpolation='nearest'):
     """
     Implementation of quantile() function for scalar-valued `qrank` arguments.
 
@@ -217,6 +229,9 @@ def quantile_scalar(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     qrank : float
     assume_sorted : bool
     assume_unique : bool
+    interpolation : str, optional
+        Interpolation method to use when desired quantile is between
+        two data points. Interpretation depends on size of `x`.
 
     Returns
     -------
@@ -230,7 +245,8 @@ def quantile_scalar(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     return q
 
 
-def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
+def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False,
+             interpolation='nearest'):
     """
     Compute quantiles of a given distribution characterized by its (finite)
     state space and PMF.
@@ -247,6 +263,9 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
         If true, assume that state space `x` is sorted.
     assume_unique : bool
         If true, assume that elements in state space `x` are unique.
+    interpolation : str, optional
+        Interpolation method to use when desired quantile is between
+        two data points. Interpretation depends on size of `x`.
 
     Returns
     -------
@@ -255,7 +274,7 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     """
 
     qrank1d = np.asarray(qrank)
-    q = quantile_array(x, pmf, qrank1d, assume_sorted, assume_unique)
+    q = quantile_array(x, pmf, qrank1d, assume_sorted, assume_unique, interpolation)
 
     if np.isscalar(qrank):
         q = q.item()
@@ -264,7 +283,8 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False):
 
 
 @overload(quantile, jit_options={'nogil': True, 'parallel': False})
-def quantile_generic(x, pmf, qrank, assume_sorted=False, assume_unique=False):
+def quantile_generic(x, pmf, qrank, assume_sorted=False, assume_unique=False,
+                     interpolation='nearest'):
     from numba.types import Number
 
     f = None
@@ -276,7 +296,8 @@ def quantile_generic(x, pmf, qrank, assume_sorted=False, assume_unique=False):
     return f
 
 
-def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False):
+def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False,
+                     interpolation='nearest'):
     """
     Convenience wrapper around quantile() function that accepts percentile
     rank argument in the interval [0,100] instead of quantile ranks
@@ -292,6 +313,9 @@ def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False):
         If true, assume that state space `x` is sorted.
     assume_unique : bool
         If true, assume that elements in state space `x` are unique.
+    interpolation : str, optional
+        Interpolation method to use when desired quantile is between
+        two data points. Interpretation depends on size of `x`.
 
     Returns
     -------
@@ -301,23 +325,25 @@ def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False):
 
     qrank = np.asarray(prank, dtype=np.float64).copy()
     qrank /= 100.0
-    pctl = quantile(x, pmf, qrank, assume_sorted, assume_unique)
+    pctl = quantile(x, pmf, qrank, assume_sorted, assume_unique, interpolation)
 
     return pctl
 
 
-def percentile_scalar(x, pmf, prank, assume_sorted=False, assume_unique=False):
+def percentile_scalar(x, pmf, prank, assume_sorted=False, assume_unique=False,
+                      interpolation='nearest'):
 
     qrank = np.asarray(prank, dtype=np.float64).copy()
     qrank /= 100.0
-    pctl1d = quantile(x, pmf, qrank, assume_sorted, assume_unique)
+    pctl1d = quantile(x, pmf, qrank, assume_sorted, assume_unique, interpolation)
 
     pctl = pctl1d[0]
 
     return pctl
 
 
-def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False):
+def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False,
+               interpolation='nearest'):
     """
     Compute percentiles of a given distribution characterized by its (finite)
     state space and PMF.
@@ -334,6 +360,9 @@ def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False):
         If true, assume that state space `x` is sorted.
     assume_unique : bool
         If true, assume that elements in state space `x` are unique.
+    interpolation : str, optional
+        Interpolation method to use when desired quantile is between
+        two data points. Interpretation depends on size of `x`.
 
     Returns
     -------
@@ -343,7 +372,7 @@ def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False):
 
     qrank = np.array(prank, dtype=np.float64)
     qrank /= 100.0
-    pctl = quantile_array(x, pmf, qrank, assume_sorted, assume_unique)
+    pctl = quantile_array(x, pmf, qrank, assume_sorted, assume_unique, interpolation)
 
     if np.isscalar(prank):
         pctl = pctl.item()
@@ -352,7 +381,8 @@ def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False):
 
 
 @overload(percentile, jit_options={'nogil': True, 'parallel': False})
-def percentile_generic(x, pmf, prank, assume_sorted=False, assume_unique=False):
+def percentile_generic(x, pmf, prank, assume_sorted=False, assume_unique=False,
+                       interpolation='nearest'):
 
     from numba.types import Number
 
@@ -407,8 +437,16 @@ def quantile_rank(x, pmf, qntl, interpolation='linear'):
         cdf = np.cumsum(pmf)
         cdf /= cdf[-1]
 
+        # remove all points where CDF is exactly 0.0, except for the last
+        ifrom = np.amax(np.where(cdf == 0.0)[0])
+        # remove all trailing points where CDF is exactly 1.0, except for the
+        # first one
+        ito = min(np.amin(np.where(cdf == 1.0)[0]) + 1, len(cdf))
+        cdf = cdf[ifrom:ito]
+        x = x[ifrom:ito]
+
         if interpolation == 'linear':
-            rank = np.interp(qntl, x, cdf, left=0.0, right=1.0)
+            rank = np.interp(qntl, x, cdf, left=np.nan, right=np.nan)
         else:
             raise NotImplementedError('Interpolation method not implemented')
 
