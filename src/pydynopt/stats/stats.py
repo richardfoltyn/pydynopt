@@ -438,10 +438,15 @@ def quantile_rank(x, pmf, qntl, interpolation='linear'):
         cdf /= cdf[-1]
 
         # remove all points where CDF is exactly 0.0, except for the last
-        ifrom = np.amax(np.where(cdf == 0.0)[0])
+        ii = np.where(cdf == 0.0)[0]
+        ifrom = np.amax(ii) if len(ii) > 0 else 0
         # remove all trailing points where CDF is exactly 1.0, except for the
         # first one
-        ito = min(np.amin(np.where(cdf == 1.0)[0]) + 1, len(cdf))
+        ii = np.where(cdf == 1.0)[0]
+        if len(ii) > 0:
+            ito = min(np.amin(ii) + 1, len(cdf))
+        else:
+            ito = len(cdf)
         cdf = cdf[ifrom:ito]
         x = x[ifrom:ito]
 
@@ -457,10 +462,15 @@ def quantile_rank(x, pmf, qntl, interpolation='linear'):
         cdf /= cdf[-1]
 
         # remove all points where CDF is exactly 0.0, except for the last
-        ifrom = np.amax(np.where(cdf == 0.0)[0])
+        ii = np.where(cdf == 0.0)[0]
+        ifrom = np.amax(ii) if len(ii) > 0 else 0
         # remove all trailing points where CDF is exactly 1.0, except for the
         # first one
-        ito = min(np.amin(np.where(cdf == 1.0)[0]) + 1, len(cdf))
+        ii = np.where(cdf == 1.0)[0]
+        if len(ii) > 0:
+            ito = min(np.amin(ii) + 1, len(cdf))
+        else:
+            ito = len(cdf)
         cdf = cdf[ifrom:ito]
         x = x[ifrom:ito]
 
