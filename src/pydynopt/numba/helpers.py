@@ -90,7 +90,7 @@ def array_generic(obj, dtype=None):
     return f
 
 
-def create_numba_instance(obj, attrs=None):
+def create_numba_instance(obj, attrs=None, init=True, copy=False):
     """
     Automatically create numba-fied instance of a given object.
     The routine attempts to automatically generate a class signature that
@@ -102,11 +102,19 @@ def create_numba_instance(obj, attrs=None):
     attrs : array_like, optional
         List of attributes of `obj` that should be included in the Numba-fied
         class definition.
+    init : bool, optional
+        If true, additionally initialize the attribute values in the Numba
+        instance with values from original objects.
+    copy : bool, optional
+        If true, create copies of container objects such as tuples or Numpy
+        arrays when initializing attributes of Numba instance.
 
     Returns
     -------
 
     """
+
+    import sys
 
     from pydynopt.numba import jitclass, boolean
     from pydynopt.numba import int8, int32, int64
@@ -142,33 +150,51 @@ def create_numba_instance(obj, attrs=None):
                    np.bool: boolean,
                    np.bool_: boolean}
 
+    def process_ndarray(value):
+        # List of equivalent types
+        keys = tuple(k for k in types_numpy if k == value.dtype)
+        if len(keys) == 0:
+            msg = 'Unsupported Numpy dtype {}'.format(value.dtype)
+            print(msg, file=sys.stderr)
+            return
+
+        nbtype = types_numpy[keys[0]]
+
+        if isinstance(value, np.ndarray):
+            if value.ndim == 0:
+                signature.append((attr, nbtype))
+            elif value.ndim == 1:
+                if value.flags.c_contiguous:
+                    signature.append((attr, nbtype[::1]))
+                else:
+                    msg = f'Array {attr} is not C-contiguous'
+                    print(msg, file=sys.stderr)
+                    signature.append((attr, nbtype[:]))
+            else:
+                if value.flags.c_contiguous:
+                    dims = (slice(None, None),)*(value.ndim - 1)
+                    dims += (slice(None, None, 1),)
+                    signature.append((attr, nbtype[dims]))
+                else:
+                    msg = f'Array {attr} is not C-contiguous'
+                    print(msg, file=sys.stderr)
+                    dims = (slice(None, None),)*value.ndim
+                    signature.append((attr, nbtype[dims]))
+        else:
+            # scalar type
+            signature.append((attr, nbtype))
+
     for attr in attrs:
         # Note: we excluded None-values attributes above
         value = getattr(obj, attr)
         t = type(value)
 
         if hasattr(value, 'dtype'):
-            # List of equivalent types
-            keys = tuple(k for k in types_numpy if k == value.dtype)
-            if len(keys) == 0:
-                msg = 'Unsupported Numpy dtype {}'.format(value.dtype)
-                raise ValueError(msg)
-
-            nbtype = types_numpy[keys[0]]
-
-            if isinstance(value, np.ndarray):
-                if value.ndim == 0:
-                    signature.append((attr, nbtype))
-                elif value.ndim == 1:
-                    signature.append((attr, nbtype[::1]))
-                else:
-                    dims = (slice(None, None), ) * (value.ndim - 1)
-                    dims += (slice(None, None, 1), )
-                    signature.append((attr, nbtype[dims]))
-            else:
-                # scalar type
-                signature.append((attr, nbtype))
-
+            process_ndarray(value)
+        elif isinstance(value, (list, tuple)):
+            # Convert to Numpy array in numba instance
+            value = np.asarray(value)
+            process_ndarray(value)
         elif t in types_python:
             nbtype = types_python[t]
             signature.append((attr, nbtype))
@@ -177,4 +203,34 @@ def create_numba_instance(obj, attrs=None):
 
     obj_nb = cls_nb()
 
+    if init:
+        copy_attributes(obj, obj_nb, copy=copy)
+
     return obj_nb
+
+
+def copy_attributes(src, dst, copy=True):
+    """
+    Copy attributes from src that at also present in dst into dst.
+
+    Parameters
+    ----------
+    src : object
+    dst : object
+    copy : bool
+        If true, copy array-valued attributes instead of referencing the
+        original array.
+
+    Returns
+    -------
+    params : NumbaParams
+    """
+    for attr in dir(dst):
+        if not attr.startswith('_') and hasattr(src, attr):
+            x = getattr(src, attr)
+            if x is not None:
+                if (copy and not np.isscalar(x)) or isinstance(x, (tuple, list)):
+                    x = np.copy(x)
+                setattr(dst, attr, x)
+
+    return dst
