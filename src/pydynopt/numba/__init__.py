@@ -7,5 +7,6 @@ from .wrapper import int8, int16, int32, int64
 from .wrapper import float32, float64
 from .wrapper import boolean, string
 from .wrapper import prange
+from .wrapper import from_dtype
 
 from .helpers import to_array

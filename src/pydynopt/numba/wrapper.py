@@ -9,7 +9,7 @@ import numpy as np
 
 __all__ = ['jit', 'jitclass', 'overload', 'register_jitable',
            'float32', 'float64', 'int8', 'int16', 'int32', 'int64',
-           'boolean', 'string', 'prange']
+           'boolean', 'string', 'prange', 'from_dtype']
 
 
 def jit_dummy(signature_or_function=None, *jit_args, **jit_kwargs):
@@ -83,6 +83,9 @@ def register_jitable_dummy(*args, **kwargs):
         return wrap(*args)
 
 
+def from_dtype(obj):
+    return obj
+
 class SubscriptableType(np.int64):
     """
     Dummy type that servers as default drop-in for Numba's data types.
@@ -122,6 +125,7 @@ if use_numba:
         from numba.types import float32, float64
         from numba.types import boolean, string
         from numba import prange
+        from numba import from_dtype
     except ImportError:
         # Nothing to do, use the default decorators defined above
         pass

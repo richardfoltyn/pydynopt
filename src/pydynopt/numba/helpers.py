@@ -119,6 +119,7 @@ def create_numba_instance(obj, attrs=None, init=True, copy=False):
     from pydynopt.numba import jitclass, boolean
     from pydynopt.numba import int8, int32, int64
     from pydynopt.numba import float32, float64
+    from pydynopt.numba import from_dtype
 
     if attrs is None:
         # Assume that all object attributes should be included as long as they
@@ -142,23 +143,13 @@ def create_numba_instance(obj, attrs=None, init=True, copy=False):
                     float: float64,
                     bool: boolean}
 
-    types_numpy = {np.int8: int8,
-                   np.int32: int32,
-                   np.int64: int64,
-                   np.float32: float32,
-                   np.float64: float64,
-                   np.bool: boolean,
-                   np.bool_: boolean}
-
     def process_ndarray(value):
-        # List of equivalent types
-        keys = tuple(k for k in types_numpy if k == value.dtype)
-        if len(keys) == 0:
+        try:
+            nbtype = from_dtype(value.dtype)
+        except:
             msg = 'Unsupported Numpy dtype {}'.format(value.dtype)
             print(msg, file=sys.stderr)
             return
-
-        nbtype = types_numpy[keys[0]]
 
         if isinstance(value, np.ndarray):
             if value.ndim == 0:
