@@ -170,6 +170,11 @@ def interp1d(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan,
         interp1d_eval_jit(index, weight, fp1d, extrapolate, left, right, out1d)
         out_work[i] = out1d
 
+    if fp.ndim > 1 and axis != (fp.ndim - 1):
+        # Move interpolating axis back to where it was
+        out = np.moveaxis(out, -1, axis)
+        out = np.ascontiguousarray(out)
+
     if np.isscalar(x):
         out = out.item()
 
