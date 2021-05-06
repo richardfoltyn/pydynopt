@@ -122,10 +122,16 @@ def create_numba_instance(obj, attrs=None, init=True, copy=False):
     from pydynopt.numba import from_dtype
 
     if attrs is None:
-        # Assume that all object attributes should be included as long as they
-        # are not for internal use or None.
-        attrs = [attr for attr in dir(obj)
-                 if not attr.startswith('_') and getattr(obj, attr) is not None]
+        # Check whether class has NUMBA_ATTRS attribute which contains
+        # the attributes to be included in Numbafied instance.
+        if hasattr(obj.__class__, 'NUMBA_ATTRS'):
+            attrs = [attr for attr in obj.__class__.NUMBA_ATTRS
+                     if hasattr(obj, attr)]
+        else:
+            # Assume that all object attributes should be included as long as
+            # they are not for internal use or None.
+            attrs = [attr for attr in dir(obj)
+                     if not attr.startswith('_') and getattr(obj, attr) is not None]
 
     # Empty init, expected by Numba jitclass()
     def __init__(self):
