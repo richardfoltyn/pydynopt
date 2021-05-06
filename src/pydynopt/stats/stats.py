@@ -6,6 +6,7 @@ Author: Richard Foltyn
 
 import numpy as np
 
+from pydynopt.interpolate import interp1d
 from pydynopt.numba import jit, register_jitable, overload
 
 
@@ -186,7 +187,7 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
             ii = np.fmin(ii, pmf1d.size - 1)
             q = x1d[ii]
         elif interpolation == 'linear':
-            q = np.interp(qrank1d, cdf, x1d[imin:imax+1], left=np.nan, right=np.nan)
+            q = interp1d(qrank1d, cdf, x1d[imin:imax+1], left=np.nan, right=np.nan)
         else:
             raise ValueError('Unsupported interpolation method')
 
@@ -210,7 +211,7 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
         ii = np.hstack((ii, iip1))
         ii = np.unique(ii)
         # linearly interpolate *within* brackets
-        q = np.interp(qrank1d, cdf[ii], x1d[ii])
+        q = interp1d(qrank1d, cdf[ii], x1d[ii])
     else:
         raise ValueError('Non-conformable arrays')
 
