@@ -421,6 +421,8 @@ def sub2ind_scalar(coords, shape, out=None):
     """
 
     ndim = len(shape)
+    if len(coords) != ndim:
+        raise ValueError('Incompatible coordinate array size')
     stride = np.empty(ndim, dtype=np.int64)
     stride[-1] = 1
 
