@@ -164,9 +164,7 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
         if not assume_unique:
             x1d, pmf1d = create_unique_pmf(x1d, pmf1d, assume_sorted=True)
 
-        cdf = np.empty((pmf1d.size + 1, ), dtype=pmf1d.dtype)
-        cdf[0] = 0.0
-        cdf[1:] = np.cumsum(pmf1d)
+        cdf = np.cumsum(pmf1d)
         cdf /= cdf[-1]
 
         # trim (constant) right tail as that confuses digitize()
@@ -187,7 +185,7 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
             ii = np.fmin(ii, pmf1d.size - 1)
             q = x1d[ii]
         elif interpolation == 'linear':
-            q = interp1d(qrank1d, cdf, x1d[imin:imax+1], left=np.nan, right=np.nan)
+            q = interp1d(qrank1d, cdf, x1d[imin:imax+1], left=x1d[imin], right=x1d[imax])
         else:
             raise ValueError('Unsupported interpolation method')
 
