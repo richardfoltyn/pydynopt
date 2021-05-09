@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from pydynopt.numba import jit, overload, jitclass, register_jitable
+from pydynopt.numba import overload, jitclass, register_jitable
 from pydynopt.numba import int64, float64
 
 
