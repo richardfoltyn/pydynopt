@@ -101,6 +101,97 @@ def create_unique_pmf(x, pmf, assume_sorted=False):
     return xuniq, pmf_uniq
 
 
+@jit(nopython=True, nogil=True, parallel=False)
+def _ppf_nearest(rank, cdf, x, qntl):
+    """
+    Returns the nearest quantile `x[j]` with index `j` on the `cdf` array
+    which satisfies
+        cdf[j-1] < rank[i] <= cdf[j]
+    for each element of `rank`. On boundary violations, the first or last
+    applicable element in `x` is returned.
+
+    One reason to use this function instead of np.digitize() or similar is
+    that this correctly handles non-decreasing (i.e. constant)
+    values in `cdf`.
+
+    Parameters
+    ----------
+    rank : np.ndarray
+    cdf : np.ndarray
+    x : np.ndarray
+        Array of (sorted and unique) points defining the distributions support.
+    qntl : np.ndarray
+        Stores nearest percentile-points.
+    """
+
+    # Skip over any potential initially flat region without mass
+    imin = 0
+    for imin in range(cdf.size):
+        if cdf[imin+1] > 0.0:
+            break
+
+    for i in range(rank.size):
+        ri = rank[i]
+        if ri <= cdf[imin]:
+            qntl[i] = x[imin]
+        else:
+            j = imin
+            for j in range(imin, cdf.size-1):
+                if cdf[j] < ri <= cdf[j+1]:
+                    break
+            qntl[i] = x[j]
+
+
+@jit(nopython=True, nogil=True, parallel=False)
+def _ppf_interp(rank, cdf, x, qntl):
+    """
+    Implements an interpolating percentile-point function that correctly
+    handles flat CDF regions.
+
+    In a first step, for each quantile rank the interval
+    cdf[j-1] < rank[i] <= cdf[j] is identified, only then interpolation
+    within that interval is performed.
+
+    One reason to use this function instead of np.interp() or similar is
+    that this correctly handles non-decreasing (i.e. constant)
+    values in `cdf`.
+
+    Parameters
+    ----------
+    rank : np.ndarray
+    cdf : np.ndarray
+    x : np.ndarray
+        Array of (sorted and unique) points defining the distributions support.
+    qntl : np.ndarray
+        Array of resulting quantiles
+    """
+
+    # Skip over any potential initially flat region without mass
+    imin = 0
+    for imin in range(cdf.size):
+        if cdf[imin+1] > 0.0:
+            break
+
+    for i in range(rank.size):
+        ri = rank[i]
+
+        if ri <= cdf[imin]:
+            qntl[i] = x[imin]
+        else:
+            ilb = imin
+            for ilb in range(imin, cdf.size-1):
+                if cdf[ilb] < ri <= cdf[ilb+1]:
+                    break
+
+            cdf_lb = cdf[ilb]
+            cdf_ub = cdf[ilb+1]
+
+            wgt_lb = (cdf_ub - ri) / (cdf_ub - cdf_lb)
+
+            q = wgt_lb * x[ilb] + (1.0 - wgt_lb) * x[ilb+1]
+            qntl[i] = q
+
+
 def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
                    interpolation='nearest'):
     """
@@ -108,7 +199,8 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
     state space and PMF.
 
     If `x` and `pmf` are of equal length, they are assumed to represent a
-    discrete random variable and no (linear) interpolation is attempted.
+    discrete random variable and by default no (linear) interpolation is
+    attempted, unless specifically requested by the user.
 
     If `x` has one element more than `pmf`, it is assumed that `x` contains
     the bin edges that define intervals with the corresponding mass given by
@@ -167,51 +259,30 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
         cdf = np.cumsum(pmf1d)
         cdf /= cdf[-1]
 
-        # trim (constant) right tail as that confuses digitize()
-        # Note that there is at least one such element as we set the last
-        # element to 1.0
-        ii = np.where(cdf > (1.0 - 1.0e-14))[0]
-        imax = ii[0]
-        cdf = cdf[:imax+1]
-        cdf[-1] = 1.0
-
-        # trim (constant) left tail
-        ii = np.where(cdf > 0.0)[0]
-        imin = max(0, ii[0] - 1)
-        cdf = cdf[imin:]
-        if interpolation == 'nearest':
-            ii = np.digitize(qrank1d, cdf)
-            ii += (imin - 1)
-            ii = np.fmin(ii, pmf1d.size - 1)
-            q = x1d[ii]
-        elif interpolation == 'linear':
-            q = interp1d(qrank1d, cdf, x1d[imin:imax+1], left=x1d[imin], right=x1d[imax])
-        else:
-            raise ValueError('Unsupported interpolation method')
-
     elif len(x1d) == (len(pmf1d) + 1):
+        # Assume that this is a continuous RV and the values in x are BIN
+        # EDGES while PMF contains the mass in the bin between any two edges.
+        # This should be combined with (linear) interpolation as returning
+        # the nearest edge does not make any sense.
 
         cdf = np.empty((pmf1d.size + 1,), dtype=pmf1d.dtype)
         cdf[0] = 0.0
         cdf[1:] = np.cumsum(pmf1d)
         cdf /= cdf[-1]
 
-        # trim (constant) right tail as that confuses digitize()
-        iub = np.amin(np.where(cdf == 1.0)[0]) + 1
-        cdf = cdf[:iub]
-        x1d = x1d[:iub]
-        cdf[-1] = 1.0
-        ii = np.digitize(qrank1d, cdf)
-        ii -= 1
-        # include only CDF values that bracket percentiles of interest.
-        # This is a work-around as Numba does not support np.union1d()
-        iip1 = np.fmin(ii + 1, cdf.size - 1)
-        ii = np.hstack((ii, iip1))
-        ii = np.unique(ii)
-        # linearly interpolate *within* brackets
-        q = interp1d(qrank1d, cdf[ii], x1d[ii])
+        # Force linear interpolation
+        interpolation = 'linear'
     else:
         raise ValueError('Non-conformable arrays')
+
+    q = np.empty_like(qrank1d)
+
+    if interpolation == 'nearest':
+        _ppf_nearest(qrank1d, cdf, x1d, q)
+    elif interpolation == 'linear':
+        _ppf_interp(qrank1d, cdf, x1d, q)
+    else:
+        raise ValueError('Unsupported interpolation method')
 
     return q
 
