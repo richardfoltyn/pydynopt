@@ -7,15 +7,15 @@ Author: Richard Foltyn
 import numpy as np
 
 from pydynopt.numba import jit
-from .numba.linear import interp1d_eval_array, interp1d_locate_array
+from .numba.linear import _interp1d_eval_array, _interp1d_locate_array
 from .numba.linear import interp1d_array
 
 from .numba.linear import interp2d_locate_array, interp2d_eval_array
 from .numba.linear import interp2d_array
 
 # Add @jit wrappers around Numba implementations of interpolation routines
-interp1d_locate_jit = jit(interp1d_locate_array, nopython=True)
-interp1d_eval_jit = jit(interp1d_eval_array, nopython=True)
+interp1d_locate_jit = jit(_interp1d_locate_array, nopython=True)
+interp1d_eval_jit = jit(_interp1d_eval_array, nopython=True)
 interp1d_jit = jit(interp1d_array, nopython=True)
 
 interp2d_locate_jit = jit(interp2d_locate_array, nopython=True)
@@ -52,7 +52,7 @@ def interp1d_locate(x, xp, ilb=0, index_out=None, weight_out=None):
     ilb = max(0, min(xp.shape[0] - 2, ilb))
 
     # Use Numba-fied implementation to do the actual work
-    interp1d_locate_array(xx, xp, ilb, index_out, weight_out)
+    interp1d_locate_jit(xx, xp, ilb, index_out, weight_out)
 
     if np.isscalar(x):
         index_out = index_out.item()
@@ -115,7 +115,7 @@ def interp1d(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan,
     -------
 
     """
-    xx = np.ascontiguousarray(np.atleast_1d(x))
+    x1d = np.ascontiguousarray(np.atleast_1d(x))
 
     if xp.shape[0] < 2:
         msg = 'Invalid input array xp'
@@ -129,7 +129,7 @@ def interp1d(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan,
     if axis < 0:
         axis += fp.ndim
 
-    out_shp = list(fp.shape[:axis]) + list(fp.shape[axis+1:]) + list(xx.shape)
+    out_shp = list(fp.shape[:axis]) + list(fp.shape[axis+1:]) + list(x1d.shape)
     out_shp = tuple(out_shp)
 
     # Move interpolation axis to the very end, reshape into two dimensions
@@ -141,7 +141,7 @@ def interp1d(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan,
 
     # Allocate output array if required
     if out is None:
-        out = np.empty(out_shp, dtype=xx.dtype)
+        out = np.empty(out_shp, dtype=x1d.dtype)
     else:
         shp_ok = np.all(np.array(out_shp) == out.shape)
         if not shp_ok:
@@ -151,19 +151,19 @@ def interp1d(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan,
     # Reshape output array such that sample points are along last axis.
     # Manually compute size of first dimension to correctly handle 0-sized
     # input arrays.
-    d0 = out.size // xx.size if xx.size > 0 else 1
-    shp = tuple(np.hstack((d0, xx.shape)))
+    d0 = out.size // x1d.size if x1d.size > 0 else 1
+    shp = tuple(np.hstack((d0, x1d.shape)))
     out_work = out.reshape(shp)
 
     # Find interpolation indices and weights: this has to be done only once
     # and applied to all remaining axis of fp
-    index = np.empty_like(xx, dtype=np.int64)
-    weight = np.empty_like(xx)
+    index = np.empty_like(x1d, dtype=np.int64)
+    weight = np.empty_like(x1d, dtype=out.dtype)
 
-    interp1d_locate_jit(xx, xp, ilb, index_out=index, weight_out=weight)
+    interp1d_locate_jit(x1d, xp, ilb, index_out=index, weight_out=weight)
 
     fp1d = np.empty_like(fp_work[0])
-    out1d = np.empty(out_work.shape[1:])
+    out1d = np.empty_like(out_work[0])
     for i in range(fp_work.shape[0]):
         # Copy into contiguous array
         fp1d[:] = fp_work[i]

@@ -76,7 +76,7 @@ def interp1d_locate_array(x, xp, ilb=0, index_out=None, weight_out=None):
     """
 
     lind_out = np.empty_like(x, dtype=np.int64) if index_out is None else index_out
-    lwgt_out = np.empty_like(x, dtype=np.float64) if weight_out is None else weight_out
+    lwgt_out = np.empty_like(x, dtype=x.dtype) if weight_out is None else weight_out
 
     lind_out_flat = lind_out.reshape((-1, ))
     lwgt_out_flat = lwgt_out.reshape((-1, ))
@@ -90,6 +90,46 @@ def interp1d_locate_array(x, xp, ilb=0, index_out=None, weight_out=None):
         lwgt_out_flat[i] = wgt_lb
 
     return lind_out, lwgt_out
+
+
+@register_jitable(parallel=False, nogil=True)
+def _interp1d_locate_array(x, xp, ilb, index_out, weight_out):
+    """
+    Numba implementation for computing the interpolation bracketing intervals
+    and weights for array-valued arguments.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Sample points at which to interpolate.
+    xp : np.ndarray
+        Grid points representing domain over which to interpolate.
+    ilb : int
+        Initial guess for index of lower bound of bracketing interval of
+        the first element.
+        NOTE: No error-checking is performed on its value!
+    index_out : np.ndarray or None
+        Optional pre-allocated output array for indices of lower bounds
+        of bracketing interval.
+    weight_out : np.ndarray or None
+        Optional pre-allocated output array for lower bound weights.
+
+    Returns
+    -------
+    index_out : np.ndarray
+    weight_out : np.ndarray
+    """
+
+    lind_out_flat = index_out.reshape((-1,))
+    lwgt_out_flat = weight_out.reshape((-1,))
+
+    for i, xi in enumerate(x.flat):
+        ilb = bsearch_impl(xi, xp, ilb)
+        lind_out_flat[i] = ilb
+
+        # Interpolation weight on lower bound
+        wgt_lb = (xp[ilb + 1] - xi)/(xp[ilb + 1] - xp[ilb])
+        lwgt_out_flat[i] = wgt_lb
 
 
 @register_jitable(parallel=False, nogil=True)
@@ -161,7 +201,7 @@ def interp1d_eval_array(index, weight, fp, extrapolate=True, left=np.nan,
         Interpolant evaluated at sample points.
     """
 
-    lout = np.empty_like(weight, dtype=fp.dtype) if out is None else out
+    lout = np.empty_like(weight) if out is None else out
 
     index_flat = index.reshape((-1, ))
     weight_flat = weight.reshape((-1, ))
@@ -181,6 +221,54 @@ def interp1d_eval_array(index, weight, fp, extrapolate=True, left=np.nan,
         out_flat[i] = fx
 
     return lout
+
+
+@register_jitable(parallel=False, nogil=True)
+def _interp1d_eval_array(index, weight, fp, extrapolate, left, right, out):
+    """
+    Numba implementation to evaluate an intepolant and multiple sample points.
+
+    Parameters
+    ----------
+    index : np.ndarray
+        Indices of lower bounds of bracketing intervals.
+    weight : np.ndarray
+        Weights on lower bounds of bracketing intervals.
+    fp : np.ndarray
+        Function values defined on original grid points.
+    extrapolate : bool
+        If true, extrapolate values outside of domain.
+    left : float
+        Value to return if sample point is below the domain lower bound.
+    right : float
+        Value to return if sample point is above the domain upper bound.
+    out : np.ndarray or None
+        Optional pre-allocated output array.
+
+    Returns
+    -------
+    out : np.ndarray
+        Interpolant evaluated at sample points.
+    """
+
+    index_flat = index.reshape((-1, ))
+    weight_flat = weight.reshape((-1, ))
+    out_flat = out.reshape((-1,))
+
+    for i in range(out_flat.size):
+        ilb, wgt = index_flat[i], weight_flat[i]
+
+        fx = wgt*fp[ilb] + (1.0 - wgt)*fp[ilb + 1]
+
+        if not extrapolate:
+            if wgt > 1.0:
+                fx = left
+            elif wgt < 0.0:
+                fx = right
+
+        out_flat[i] = fx
+
+    return out
 
 
 def interp1d_scalar(x, xp, fp, ilb=0, extrapolate=True, left=np.nan,
