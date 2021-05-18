@@ -275,7 +275,7 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
     else:
         raise ValueError('Non-conformable arrays')
 
-    q = np.empty_like(qrank1d)
+    q = np.empty_like(qrank1d, dtype=x.dtype)
 
     if interpolation == 'nearest':
         _ppf_nearest(qrank1d, cdf, x1d, q)
@@ -307,7 +307,7 @@ def quantile_scalar(x, pmf, qrank, assume_sorted=False, assume_unique=False,
     -------
     q : float
     """
-    qrank1d = np.asarray(qrank)
+    qrank1d = np.asarray(qrank, dtype=x)
     q1d = quantile(x, pmf, qrank1d, assume_sorted, assume_unique)
 
     q = q1d[0]
@@ -343,7 +343,7 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False,
         Quantile corresponding to given quantile ranks.
     """
 
-    qrank1d = np.asarray(qrank)
+    qrank1d = np.asarray(qrank, dtype=x)
     q = quantile_array(x, pmf, qrank1d, assume_sorted, assume_unique, interpolation)
 
     if np.isscalar(qrank):
@@ -393,8 +393,7 @@ def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False,
         Percentiles corresponding to given percentile ranks
     """
 
-    qrank = np.asarray(prank, dtype=np.float64).copy()
-    qrank /= 100.0
+    qrank = np.asarray(prank) / 100.0
     pctl = quantile(x, pmf, qrank, assume_sorted, assume_unique, interpolation)
 
     return pctl
@@ -403,8 +402,7 @@ def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False,
 def percentile_scalar(x, pmf, prank, assume_sorted=False, assume_unique=False,
                       interpolation='nearest'):
 
-    qrank = np.asarray(prank, dtype=np.float64).copy()
-    qrank /= 100.0
+    qrank = np.asarray(prank, dtype=x.dtype) / 100.0
     pctl1d = quantile(x, pmf, qrank, assume_sorted, assume_unique, interpolation)
 
     pctl = pctl1d[0]
@@ -440,8 +438,7 @@ def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False,
         Percentiles corresponding to given percentile ranks.
     """
 
-    qrank = np.array(prank, dtype=np.float64)
-    qrank /= 100.0
+    qrank = np.asarray(prank, dtype=x.dtype) / 100.0
     pctl = quantile_array(x, pmf, qrank, assume_sorted, assume_unique, interpolation)
 
     if np.isscalar(prank):
