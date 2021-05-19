@@ -307,7 +307,7 @@ def quantile_scalar(x, pmf, qrank, assume_sorted=False, assume_unique=False,
     -------
     q : float
     """
-    qrank1d = np.asarray(qrank, dtype=x)
+    qrank1d = np.asarray(qrank, dtype=x.dtype)
     q1d = quantile(x, pmf, qrank1d, assume_sorted, assume_unique)
 
     q = q1d[0]
@@ -343,7 +343,7 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False,
         Quantile corresponding to given quantile ranks.
     """
 
-    qrank1d = np.asarray(qrank, dtype=x)
+    qrank1d = np.asarray(qrank, dtype=x.dtype)
     q = quantile_array(x, pmf, qrank1d, assume_sorted, assume_unique, interpolation)
 
     if np.isscalar(qrank):
