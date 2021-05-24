@@ -3,7 +3,10 @@ Basic routines to create and manipulate arrays.
 
 Author: Richard Foltyn
 """
+from math import log
+
 import numpy as np
+from scipy.optimize import brentq
 
 from pydynopt.numba import register_jitable, jit
 from .numba.arrays import ind2sub_array, ind2sub_scalar
@@ -122,3 +125,79 @@ def sub2ind(coords, shape, out=None):
         out = sub2ind_array_jit(coords, shape, out)
 
     return out
+
+
+def logspace(start, stop, num, log_shift=0.0, x0=None, frac_at_x0=None,
+             insert_vals=None):
+    """
+    Create grid that is by default uniformly spaced in logs. Alternatively,
+    additional arguments can be specified to alter the grid point density,
+    particularly in the left tail of the grid.
+
+    Parameters
+    ----------
+    start : float
+    stop : float
+    num : int
+    log_shift : float, optional
+    x0 : float, optional
+    frac_at_x0 : float, optional
+    insert_vals : array_like, optional
+
+    Returns
+    -------
+    grid : np.ndarray
+    """
+
+    if insert_vals:
+        insert_vals = np.atleast_1d(insert_vals)
+
+    if frac_at_x0 is not None:
+        frac_at_x0 = float(frac_at_x0)
+        if frac_at_x0 <= 0.0 or frac_at_x0 >= 1.0:
+            msg = f'Invalid argument frac_at_x0: {frac_at_x0}'
+            raise ValueError(msg)
+
+        if x0 is None:
+            x0 = (stop+start)/2.0
+        elif x0 <= start:
+            msg = 'Invalid argument: x0 > start required!'
+            raise ValueError(msg)
+
+        def fobj(x):
+            dist = np.log(stop + x) - np.log(start + x)
+            fx = np.log(x0 + x) - np.log(start + x) - frac_at_x0 * dist
+            return fx
+
+        ub = stop - start
+        for it in range(10):
+            if fobj(ub) < 0:
+                break
+            else:
+                ub *= 10
+        else:
+            msg = f'Cannot find grid spacing for parameters x0={x0:g} and ' \
+                  f'frac_at_x0={frac_at_x0:g}'
+            raise ValueError(msg)
+
+        x = brentq(fobj, -start + 1.0e-12, ub)
+        log_shift = x
+
+    lstart, lstop = log(start + log_shift), log(stop + log_shift)
+
+    rem = 0 if insert_vals is None else len(insert_vals)
+
+    grid = np.linspace(lstart, lstop, num - rem)
+    grid = np.exp(grid) - log_shift
+
+    if insert_vals is not None and len(insert_vals) > 0:
+        idx_insert = np.searchsorted(grid, insert_vals) + 1
+        grid = np.insert(grid, idx_insert, insert_vals)
+
+    # there may be some precision issues resulting in
+    # x != exp(log(x + log_shift) - log_shift
+    # so we replace the start and stop values with the requested values
+    grid[0] = start
+    grid[-1] = stop
+
+    return grid

@@ -8,12 +8,12 @@ from numpy import insert, unravel_index, ravel_multi_index
 from pydynopt.numba import overload
 
 from .numba import _insert
-from .base import powerspace
+from .base import powerspace, logspace
 
 from .base import ind2sub, sub2ind
 
 __all__ = ['insert', 'unravel_index', 'ravel_multi_index',
-           'powerspace', 'ind2sub', 'sub2ind']
+           'powerspace', 'logspace', 'ind2sub', 'sub2ind']
 
 JIT_OPTIONS = {'parallel': False, 'nogil': True, 'cache': True}
 
