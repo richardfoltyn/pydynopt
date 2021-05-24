@@ -570,7 +570,7 @@ class PlotMap(object):
         dim : int
             Data array dimension to be mapped to rows.
 
-        at_idx: array_like
+        at_idx: array_like or slice
             Indexes along `dim` to be plotted on x-axis. (optional)
 
         at_val: array_like
