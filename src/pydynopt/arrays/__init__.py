@@ -68,34 +68,64 @@ def unravel_index_generic(indices, shape, order='C'):
 
 
 @overload(ind2sub, jit_options=JIT_OPTIONS)
-def ind2sub_impl_generic(indices, shape, out):
+def ind2sub_impl_generic(indices, shape, axis, out):
+    """
+    Return JIT-able function when all arguments are present.
+
+    The routine requires that the `out` argument is not explicitly passed
+    as None, since the JIT-able functions returned here for the most part
+    assume that the `out` array is allocated (except for the scalar case
+    when axis=None).
+
+    """
     from numba.types import Integer
     from numba.types.npytypes import Array
 
-    from .numba.arrays import ind2sub_array_impl, ind2sub_scalar_impl
-
     f = None
-    if isinstance(indices, Integer) and out is not None:
-        f = ind2sub_scalar_impl
-    elif isinstance(indices, Array) and out is not None:
-        f = ind2sub_array_impl
+    if isinstance(indices, Integer):
+        if axis is not None and out is not None:
+            from .numba.arrays import ind2sub_axis_scalar as f
+        elif axis is not None:
+            from .numba.arrays import ind2sub_scalar_impl as f
+    elif isinstance(indices, Array):
+        if axis is not None and out is not None:
+            from .numba.arrays import ind2sub_axis_array_impl as f
+        elif out is not None:
+            from .numba.arrays import ind2sub_array_impl as f
 
     return f
 
 
 @overload(ind2sub, jit_options=JIT_OPTIONS)
-def ind2sub_generic(indices, shape, out=None):
+def ind2sub_generic(indices, shape, axis=None, out=None):
+    """
+    Return JIT-able function appropriate for the given arguments.
+
+    If neither both axis and out are provided, this function will
+    not be called in the first place! We therefore only need to handle
+    the case when one of them is missing.
+    """
 
     from numba.types import Integer
     from numba.types.npytypes import Array
 
-    from .numba.arrays import ind2sub_array, ind2sub_scalar
-
     f = None
-    if isinstance(indices, Integer) and out is None:
-        f = ind2sub_scalar
-    elif isinstance(indices, Array) and out is None:
-        f = ind2sub_array
+    if isinstance(indices, Integer):
+        if axis is not None:
+            # out missing, will be ignored by implementation
+            from .numba.arrays import ind2sub_axis_scalar_impl as f
+        else:
+            # axis is missing, so implementation will return 1d-array with
+            # all coordinates. out array will be allocated if missing.
+            from .numba.arrays import ind2sub_scalar as f
+    elif isinstance(indices, Array):
+        if axis is not None:
+            # out missing, will be allocated on demand
+            from .numba.arrays import ind2sub_axis_array as f
+        else:
+            # axis is missing, so implementation will return 2d-array with
+            # all coordinates. out array will be allocated if missing.
+            from .numba.arrays import ind2sub_array as f
 
     return f
 

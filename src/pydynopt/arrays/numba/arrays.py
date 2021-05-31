@@ -195,7 +195,7 @@ def _ravel_multi_index(multi_index, dims, mode='raise', order='C'):
     return index
 
 
-def ind2sub_array(indices, shape, out=None):
+def ind2sub_array(indices, shape, axis=None, out=None):
     """
     Converts a flat index or array of flat indices into a tuple of coordinate
     arrays.
@@ -210,6 +210,8 @@ def ind2sub_array(indices, shape, out=None):
         of an array of dimensions `shape`.
     shape : array_like
         The shape of the array to use for unraveling indices.
+    axis : int, optional
+        Ignored, only present to ensure compatible function signatures.
     out : np.ndarray or None
         Optional output array (only Numpy arrays supported in Numba mode)
 
@@ -220,20 +222,20 @@ def ind2sub_array(indices, shape, out=None):
     """
 
     unravel_ndim = len(shape)
-    N = len(indices)
+    n = len(indices)
 
     if out is not None:
         coords = out
     else:
-        coords = np.empty((unravel_ndim, N), dtype=indices.dtype)
+        coords = np.empty((unravel_ndim, n), dtype=indices.dtype)
 
-    coords = ind2sub_array_impl(indices, shape, coords)
+    coords = ind2sub_array_impl(indices, shape, 0, coords)
 
     return coords
 
 
 @register_jitable(nogil=True, parallel=False)
-def ind2sub_array_impl(indices, shape, out):
+def ind2sub_array_impl(indices, shape, axis, out):
     """
     Implementation for array-values ind2sub().
     """
@@ -243,30 +245,91 @@ def ind2sub_array_impl(indices, shape, out):
     for i in range(unravel_ndim):
         unravel_size *= shape[i]
 
-    N = len(indices)
+    n = len(indices)
 
-    idx_start = unravel_ndim - 1
-    idx_step = -1
-
-    for i in range(N):
+    for i in range(n):
         val = indices[i]
 
         if val < 0 or val >= unravel_size:
             raise ValueError('Invalid flat index')
 
-        idx = idx_start
-
-        for j in range(0, unravel_ndim):
-            k = shape[idx]
+        for j in range(unravel_ndim-1, -1, -1):
+            k = shape[j]
             tmp = val/k
-            out[idx, i] = val%k
+            out[j, i] = val % k
             val = tmp
-            idx += idx_step
 
     return out
 
 
-def ind2sub_scalar(indices, shape, out=None):
+def ind2sub_axis_array(indices, shape, axis=None, out=None):
+    """
+    Converts a flat index or array of flat indices into a coordinate
+    arrays for the given axis.
+
+    Parameters
+    ----------
+    indices : array_like
+        An integer array whose elements are indices into the flattened version
+        of an array of dimensions `shape`.
+    shape : array_like
+        The shape of the array to use for unraveling indices.
+    axis : int, optional
+        Axis along which coordinate array should be returned. If None,
+        the coordinates for the leading axis are returned.
+    out : np.ndarray or None
+        Optional output array (only Numpy arrays supported in Numba mode)
+
+    Returns
+    -------
+    coords : np.ndarray
+        Array of coordinates
+    """
+
+    n = len(indices)
+    laxis = 0 if axis is None else axis
+
+    if out is not None:
+        coords = out
+    else:
+        coords = np.empty((n, ), dtype=indices.dtype)
+
+    coords = ind2sub_axis_array_impl(indices, shape, laxis, coords)
+
+    return coords
+
+
+@register_jitable(nogil=True, parallel=False)
+def ind2sub_axis_array_impl(indices, shape, axis, out):
+    """
+    Implementation for array-valued ind2sub(..., axis, out).
+    """
+
+    unravel_ndim = len(shape)
+    unravel_size = 1
+    for i in range(unravel_ndim):
+        unravel_size *= shape[i]
+
+    n = len(indices)
+
+    for i in range(n):
+        val = indices[i]
+
+        if val < 0 or val >= unravel_size:
+            raise ValueError('Invalid flat index')
+
+        for j in range(unravel_ndim - 1, -1, -1):
+            k = shape[j]
+            tmp = val / k
+            if j == axis:
+                out[i] = val % k
+                break
+            val = tmp
+
+    return out
+
+
+def ind2sub_scalar(indices, shape, axis=None, out=None):
     """
     Converts a flat index tuple of coordinates.
 
@@ -279,7 +342,9 @@ def ind2sub_scalar(indices, shape, out=None):
         Indices into the flattened version of an array of dimensions `shape`.
     shape : array_like
         The shape of the array to use for unraveling indices.
-    out : np.ndarray or None
+    axis : int, optional
+        Ignored, only present to ensure compatible function signatures.
+    out : np.ndarray, optional
         Optional output array (only Numpy arrays supported in Numba mode)
 
     Returns
@@ -293,39 +358,115 @@ def ind2sub_scalar(indices, shape, out=None):
     if out is not None:
         coords = out
     else:
-        coords = np.empty((unravel_ndim, ), dtype=np.int64)
+        coords = np.empty((unravel_ndim, ), dtype=np.asarray(indices).dtype)
 
-    coords = ind2sub_scalar_impl(indices, shape, coords)
+    coords = ind2sub_scalar_impl(indices, shape, 0, coords)
 
     return coords
 
 
 @register_jitable(nogil=True, parallel=False)
-def ind2sub_scalar_impl(indices, shape, out):
+def ind2sub_scalar_impl(indices, shape, axis, out):
+    """
+    Implementation routine for ind2sub() with scalar arguments.
+    """
 
     unravel_ndim = len(shape)
     unravel_size = 1
     for i in range(unravel_ndim):
         unravel_size *= shape[i]
 
-    idx_start = unravel_ndim - 1
-    idx_step = -1
+    val = indices
+
+    if val < 0 or val >= unravel_size:
+        raise ValueError('Invalid flat index')
+
+    for j in range(unravel_ndim-1, -1, -1):
+        k = shape[j]
+        tmp = val / k
+        out[j] = val % k
+        val = tmp
+
+    return out
+
+
+@register_jitable(nogil=True, parallel=False)
+def ind2sub_axis_scalar(indices, shape, axis, out):
+    """
+    Converts a flat index into a coordinate for the given axis.
+
+    Wrapper around implementation routine to support `out` arguments that
+    are not None.
+
+    Parameters
+    ----------
+    indices : int
+        Index into the flattened version of an array of dimensions `shape`.
+    shape : array_like
+        The shape of the array to use for unraveling indices.
+    axis : int, optional
+        Axis along which coordinate should be returned. If None,
+        the coordinates for the leading axis are returned.
+    out : np.ndarray
+        Array to store coordinate along requested axis as its first element.
+
+    Returns
+    -------
+    int
+        Coordinate along the requested axis.
+    """
+
+    lout = ind2sub_axis_scalar_impl(indices, shape, axis)
+    out[0] = lout
+    return lout
+
+
+@register_jitable(nogil=True, parallel=False)
+def ind2sub_axis_scalar_impl(indices, shape, axis=None, out=None):
+    """
+    Converts a flat index into a coordinate for the given axis.
+
+    Parameters
+    ----------
+    indices : int
+        Index into the flattened version of an array of dimensions `shape`.
+    shape : array_like
+        The shape of the array to use for unraveling indices.
+    axis : int, optional
+        Axis along which coordinate should be returned. If None,
+        the coordinates for the leading axis are returned.
+    out : np.ndarray, optional
+         Ignored, only present to ensure compatible function signatures.
+
+    Returns
+    -------
+    int
+        Coordinate along the requested axis.
+    """
+
+    laxis = 0 if axis is None else axis
+
+    unravel_ndim = len(shape)
+    unravel_size = 1
+    for i in range(unravel_ndim):
+        unravel_size *= shape[i]
 
     val = indices
 
     if val < 0 or val >= unravel_size:
         raise ValueError('Invalid flat index')
 
-    idx = idx_start
+    lout = 0
 
-    for j in range(0, unravel_ndim):
-        k = shape[idx]
+    for j in range(unravel_ndim-1, -1, -1):
+        k = shape[j]
         tmp = val / k
-        out[idx] = val % k
+        if j == laxis:
+            lout = val % k
+            break
         val = tmp
-        idx += idx_step
 
-    return out
+    return lout
 
 
 def sub2ind_array(coords, shape, out=None):
