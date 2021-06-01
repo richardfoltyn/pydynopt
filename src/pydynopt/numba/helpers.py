@@ -4,6 +4,8 @@ Helper routines to facilitate Python and Numba-compatible code.
 Author: Richard Foltyn
 """
 
+import sys
+
 import numpy as np
 
 from . import overload
@@ -96,6 +98,9 @@ def create_numba_instance(obj, attrs=None, init=True, copy=False):
     The routine attempts to automatically generate a class signature that
     can be used to instantiate a numba-fied object.
 
+    If the given object is already a compiled Numba type, it is immediately
+    returned as-is.
+
     Parameters
     ----------
     obj : object
@@ -111,16 +116,18 @@ def create_numba_instance(obj, attrs=None, init=True, copy=False):
 
     Returns
     -------
-
+    object
+        Instance of compiled Numba type.
     """
 
-    import sys
+    from pydynopt.numba import jitclass
 
-    from pydynopt.numba import jitclass, boolean
-    from pydynopt.numba import int8, int32, int64
-    from pydynopt.numba import float32, float64
-    from pydynopt.numba import from_dtype
+    # if this already is a compiled instance, return it immediately
+    if hasattr(obj, '_numba_type_'):
+        return obj
 
+    # object is not an instance of a Numba type, we need to build
+    # signature for jitclass().
     if attrs is None:
         # Check whether class has NUMBA_ATTRS attribute which contains
         # the attributes to be included in Numbafied instance.
@@ -142,6 +149,37 @@ def create_numba_instance(obj, attrs=None, init=True, copy=False):
     # Create class name with Numba suffix
     name = obj.__class__.__name__ + 'Numba'
     cls = type(name, (), __dict__)
+
+    signature = _build_signature(obj, attrs)
+
+    cls_nb = jitclass(signature)(cls)
+
+    obj_nb = cls_nb()
+
+    if init:
+        copy_attributes(obj, obj_nb, copy=copy)
+
+    return obj_nb
+
+
+def _build_signature(obj, attrs):
+    """
+    Build a signature for numba.jitclass from the list of attributes names
+    and their associated types.
+
+    Parameters
+    ----------
+    obj : object
+    attrs : list of str
+
+    Returns
+    -------
+    signature : list
+        List of tuples containing (name, type) pairs.
+    """
+
+    from pydynopt.numba import boolean, int64, float64
+    from pydynopt.numba import from_dtype
 
     signature = []
 
@@ -196,14 +234,7 @@ def create_numba_instance(obj, attrs=None, init=True, copy=False):
             nbtype = types_python[t]
             signature.append((attr, nbtype))
 
-    cls_nb = jitclass(signature)(cls)
-
-    obj_nb = cls_nb()
-
-    if init:
-        copy_attributes(obj, obj_nb, copy=copy)
-
-    return obj_nb
+    return signature
 
 
 def copy_attributes(src, dst, copy=True):
