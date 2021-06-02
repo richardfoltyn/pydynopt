@@ -86,7 +86,7 @@ def create_unique_pmf(x, pmf, assume_sorted=False):
         pmf = pmf[iorder]
 
     xuniq = np.unique(x)
-    pmf_uniq = np.zeros_like(xuniq)
+    pmf_uniq = np.zeros_like(pmf)
 
     j = 0
     nx = len(x)
@@ -343,7 +343,7 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False,
         Quantile corresponding to given quantile ranks.
     """
 
-    qrank1d = np.asarray(qrank, dtype=x.dtype)
+    qrank1d = np.asarray(qrank)
     q = quantile_array(x, pmf, qrank1d, assume_sorted, assume_unique, interpolation)
 
     if np.isscalar(qrank):
@@ -438,7 +438,7 @@ def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False,
         Percentiles corresponding to given percentile ranks.
     """
 
-    qrank = np.asarray(prank, dtype=x.dtype) / 100.0
+    qrank = np.asarray(prank) / 100.0
     pctl = quantile_array(x, pmf, qrank, assume_sorted, assume_unique, interpolation)
 
     if np.isscalar(prank):
