@@ -23,10 +23,14 @@ def anything_to_list(value, force_list=False):
 
     from collections import Iterable
 
+    has_pandas = False
+
     try:
-        from pandas import DataFrame
+        from pandas import DataFrame, Series
+        has_pandas = True
     except ImportError:
         DataFrame = None
+        Series = None
 
     lst = None
     if value is not None:
@@ -34,7 +38,7 @@ def anything_to_list(value, force_list=False):
             # Treat string separately to prevent it being split into separate
             # characters, as a string is also Iterable
             lst = [value]
-        elif DataFrame is not None and isinstance(value, DataFrame):
+        elif has_pandas and isinstance(value, (DataFrame, Series)):
             # Treat pandas DataFrame separately, as these are iterable,
             # but iteration is over column index, which is not what we want.
             lst = [value]
