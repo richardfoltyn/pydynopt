@@ -1,7 +1,5 @@
 
 
-__author__ = 'Richard Foltyn'
-
 import matplotlib
 from matplotlib.font_manager import FontProperties
 import itertools as it
@@ -168,6 +166,10 @@ class AbstractStyle(object):
         self._mew = None
         self._zorder = None
         self._figure = cls.FIGURE_KWARGS
+        self._ylabel = None
+        self._xlabel = None
+        self._title = None
+        self._suptitle = None
 
         self._plot_all = PlotStyleDict(self)
 
@@ -192,6 +194,11 @@ class AbstractStyle(object):
         obj._mec = copy.deepcopy(self._mec, memodict)
         obj._mew = copy.deepcopy(self._mew, memodict)
         obj._zorder = copy.deepcopy(self._zorder, memodict)
+        obj._xlabel = copy.deepcopy(self._xlabel, memodict)
+        obj._ylabel = copy.deepcopy(self._ylabel, memodict)
+        obj._title = copy.deepcopy(self._title, memodict)
+        obj._suptitle = copy.deepcopy(self._suptitle, memodict)
+
         # Omit updating _figure since we do not permit updating by user code
 
         return obj
@@ -219,35 +226,55 @@ class AbstractStyle(object):
 
     @property
     def title(self):
-        cls = self.__class__
-        fp = FontProperties(**cls.TITLE_FONTPROP_KWARGS)
-        kwargs = cls.TITLE_KWARGS.copy()
-        kwargs.update({'fontproperties': fp})
-        return kwargs
+        if self._title is None:
+            cls = self.__class__
+            fp = FontProperties(**cls.TITLE_FONTPROP_KWARGS)
+            self._title = cls.TITLE_KWARGS.copy()
+            self._title.update({'fontproperties': fp})
+        return self._title
+
+    @title.setter
+    def title(self, value):
+        self._title = dict(value)
 
     @property
     def suptitle(self):
-        cls = self.__class__
-        fp = FontProperties(**cls.SUBTITLE_FONTPROP_KWARGS)
-        kwargs = cls.SUPTITLE_KWARGS.copy()
-        kwargs.update({'fontproperties': fp})
-        return kwargs
+        if self._suptitle is None:
+            cls = self.__class__
+            fp = FontProperties(**cls.SUBTITLE_FONTPROP_KWARGS)
+            self._suptitle = cls.SUPTITLE_KWARGS.copy()
+            self._suptitle.update({'fontproperties': fp})
+        return self._suptitle
+
+    @suptitle.setter
+    def suptitle(self, value):
+        self._suptitle = dict(value)
 
     @property
     def xlabel(self):
-        cls = self.__class__
-        fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
-        kwargs = cls.LBL_KWARGS.copy()
-        kwargs.update({'fontproperties': fp})
-        return kwargs
+        if self._xlabel is None:
+            cls = self.__class__
+            fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
+            self._xlabel = cls.LBL_KWARGS.copy()
+            self._xlabel.update({'fontproperties': fp})
+        return self._xlabel
+
+    @xlabel.setter
+    def xlabel(self, value):
+        self._xlabel = dict(value)
 
     @property
     def ylabel(self):
-        cls = self.__class__
-        fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
-        kwargs = cls.LBL_KWARGS.copy()
-        kwargs.update({'fontproperties': fp})
-        return kwargs
+        if self._ylabel is None:
+            cls = self.__class__
+            fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
+            self._ylabel = cls.LBL_KWARGS.copy()
+            self._ylabel.update({'fontproperties': fp})
+        return self._ylabel
+
+    @ylabel.setter
+    def ylabel(self, value):
+        self._ylabel = dict(value)
 
     @property
     def grid(self):
@@ -499,7 +526,7 @@ class DefaultStyle(AbstractStyle):
     }
 
     # Keyword arguments (other than font properties) for various objects
-    LEG_KWARGS = {'framealpha': .7, 'frameon': False}
+    LEG_KWARGS = {'framealpha': .7, 'frameon': True, 'fancybox': False}
 
     LBL_KWARGS = {}
     TITLE_KWARGS = {}
