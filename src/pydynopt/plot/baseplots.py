@@ -13,7 +13,7 @@ def plot_grid(fun, nrow=1, ncol=1,
               xlabel=None, ylabel=None, xlim=None, ylim=None,
               legend_at=(0, 0), legend_loc='best', legend=False,
               outfile=None, style=None, aspect=None, close_fig=True,
-              pass_style=False, *args, **kwargs):
+              pass_style=False, metadata=None, *args, **kwargs):
     """
     Creates a rectangular grid of subplots and calls a user-provided function
     for each subplot to render user-supplied content.
@@ -76,6 +76,9 @@ def plot_grid(fun, nrow=1, ncol=1,
     pass_style : bool, optional
         If true and style is not None, add style to kwargs when calling
         plotting function.
+    metadata : dict, optional
+        Dictionary of metadata passed to savefig(). Admissible values depend
+        on backend used to generate the figure.
     args :
         Positional arguments passed directly to `fun`
     kwargs :
@@ -188,14 +191,14 @@ def plot_grid(fun, nrow=1, ncol=1,
                 if j > 0 and ylim_same and not sharey:
                     axes[i, j].set_yticklabels([])
 
-    render(fig, outfile, close_fig)
+    render(fig, outfile, close_fig, metadata)
 
 
-def render(fig, outfile=None, close_fig=True):
+def render(fig, outfile=None, close_fig=True, metadata=None):
     if not outfile:
         fig.show()
     else:
-        fig.savefig(outfile)
+        fig.savefig(outfile, metadata=metadata)
         if close_fig:
             plt.close(fig)
 
