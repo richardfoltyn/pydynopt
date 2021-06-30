@@ -1,18 +1,20 @@
 """
-Utility functions for working with lists.
+Utility functions for working with list-like collections.
 
 Author: Richard Foltyn
 """
 
+__all__ = ['anything_to_list', 'anything_to_tuple']
 
-def anything_to_list(value, force_list=False):
+
+def anything_to_list(value, force=False):
     """
     Covert a given value to a list (with potentially only one element).
 
     Parameters
     ----------
     value : object
-    force_list : bool
+    force : bool
         If true, return empty list even if input object is None
 
     Returns
@@ -32,23 +34,71 @@ def anything_to_list(value, force_list=False):
         DataFrame = None
         Series = None
 
-    lst = None
+    items = None
     if value is not None:
         if isinstance(value, str):
             # Treat string separately to prevent it being split into separate
             # characters, as a string is also Iterable
-            lst = [value]
+            items = [value]
         elif has_pandas and isinstance(value, (DataFrame, Series)):
             # Treat pandas DataFrame separately, as these are iterable,
             # but iteration is over column index, which is not what we want.
-            lst = [value]
+            items = [value]
         elif isinstance(value, Iterable):
-            lst = list()
-            lst.extend(value)
+            items = list()
+            items.extend(value)
         else:
-            lst = [value]
+            items = [value]
 
-    if force_list and lst is None:
-        lst = []
+    if force and items is None:
+        items = []
 
-    return lst
+    return items
+
+
+def anything_to_tuple(value, force=False):
+    """
+    Covert a given value to a tuple (with potentially only one element).
+
+    Parameters
+    ----------
+    value : object
+    force : bool
+        If true, return empty tuple even if input object is None
+
+    Returns
+    -------
+    tuple or None
+        Input data converted to a tuple
+    """
+
+    from collections import Iterable
+
+    has_pandas = False
+
+    try:
+        from pandas import DataFrame, Series
+        has_pandas = True
+    except ImportError:
+        DataFrame = None
+        Series = None
+
+    items = None
+    if value is not None:
+        if isinstance(value, str):
+            # Treat string separately to prevent it being split into separate
+            # characters, as a string is also Iterable
+            items = (value, )
+        elif has_pandas and isinstance(value, (DataFrame, Series)):
+            # Treat pandas DataFrame separately, as these are iterable,
+            # but iteration is over column index, which is not what we want.
+            items = (value, )
+        elif isinstance(value, Iterable):
+            items = tuple(value)
+        else:
+            items = (value, )
+
+    if force and items is None:
+        items = tuple()
+
+    return items
