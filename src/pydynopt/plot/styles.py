@@ -210,7 +210,7 @@ class AbstractStyle(object):
     @property
     def legend(self):
         cls = self.__class__
-        fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
+        fp = FontProperties(**cls.LEG_FONTPROP_KWARGS)
         kwargs = cls.LEG_KWARGS.copy()
         # Add font properties
         kwargs.update({'prop': fp})
@@ -498,7 +498,8 @@ class AbstractStyle(object):
 class DefaultStyle(AbstractStyle):
 
     LEG_FONTPROP_KWARGS = {
-        'family': 'serif'
+        'family': 'serif',
+        'size': 10
     }
 
     LBL_FONTPROP_KWARGS = {
