@@ -23,6 +23,10 @@ def anything_to_list(value, force=False):
         Input data converted to a list
     """
 
+    # Quick exit
+    if isinstance(value, list):
+        return value
+
     from collections import Iterable
 
     has_pandas = False
@@ -71,6 +75,10 @@ def anything_to_tuple(value, force=False):
     tuple or None
         Input data converted to a tuple
     """
+
+    # quick exit
+    if isinstance(value, tuple):
+        return value
 
     from collections import Iterable
 
