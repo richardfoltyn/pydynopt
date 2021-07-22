@@ -170,6 +170,7 @@ class AbstractStyle(object):
         self._xlabel = None
         self._title = None
         self._suptitle = None
+        self._legend = None
 
         self._plot_all = PlotStyleDict(self)
 
@@ -198,6 +199,7 @@ class AbstractStyle(object):
         obj._ylabel = copy.deepcopy(self._ylabel, memodict)
         obj._title = copy.deepcopy(self._title, memodict)
         obj._suptitle = copy.deepcopy(self._suptitle, memodict)
+        obj._legend = copy.deepcopy(self._legend, memodict)
 
         # Omit updating _figure since we do not permit updating by user code
 
@@ -209,12 +211,17 @@ class AbstractStyle(object):
 
     @property
     def legend(self):
-        cls = self.__class__
-        fp = FontProperties(**cls.LEG_FONTPROP_KWARGS)
-        kwargs = cls.LEG_KWARGS.copy()
-        # Add font properties
-        kwargs.update({'prop': fp})
-        return kwargs
+        if self._legend is None:
+            cls = self.__class__
+            fp = FontProperties(**cls.LEG_FONTPROP_KWARGS)
+            self._legend = cls.LEG_KWARGS.copy()
+            # Add font properties
+            self._legend.update({'prop': fp})
+        return self._legend
+
+    @legend.setter
+    def legend(self, value):
+        self._legend = dict(value)
 
     @property
     def text(self):
