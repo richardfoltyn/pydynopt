@@ -157,3 +157,43 @@ def percentile(df, prank, varlist=None, weight_var='weight', multi_index=False,
         result = result.stack()
 
     return result
+
+
+def weighted_pmf(df, varlist_outer, varlist_inner, varname_weight='weight'):
+    """
+    Compute weight weighted PMF over "inner" cells defined by `varlist_inner`
+    within "outer" cells defined by `varlist_outer`.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+    varlist_outer : str or array_like
+    varlist_inner: str or array_like
+    varname_weight : str, optional
+        Name of variable containing weights.
+
+    Returns
+    -------
+    pd.DataFrame
+    """
+
+    varlist_outer = anything_to_list(varlist_outer, force=True)
+    varlist_inner = anything_to_list(varlist_inner)
+
+    varlist_all = varlist_outer + varlist_inner
+
+    grp = df.groupby(varlist_all)
+    df_inner = grp.agg({varname_weight: np.sum})
+    if varlist_outer:
+        df_outer = df_inner.groupby(varlist_outer)[varname_weight].sum()
+        df_outer = df_outer.to_frame(name='weight_sum')
+    else:
+        weight_sum = df_inner[varname_weight].sum()
+        df_outer = pd.DataFrame(weight_sum, index=df_inner.index, columns=['weight_sum'])
+
+    df_inner = df_inner.join(df_outer, how='left')
+    df_inner['pmf'] = df_inner['weight']/df_inner['weight_sum']
+
+    df_pmf = df_inner[['pmf']].copy()
+
+    return df_pmf

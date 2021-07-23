@@ -1,3 +1,3 @@
 
 
-from .aggregations import weighted_mean, percentile
+from .aggregations import weighted_mean, weighted_pmf, percentile
