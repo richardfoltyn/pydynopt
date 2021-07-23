@@ -1,4 +1,4 @@
-
+from copy import deepcopy
 
 import matplotlib
 from matplotlib.font_manager import FontProperties
@@ -6,6 +6,8 @@ import itertools as it
 import numpy as np
 
 import copy
+
+from pydynopt.utils import anything_to_tuple
 
 
 class Colors(object):
@@ -120,7 +122,43 @@ class PlotStyleDict(object):
         return res
 
 
-class AbstractStyle(object):
+class StyleAttrMapping:
+    """
+    Wrapper type which should be returned by style properties
+    that return several key/value pairs of arguments to matplotlib
+    functions.
+
+    The class implements [] such that these key/value pairs can be
+    retrieved for a sequence of objects to be plotted.
+    """
+
+    def __init__(self, style, mapping):
+        self._style = style
+        self._mapping = mapping
+
+    def __getitem__(self, item):
+        """
+        Return the style defined by key/value pairs at a given index.
+
+        Parameters
+        ----------
+        item : int
+
+        Returns
+        -------
+        dict
+        """
+
+        result = dict()
+        for key, attr in self._mapping.items():
+            attr = attr if attr is not None else key
+            value = getattr(self._style, attr)
+            result[key] = value[item]
+
+        return result
+
+
+class AbstractStyle:
 
     LEG_FONTPROP_KWARGS = {}
     LBL_FONTPROP_KWARGS = {}
@@ -140,9 +178,12 @@ class AbstractStyle(object):
     COLORS = ['black']
     FACECOLORS = ['white']
     LINESTYLES = ['-']
+    EDGELINESTYLE = ['-']
     ALPHAS = [1.0]
+    EDGEALPHA = [0.3]
     MARKERS = [None]
     LINEWIDTH = [1.0]
+    EDGELINEWIDTH = [0.25]
     MARKERSIZE = [1.0]
     MEC = ['none']
 
@@ -158,6 +199,10 @@ class AbstractStyle(object):
         self._facealpha = None
         self._linewidth = None
         self._linestyle = None
+        self._edgecolor = None
+        self._edgelinestyle = None
+        self._edgelinewidth = None
+        self._edgealpha = None
         self._alpha = None
         self._marker = None
         self._markersize = None
@@ -184,10 +229,14 @@ class AbstractStyle(object):
 
         obj._grid = copy.deepcopy(self._grid, memodict)
         obj._color = copy.deepcopy(self._color, memodict)
+        obj._edgecolor = copy.deepcopy(self._edgecolor, memodict)
         obj._facecolor = copy.deepcopy(self._facecolor, memodict)
         obj._facealpha = copy.deepcopy(self._facealpha, memodict)
         obj._linestyle = copy.deepcopy(self._linestyle, memodict)
         obj._linewidth = copy.deepcopy(self._linewidth, memodict)
+        obj._edgelinestyle = copy.deepcopy(self._edgelinestyle, memodict)
+        obj._edgelinewidth = copy.deepcopy(self._edgelinewidth, memodict)
+        obj._edgealpha = copy.deepcopy(self._edgealpha, memodict)
         obj._alpha = copy.deepcopy(self._alpha, memodict)
         obj._marker = copy.deepcopy(self._marker, memodict)
         obj._markersize = copy.deepcopy(self._markersize, memodict)
@@ -310,24 +359,35 @@ class AbstractStyle(object):
 
     @property
     def color(self):
-        cls = self.__class__
         if self._color is None:
-            self._color = Colors(cls.COLORS)
+            self._color = Colors(type(self).COLORS)
         return self._color
 
     @color.setter
     def color(self, value):
-        if np.isscalar(value):
-            value = (value, )
-        else:
-            value = tuple(value)
+        value = anything_to_tuple(value)
         self._color = Colors(colors=value)
+
+    @property
+    def edgecolor(self):
+        if self._edgecolor is None:
+            # If nothing is set use the default colors
+            self._edgecolor = self.color
+        return self._edgecolor
+
+    @edgecolor.setter
+    def edgecolor(self, value):
+        value = anything_to_tuple(value)
+        self._edgecolor = Colors(colors=value)
 
     @property
     def facecolor(self):
         cls = self.__class__
         if self._facecolor is None:
-            self._facecolor = Colors(cls.FACECOLORS)
+            if cls.FACECOLORS:
+                self._facecolor = Colors(cls.FACECOLORS)
+            else:
+                self._facecolor = deepcopy(self.color)
         return self._facecolor
 
     @facecolor.setter
@@ -362,15 +422,23 @@ class AbstractStyle(object):
 
     @linewidth.setter
     def linewidth(self, value):
-        if np.isscalar(value):
-            value = (value, )
-        else:
-            value = tuple(value)
+        value = anything_to_tuple(value)
         self._linewidth = LineWidth(value)
 
     @property
     def lw(self):
         return self.linewidth
+
+    @property
+    def edgelinewidth(self):
+        if self._edgelinewidth is None:
+            self._edgelinewidth = LineWidth(type(self).EDGELINEWIDTH)
+        return self._edgelinewidth
+
+    @edgelinewidth.setter
+    def edgelinewidth(self, value):
+        value = anything_to_tuple(value)
+        self._edgelinewidth = LineWidth(value)
 
     @property
     def linestyle(self):
@@ -379,17 +447,36 @@ class AbstractStyle(object):
             self._linestyle = LineStyle(cls.LINESTYLES)
         return self._linestyle
 
+    @linestyle.setter
+    def linestyle(self, value):
+        value = anything_to_tuple(value)
+        self._linestyle = LineStyle(value)
+
     @property
     def ls(self):
         return self.linestyle
 
-    @linestyle.setter
-    def linestyle(self, value):
-        if np.isscalar(value):
-            value = (value, )
-        else:
-            value = tuple(value)
-        self._linestyle = LineStyle(value)
+    @property
+    def edgelinestyle(self):
+        if self._edgelinestyle is None:
+            self._edgelinestyle = LineStyle(type(self).EDGELINESTYLE)
+        return self._edgelinestyle
+
+    @edgelinestyle.setter
+    def edgelinestyle(self, value):
+        value = anything_to_tuple(value)
+        self._edgelinestyle = LineStyle(value)
+
+    @property
+    def edgealpha(self):
+        if self._edgealpha is None:
+            self._edgealpha = Transparency(type(self).EDGEALPHA)
+        return self._edgealpha
+
+    @edgealpha.setter
+    def edgealpha(self, value):
+        value = anything_to_tuple(value)
+        self._edgealpha = Transparency(value)
 
     @property
     def alpha(self):
@@ -400,10 +487,7 @@ class AbstractStyle(object):
 
     @alpha.setter
     def alpha(self, value):
-        if np.isscalar(value):
-            value = (value, )
-        else:
-            value = tuple(value)
+        value = anything_to_tuple(value)
         self._alpha = Transparency(value)
 
     @property
@@ -501,6 +585,105 @@ class AbstractStyle(object):
     def plot_kwargs(self):
         return self._plot_all
 
+    @property
+    def fill_between_kwargs(self):
+        """
+        Return a sequence of collections of key/value pairs that can be passed
+        to matplotlib's fill_between()
+
+        Returns
+        -------
+        StyleAttrMapping
+        """
+        mapping = {
+            'edgecolor': None,
+            'facecolor': None,
+            'lw': 'edgelinewidth',
+            'ls': 'edgelinestyle',
+            'alpha': 'facealpha',
+            'zorder': None
+        }
+
+        kwargs = StyleAttrMapping(self, mapping)
+
+        return kwargs
+
+    @property
+    def fill_between_edge_kwargs(self):
+        """
+        Return a sequence of collections of key/value pairs that can be passed to
+        matplotlib's plot() function when separately plotting the lower
+        and upper edge lines of the area shaded by fill_between()
+
+        Returns
+        -------
+        StyleAttrMapping
+        """
+        mapping = {
+            'color': 'edgecolor',
+            'ls': 'edgelinestyle',
+            'lw': 'edgelinewidth',
+            'alpha': 'edgealpha',
+            'zorder': None
+        }
+
+        kwargs = StyleAttrMapping(self, mapping)
+
+        return kwargs
+
+    @property
+    def errorbar_kwargs(self):
+        """
+        Return a sequence of collections of key/value pairs that can be passed to
+        matplotlib's errorbar().
+
+        Returns
+        -------
+        StyleAttrMapping
+        """
+        mapping = {
+            'ecolor': 'edgecolor',
+            'elinewidth': 'edgelinewidth',
+            'color': None,
+            'ls': None,
+            'lw': None,
+            'alpha': None,
+            'marker': None,
+            'mec': None,
+            'mew': None,
+            'markersize': None,
+            'markevery': None,
+            'zorder': None
+        }
+
+        kwargs = StyleAttrMapping(self, mapping)
+
+        return kwargs
+
+    @property
+    def bar_kwargs(self):
+        """
+        Returns a sequence of collections of key/value pairs that can be passed
+        to matplotlib's bar().
+
+        Returns
+        -------
+        StyleAttrMapping
+        """
+
+        mapping = {
+            'color': 'facecolor',
+            'edgecolor': None,
+            'lw': None,
+            'ls': None,
+            'alpha': None,
+            'zorder': None
+        }
+
+        kwargs = StyleAttrMapping(self, mapping)
+
+        return kwargs
+
 
 class DefaultStyle(AbstractStyle):
 
@@ -563,13 +746,16 @@ class DefaultStyle(AbstractStyle):
     }
 
     LINESTYLES = ['-', '--', '-', '--']
+    EDGELINESTYLE = ['-']
     ALPHAS = [.9, 0.7, 0.7, 1.0]
     MARKERS = [None]
     LINEWIDTH = [2]
+    EDGELINEWIDTH = [0.5]
     MARKERSIZE = 5
     MEC = ['white']
     COLORS = ['#377eb8', '#e41a1c', '#4daf4a', '#ff7f00', '#f781bf']
-    FACECOLORS = ['#377eb8', '#e41a1c', '#4daf4a', '#ff7f00', '#f781bf']
+    # Default values for facecolor: force same as color
+    FACECOLORS = None
 
     def __init__(self):
 
