@@ -11,6 +11,7 @@ def plot_grid(fun, nrow=1, ncol=1,
               figure_kw=None, subplot_kw=None,
               sharex=True, sharey=True,
               xlabel=None, ylabel=None, xlim=None, ylim=None,
+              xticks=None, yticks=None, xticklabels=None, yticklabels=None,
               legend_at=(0, 0), legend_loc='best', legend=False,
               outfile=None, style=None, aspect=None, close_fig=True,
               pass_style=False, metadata=None, *args, **kwargs):
@@ -54,6 +55,16 @@ def plot_grid(fun, nrow=1, ncol=1,
         Lower and upper y-axis limits. Can be specified either as a tuple
         if limits are to be applied across all rows / columns, or as an
         array of shape [nrow, ncol, 2] with panel-specific limits.
+    xticks : array_like, optional
+        Location of (major) x-ticks. Ignored if subplots don't have shared
+        x-values.
+    xticklabels : array_like, optional
+        Ticklabels for x-ticks. Ignored if x-ticks not given or not used.
+    yticks : array_like, optional
+        Location of (major) y-ticks. Ignored if subplots don't have shared
+        y-values.
+    yticklabels : array_like, optional
+        Ticklabels for y-ticks. Ignored if y-ticks not given or not used.
     legend_at : array_like
         Subplot in which legend should be placed (default: (0,0)). Accepts
         either a single tuple if legend should be placed in only one subplot,
@@ -128,6 +139,12 @@ def plot_grid(fun, nrow=1, ncol=1,
     if subplot_kw is not None:
         style.subplot.update(subplot_kw)
 
+    if ncol == 1:
+        sharex = True
+
+    if nrow == 1:
+        sharey = True
+
     fig, axes = plt.subplots(nrow, ncol, subplot_kw=style.subplot,
                              sharex=sharex, sharey=sharey, squeeze=False,
                              **fig_kw)
@@ -154,6 +171,12 @@ def plot_grid(fun, nrow=1, ncol=1,
         for i in range(nrow):
             axes[i, 0].set_ylabel(ylabel[i], **style.ylabel)
 
+    margins = style.margins
+    if margins is not None:
+        margins1d, *rest = np.broadcast_arrays(margins, np.arange(4))
+    else:
+        margins1d = np.zeros(4)
+
     for i in range(nrow):
         for j in range(ncol):
             if i == 0:
@@ -161,12 +184,33 @@ def plot_grid(fun, nrow=1, ncol=1,
                     axes[i, j].set_title(column_title[j], **style.title)
 
             if xlim is not None:
-                axes[i, j].set_xlim(xlim)
+                dx = xlim[1] - xlim[0]
+                xlb = xlim[0] - margins1d[0] / aspect * dx
+                xub = xlim[1] + margins1d[2] / aspect * dx
+                axes[i, j].set_xlim((xlb, xub))
+
             if ylim is not None:
-                axes[i, j].set_ylim(ylim[i, j])
+                dy = ylim[i, j, 1] - ylim[i, j, 0]
+                ylb = ylim[i, j, 0] - margins1d[1] * dy
+                yub = ylim[i, j, 1] + margins1d[3] * dy
+                axes[i, j].set_ylim((ylb, yub))
+
+            # No limits specified, margin is a float applicable to all sides
+            if ylim is None and xlim is None and isinstance(margins, float):
+                axes[i, j].margins(margins)
 
             if style.grid:
                 axes[i, j].grid(**style.grid)
+
+            if sharex and xticks is not None:
+                axes[i, j].set_xticks(xticks)
+                if j == (nrow - 1) and xticklabels is not None:
+                    axes[i, j].set_xticklabels(xticklabels)
+
+            if sharey and yticks is not None:
+                axes[i, j].set_yticks(yticks)
+                if i == 0 and yticklabels is not None:
+                    axes[i, j].set_yticklabels(yticklabels)
 
             fun(axes[i, j], (i, j), *args, **kwargs)
 
@@ -178,6 +222,7 @@ def plot_grid(fun, nrow=1, ncol=1,
         fig.suptitle(suptitle, **style.suptitle)
 
     # === y-ticks for shared ylims ===
+
     # Turn off ytick labels if ylim are the same for entire row
     # for all but the first column
     if not sharey:

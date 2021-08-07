@@ -193,6 +193,7 @@ class AbstractStyle:
         self.cell_size = 6
         self.dpi = 96
         self.aspect = 1.0
+        self._margins = 0.02
         self._grid = cls.GRID_KWARGS
         self._color = None
         self._facecolor = None
@@ -226,6 +227,7 @@ class AbstractStyle:
         obj.cell_size = self.cell_size
         obj.dpi = self.dpi
         obj.aspect = self.aspect
+        obj._margins = self._margins
 
         obj._grid = copy.deepcopy(self._grid, memodict)
         obj._color = copy.deepcopy(self._color, memodict)
@@ -580,6 +582,39 @@ class AbstractStyle:
         else:
             value = tuple(value)
         self._zorder = ConstFillProperty(100, value)
+
+    @property
+    def margins(self):
+        return self._margins
+
+    @margins.setter
+    def margins(self, value):
+        """
+        Set subplot margins. Values are relative to the data margins and
+        need to be in the interval [0, 1]. If multiple values are given,
+        these are interpreted to be in the order (left, bottom, right, top).
+
+        If set to None, scaling or margins is disabled.
+
+        Parameters
+        ----------
+        value : int or array_like, optional
+        """
+        if value is not None:
+            try:
+                value = float(value)
+            except TypeError:
+                try:
+                    value = np.atleast_1d(value)
+                    if value.size != 1 and value.size != 4:
+                        raise ValueError('margins value not understood')
+                    if np.all(value[0] == value[1:]):
+                        # Store as float since it's the same value for all sides
+                        value = float(value[0])
+                except TypeError:
+                    raise ValueError('margins value not understood')
+
+        self._margins = value
 
     @property
     def plot_kwargs(self):
