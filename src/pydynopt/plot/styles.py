@@ -516,11 +516,7 @@ class AbstractStyle:
 
     @markersize.setter
     def markersize(self, value):
-        cls = self.__class__
-        if np.isscalar(value):
-            value = (value, )
-        else:
-            value = tuple(value)
+        value = anything_to_tuple(value)
         default = value[len(value)-1]
         self._markersize = ConstFillProperty(default, value)
 
@@ -532,11 +528,8 @@ class AbstractStyle:
 
     @markevery.setter
     def markevery(self, value):
-        if np.isscalar(value):
-            value = (value, )
-        else:
-            value = tuple(value)
-        default = 1
+        value = anything_to_tuple(value)
+        default = value[len(value)-1]
         self._markevery = ConstFillProperty(default, value)
 
     @property
@@ -688,7 +681,8 @@ class AbstractStyle:
             'mew': None,
             'markersize': None,
             'markevery': None,
-            'zorder': None
+            'zorder': None,
+            'errorevery': 'markevery'
         }
 
         kwargs = StyleAttrMapping(self, mapping)
@@ -764,7 +758,7 @@ class DefaultStyle(AbstractStyle):
     }
 
     FIGURE_KWARGS = {
-        'tight_layout': True
+        'constrained_layout': True
     }
 
     GRID_KWARGS = {
