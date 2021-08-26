@@ -139,12 +139,6 @@ def plot_grid(fun, nrow=1, ncol=1,
     if subplot_kw is not None:
         style.subplot.update(subplot_kw)
 
-    if ncol == 1:
-        sharex = True
-
-    if nrow == 1:
-        sharey = True
-
     fig, axes = plt.subplots(nrow, ncol, subplot_kw=style.subplot,
                              sharex=sharex, sharey=sharey, squeeze=False,
                              **fig_kw)
@@ -179,40 +173,51 @@ def plot_grid(fun, nrow=1, ncol=1,
 
     for i in range(nrow):
         for j in range(ncol):
+
+            ax = axes[i, j]
+
             if i == 0:
                 if j < column_title.shape[0] and column_title[j]:
-                    axes[i, j].set_title(column_title[j], **style.title)
+                    ax.set_title(column_title[j], **style.title)
 
             if xlim is not None:
                 dx = xlim[1] - xlim[0]
                 xlb = xlim[0] - margins1d[0] / aspect * dx
                 xub = xlim[1] + margins1d[2] / aspect * dx
-                axes[i, j].set_xlim((xlb, xub))
+                ax.set_xlim((xlb, xub))
 
             if ylim is not None:
                 dy = ylim[i, j, 1] - ylim[i, j, 0]
                 ylb = ylim[i, j, 0] - margins1d[1] * dy
                 yub = ylim[i, j, 1] + margins1d[3] * dy
-                axes[i, j].set_ylim((ylb, yub))
+                ax.set_ylim((ylb, yub))
 
             # No limits specified, margin is a float applicable to all sides
             if ylim is None and xlim is None and isinstance(margins, float):
-                axes[i, j].margins(margins)
+                ax.margins(margins)
 
             if style.grid:
-                axes[i, j].grid(**style.grid)
+                ax.grid(**style.grid)
 
-            if sharex and xticks is not None:
-                axes[i, j].set_xticks(xticks)
-                if j == (nrow - 1) and xticklabels is not None:
-                    axes[i, j].set_xticklabels(xticklabels)
+            if xticks is not None:
+                ax.set_xticks(xticks)
+                if (i == (nrow - 1) or not sharex) and xticklabels is not None:
+                    ax.set_xticklabels(xticklabels, **style.xticklabels)
 
-            if sharey and yticks is not None:
-                axes[i, j].set_yticks(yticks)
-                if i == 0 and yticklabels is not None:
-                    axes[i, j].set_yticklabels(yticklabels)
+            if yticks is not None:
+                ax.set_yticks(yticks)
+                if (j == (ncol - 1) or not sharey) and yticklabels is not None:
+                    ax.set_yticklabels(yticklabels, **style.yticklabels)
 
-            fun(axes[i, j], (i, j), *args, **kwargs)
+            fun(ax, (i, j), *args, **kwargs)
+
+            # Apply tick label styles after calling the function since
+            # user actions might have unset style settings.
+            for lbl in ax.get_xticklabels():
+                _set_properties(lbl, **style.xticklabels)
+
+            for lbl in ax.get_yticklabels():
+                _set_properties(lbl, **style.yticklabels)
 
     if legend and legend_loc is not None and legend_at is not None:
         for i, idx in enumerate(legend_at):
@@ -289,3 +294,25 @@ def broadcast_ylim(nrow, ncol, ylim):
         ylim = np.tile(ylim, reps=(1, ncol, 1))
 
     return ylim
+
+
+def _set_properties(obj, **kwargs):
+    """
+    Apply given properties specified as keyword arguments to given object
+    using set_XXX() methods, if present.
+
+    Parameters
+    ----------
+    obj
+    kwargs
+    """
+
+    for key, value in kwargs.items():
+        if hasattr(type(obj), f'set_{key}'):
+            method = getattr(type(obj), f'set_{key}')
+            method(obj, value)
+        else:
+            try:
+                setattr(obj, key, value)
+            except:
+                pass
