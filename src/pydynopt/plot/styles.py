@@ -1,3 +1,4 @@
+import collections.abc
 from copy import deepcopy
 
 import matplotlib
@@ -8,6 +9,26 @@ import numpy as np
 import copy
 
 from pydynopt.utils import anything_to_tuple
+
+
+def _to_tuple(value):
+    """
+    Return a tuple created from the given value. If `value` is None,
+    return a tuple containing only None.
+
+    Parameters
+    ----------
+    value : object
+
+    Returns
+    -------
+    builtins.tuple
+    """
+    value = anything_to_tuple(value)
+    if value is None:
+        value = (None, )
+
+    return value
 
 
 class Colors(object):
@@ -152,8 +173,25 @@ class StyleAttrMapping:
         result = dict()
         for key, attr in self._mapping.items():
             attr = attr if attr is not None else key
-            value = getattr(self._style, attr)
-            result[key] = value[item]
+            # Handle lists of attributes
+            if isinstance(attr, (list, tuple)):
+                dct = dict()
+                for subattr in attr:
+                    value = getattr(self._style, subattr)
+                    try:
+                        dct[subattr] = value[item]
+                    except TypeError:
+                        # Constant properties that should not vary across
+                        # plotted items.
+                        dct[subattr] = value
+                result[key] = dct
+            else:
+                value = getattr(self._style, attr)
+                try:
+                    result[key] = value[item]
+                except TypeError:
+                    # Constant properties that should not vary across plotted items.
+                    result[key] = value
 
         return result
 
@@ -162,12 +200,14 @@ class AbstractStyle:
 
     LEG_FONTPROP_KWARGS = {}
     LBL_FONTPROP_KWARGS = {}
+    TICKLABEL_FONTPROP_KWARGS = {}
     TITLE_FONTPROP_KWARGS = {}
     SUBTITLE_FONTPROP_KWARGS = {}
     TEXT_FONTPROP_KWARGS = {}
 
     LEG_KWARGS = {}
     LBL_KWARGS = {}
+    TICKLABEL_KWARGS = {}
     TITLE_KWARGS = {}
     SUPTITLE_KWARGS = {}
     FIGURE_KWARGS = {}
@@ -186,6 +226,7 @@ class AbstractStyle:
     EDGELINEWIDTH = [0.25]
     MARKERSIZE = [1.0]
     MEC = ['none']
+    HATCH = [None]
 
     def __init__(self):
         cls = self.__class__
@@ -204,16 +245,24 @@ class AbstractStyle:
         self._edgelinestyle = None
         self._edgelinewidth = None
         self._edgealpha = None
+        self._ecolor = None
+        self._elinewidth = None
+        self.capsize = 0.0
+        self.capthick = None
         self._alpha = None
         self._marker = None
         self._markersize = None
         self._markevery = None
         self._mec = None
         self._mew = None
+        self._hatch = None
+        self._barmargin = 0.0
         self._zorder = None
         self._figure = cls.FIGURE_KWARGS
         self._ylabel = None
         self._xlabel = None
+        self._xticklabels = None
+        self._yticklabels = None
         self._title = None
         self._suptitle = None
         self._legend = None
@@ -224,35 +273,32 @@ class AbstractStyle:
         cls = self.__class__
         obj = cls()
 
-        obj.cell_size = self.cell_size
-        obj.dpi = self.dpi
-        obj.aspect = self.aspect
-        obj._margins = self._margins
+        blacklist = '_figure',
 
-        obj._grid = copy.deepcopy(self._grid, memodict)
-        obj._color = copy.deepcopy(self._color, memodict)
-        obj._edgecolor = copy.deepcopy(self._edgecolor, memodict)
-        obj._facecolor = copy.deepcopy(self._facecolor, memodict)
-        obj._facealpha = copy.deepcopy(self._facealpha, memodict)
-        obj._linestyle = copy.deepcopy(self._linestyle, memodict)
-        obj._linewidth = copy.deepcopy(self._linewidth, memodict)
-        obj._edgelinestyle = copy.deepcopy(self._edgelinestyle, memodict)
-        obj._edgelinewidth = copy.deepcopy(self._edgelinewidth, memodict)
-        obj._edgealpha = copy.deepcopy(self._edgealpha, memodict)
-        obj._alpha = copy.deepcopy(self._alpha, memodict)
-        obj._marker = copy.deepcopy(self._marker, memodict)
-        obj._markersize = copy.deepcopy(self._markersize, memodict)
-        obj._markevery = copy.deepcopy(self._markevery, memodict)
-        obj._mec = copy.deepcopy(self._mec, memodict)
-        obj._mew = copy.deepcopy(self._mew, memodict)
-        obj._zorder = copy.deepcopy(self._zorder, memodict)
-        obj._xlabel = copy.deepcopy(self._xlabel, memodict)
-        obj._ylabel = copy.deepcopy(self._ylabel, memodict)
-        obj._title = copy.deepcopy(self._title, memodict)
-        obj._suptitle = copy.deepcopy(self._suptitle, memodict)
-        obj._legend = copy.deepcopy(self._legend, memodict)
+        for attr in dir(self):
+            if attr in blacklist:
+                continue
+            elif attr.startswith('__'):
+                # Skip all private stuff used by Python
+                continue
+            elif isinstance(getattr(cls, attr, None), property):
+                # Skip all properties
+                continue
+            elif hasattr(cls, attr):
+                # Skip class attributes
+                continue
 
-        # Omit updating _figure since we do not permit updating by user code
+            value = getattr(self, attr)
+
+            if callable(value):
+                # Skip all methods
+                continue
+            elif value is None:
+                setattr(self, attr, None)
+            elif isinstance(value, (int, float)):
+                setattr(obj, attr, value)
+            else:
+                setattr(obj, attr, deepcopy(value, memodict))
 
         return obj
 
@@ -335,6 +381,46 @@ class AbstractStyle:
         self._ylabel = dict(value)
 
     @property
+    def xticklabels(self):
+        if self._xticklabels is None:
+            cls = self.__class__
+            fp = FontProperties(**cls.TICKLABEL_FONTPROP_KWARGS)
+            self._xticklabels = cls.TICKLABEL_KWARGS.copy()
+            self._xticklabels.update({'fontproperties': fp})
+        return self._xticklabels
+
+    @xticklabels.setter
+    def xticklabels(self, value):
+        """
+        Set the keyword arguments passed to set_xticklabels()
+
+        Parameters
+        ----------
+        value : collections.abc.Mapping
+        """
+        self._xticklabels = dict(value)
+
+    @property
+    def yticklabels(self):
+        if self._yticklabels is None:
+            cls = self.__class__
+            fp = FontProperties(**cls.TICKLABEL_FONTPROP_KWARGS)
+            self._yticklabels = cls.TICKLABEL_KWARGS.copy()
+            self._yticklabels.update({'fontproperties': fp})
+        return self._yticklabels
+
+    @yticklabels.setter
+    def yticklabels(self, value):
+        """
+        Set the keyword arguments passed to set_yticklabels()
+
+        Parameters
+        ----------
+        value : collections.abc.Mapping
+        """
+        self._yticklabels = dict(value)
+
+    @property
     def grid(self):
         return self._grid.copy()
 
@@ -367,8 +453,11 @@ class AbstractStyle:
 
     @color.setter
     def color(self, value):
-        value = anything_to_tuple(value)
-        self._color = Colors(colors=value)
+        if isinstance(value, Colors):
+            self._color = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._color = Colors(colors=value)
 
     @property
     def edgecolor(self):
@@ -379,8 +468,11 @@ class AbstractStyle:
 
     @edgecolor.setter
     def edgecolor(self, value):
-        value = anything_to_tuple(value)
-        self._edgecolor = Colors(colors=value)
+        if isinstance(value, Colors):
+            self._edgecolor = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._edgecolor = Colors(colors=value)
 
     @property
     def facecolor(self):
@@ -394,26 +486,25 @@ class AbstractStyle:
 
     @facecolor.setter
     def facecolor(self, value):
-        if np.isscalar(value):
-            value = (value,)
+        if isinstance(value, Colors):
+            self._facecolor = deepcopy(value)
         else:
-            value = tuple(value)
-        self._facecolor = Colors(colors=value)
+            value = _to_tuple(value)
+            self._facecolor = Colors(colors=value)
 
     @property
     def facealpha(self):
-        cls = self.__class__
         if self._facealpha is None:
-            self._facealpha = Colors(cls.ALPHAS)
+            self._facealpha = Transparency(type(self).ALPHAS)
         return self._facealpha
 
     @facealpha.setter
     def facealpha(self, value):
-        if np.isscalar(value):
-            value = (value,)
+        if isinstance(value, Transparency):
+            self._facealpha = deepcopy(value)
         else:
-            value = tuple(value)
-        self._facealpha = Colors(colors=value)
+            value = _to_tuple(value)
+            self._facealpha = Colors(colors=value)
 
     @property
     def linewidth(self):
@@ -424,8 +515,11 @@ class AbstractStyle:
 
     @linewidth.setter
     def linewidth(self, value):
-        value = anything_to_tuple(value)
-        self._linewidth = LineWidth(value)
+        if isinstance(value, LineWidth):
+            self._linewidth = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._linewidth = LineWidth(value)
 
     @property
     def lw(self):
@@ -439,20 +533,25 @@ class AbstractStyle:
 
     @edgelinewidth.setter
     def edgelinewidth(self, value):
-        value = anything_to_tuple(value)
-        self._edgelinewidth = LineWidth(value)
+        if isinstance(self, LineWidth):
+            self._edgelinewidth = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._edgelinewidth = LineWidth(value)
 
     @property
     def linestyle(self):
-        cls = self.__class__
         if self._linestyle is None:
-            self._linestyle = LineStyle(cls.LINESTYLES)
+            self._linestyle = LineStyle(type(self).LINESTYLES)
         return self._linestyle
 
     @linestyle.setter
     def linestyle(self, value):
-        value = anything_to_tuple(value)
-        self._linestyle = LineStyle(value)
+        if isinstance(value, LineStyle):
+            self._linestyle = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._linestyle = LineStyle(value)
 
     @property
     def ls(self):
@@ -466,8 +565,11 @@ class AbstractStyle:
 
     @edgelinestyle.setter
     def edgelinestyle(self, value):
-        value = anything_to_tuple(value)
-        self._edgelinestyle = LineStyle(value)
+        if isinstance(value, LineStyle):
+            self._edgelinestyle = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._edgelinestyle = LineStyle(value)
 
     @property
     def edgealpha(self):
@@ -477,48 +579,85 @@ class AbstractStyle:
 
     @edgealpha.setter
     def edgealpha(self, value):
-        value = anything_to_tuple(value)
-        self._edgealpha = Transparency(value)
+        if isinstance(value, Transparency):
+            self._edgealpha = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._edgealpha = Transparency(value)
 
     @property
     def alpha(self):
-        cls = self.__class__
         if self._alpha is None:
-            self._alpha = Transparency(cls.ALPHAS)
+            self._alpha = Transparency(type(self).ALPHAS)
         return self._alpha
 
     @alpha.setter
     def alpha(self, value):
-        value = anything_to_tuple(value)
-        self._alpha = Transparency(value)
+        if isinstance(value, Transparency):
+            self._alpha = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._alpha = Transparency(value)
+
+    @property
+    def ecolor(self):
+        if self._ecolor is None:
+            # If nothing is set use the default colors
+            self._ecolor = Colors(['black'])
+        return self._ecolor
+
+    @ecolor.setter
+    def ecolor(self, value):
+        if isinstance(value, Colors):
+            self._ecolor = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._ecolor = Colors(colors=value)
+
+    @property
+    def elinewidth(self):
+        if self._elinewidth is None:
+            self._elinewidth = LineWidth((1.0, ))
+        return self._elinewidth
+
+    @elinewidth.setter
+    def elinewidth(self, value):
+        if isinstance(value, LineWidth):
+            self._elinewidth = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._elinewidth = LineWidth(value)
 
     @property
     def marker(self):
-        cls = self.__class__
         if self._marker is None:
-            self._marker = Marker(cls.MARKERS)
+            self._marker = Marker(type(self).MARKERS)
         return self._marker
 
     @marker.setter
     def marker(self, value):
-        if np.isscalar(value):
-            value = (value,)
+        if isinstance(value, Marker):
+            self._marker = deepcopy(value)
         else:
-            value = tuple(value)
-        self._marker = Marker(value)
+            value = _to_tuple(value)
+            if value is None:
+                value = [None]
+            self._marker = Marker(value)
 
     @property
     def markersize(self):
-        cls = self.__class__
         if self._markersize is None:
-            self._markersize = ConstFillProperty(const=cls.MARKERSIZE)
+            self._markersize = ConstFillProperty(const=type(self).MARKERSIZE)
         return self._markersize
 
     @markersize.setter
     def markersize(self, value):
-        value = anything_to_tuple(value)
-        default = value[len(value)-1]
-        self._markersize = ConstFillProperty(default, value)
+        if isinstance(value, ConstFillProperty):
+            self._markersize = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            default = value[len(value)-1]
+            self._markersize = ConstFillProperty(default, value)
 
     @property
     def markevery(self):
@@ -528,39 +667,71 @@ class AbstractStyle:
 
     @markevery.setter
     def markevery(self, value):
-        value = anything_to_tuple(value)
-        default = value[len(value)-1]
-        self._markevery = ConstFillProperty(default, value)
+        if isinstance(value, ConstFillProperty):
+            self._markevery = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            default = value[len(value)-1]
+            self._markevery = ConstFillProperty(default, value)
 
     @property
     def mec(self):
-        cls = self.__class__
         if self._mec is None:
-            self._mec = Colors(cls.MEC)
+            self._mec = Colors(type(self).MEC)
         return self._mec
 
     @mec.setter
     def mec(self, value):
-        if np.isscalar(value):
-            value = (value, )
+        if isinstance(value, ConstFillProperty):
+            self._mec = deepcopy(value)
         else:
-            value = tuple(value)
-        self._mec = ConstFillProperty('none', value)
+            value = _to_tuple(value)
+            self._mec = ConstFillProperty('none', value)
 
     @property
     def mew(self):
-        cls = self.__class__
         if self._mew is None:
             self._mew = LineWidth((0.5, ))
         return self._mew
 
     @mew.setter
     def mew(self, value):
-        if np.isscalar(value):
-            value = (value, )
+        if isinstance(value, LineWidth):
+            self._mew = deepcopy(value)
         else:
-            value = tuple(value)
-        self._mew = LineWidth(value)
+            value = _to_tuple(value)
+            self._mew = LineWidth(value)
+
+    @property
+    def hatch(self):
+        if self._hatch is None:
+            self._hatch = ConstFillProperty(None)
+        return self._hatch
+
+    @hatch.setter
+    def hatch(self, value):
+        if isinstance(value, ConstFillProperty):
+            self._hatch = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            default = None
+            self._hatch = ConstFillProperty(default, value)
+
+    @property
+    def barmargin(self):
+        return self._barmargin
+
+    @barmargin.setter
+    def barmargin(self, value):
+        try:
+            value = float(value)
+        except TypeError:
+            raise ValueError('Margin must be float!')
+
+        if value < 0.0 or value >= 0.5:
+            raise ValueError('Margin value must be in [0, 0.5)')
+
+        self._barmargin = value
 
     @property
     def zorder(self):
@@ -570,11 +741,11 @@ class AbstractStyle:
 
     @zorder.setter
     def zorder(self, value):
-        if np.isscalar(value):
-            value = (value, )
+        if isinstance(value, ConstFillProperty):
+            self._zorder = deepcopy(value)
         else:
-            value = tuple(value)
-        self._zorder = ConstFillProperty(100, value)
+            value = _to_tuple(value)
+            self._zorder = ConstFillProperty(100, value)
 
     @property
     def margins(self):
@@ -670,8 +841,10 @@ class AbstractStyle:
         StyleAttrMapping
         """
         mapping = {
-            'ecolor': 'edgecolor',
-            'elinewidth': 'edgelinewidth',
+            'ecolor': None,
+            'elinewidth': None,
+            'capsize': None,
+            'capthick': None,
             'color': None,
             'ls': None,
             'lw': None,
@@ -700,12 +873,37 @@ class AbstractStyle:
         StyleAttrMapping
         """
 
+        # NOTE: Do not use facealpha for bar charts. facealpha is meant for
+        # shaded areas such as CIs, etc. which should be in the background,
+        # which is not what we'd want for bars.
+
         mapping = {
             'color': 'facecolor',
             'edgecolor': None,
-            'lw': None,
+            'lw': 'edgelinewidth',
             'ls': None,
             'alpha': None,
+            'zorder': None,
+            'hatch': None,
+            'capsize': None,
+            'ecolor': None,
+            'error_kw': ['elinewidth', 'capthick']
+        }
+
+        kwargs = StyleAttrMapping(self, mapping)
+
+        return kwargs
+
+    @property
+    def scatter_kwargs(self):
+
+        mapping = {
+            'facecolors': 'facecolor',
+            'edgecolors': 'edgecolor',
+            'linewidths': 'edgelinewidth',
+            'linestyles': 'edgelinestyle',
+            'alpha': 'facealpha',
+            'marker': None,
             'zorder': None
         }
 
@@ -724,6 +922,11 @@ class DefaultStyle(AbstractStyle):
     LBL_FONTPROP_KWARGS = {
         'family': 'serif',
         'size': 12
+    }
+
+    TICKLABEL_FONTPROP_KWARGS = {
+        'family': 'serif',
+        'size': 10
     }
 
     TITLE_FONTPROP_KWARGS = {
