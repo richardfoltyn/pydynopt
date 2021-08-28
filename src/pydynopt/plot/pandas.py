@@ -517,6 +517,13 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
     plot_type = '' if not plot_type else plot_type.lower()
     hline = anything_to_list(hline, force=True)
 
+    df = df.copy()
+
+    df, by_var, by_labels, by_order = _process_slice(df, by, by_labels, by_order)
+    df, over_var, over_labels, over_order = _process_slice(df, over, over_labels, over_order)
+
+    df, yvars, moment_name = _process_dep_vars(df, yvar, moment)
+
     if xvar is None:
         if df.index.nlevels > 1:
             raise ValueError("Cannot determine x-variable")
@@ -528,13 +535,6 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
     else:
         if xvar in df.columns and xvar not in df.index:
             df = df.set_index(xvar, append=True)
-
-    df = df.copy()
-
-    df, by_var, by_labels, by_order = _process_slice(df, by, by_labels, by_order)
-    df, over_var, over_labels, over_order = _process_slice(df, over, over_labels, over_order)
-
-    df, yvars, moment_name = _process_dep_vars(df, yvar, moment)
 
     varlist = [over_var, by_var, xvar]
     index_other = [name for name in df.index.names if name not in varlist]
