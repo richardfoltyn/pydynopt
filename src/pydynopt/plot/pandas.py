@@ -635,17 +635,16 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
 
                     kw = style.fill_between_kwargs[k]
                     kw['lw'] = 0.0
-                    kw['zorder'] = 0
                     ax.fill_between(xvalues, yvalues - yerr[0], yvalues + yerr[1], **kw)
 
                     # Create lower and upper boundaries manually
                     kw = style.fill_between_edge_kwargs[k]
-                    kw['zorder'] = 10
+                    kw['zorder'] += 10
                     ax.plot(xvalues, yvalues - yerr[0], **kw)
                     ax.plot(xvalues, yvalues + yerr[1], **kw)
 
                     kw = style.plot_kwargs[k]
-                    kw['zorder'] = 20
+                    kw['zorder'] += 20
                     ax.plot(xvalues, yvalues, label=lbl, **kw)
 
                 elif plot_type == 'scatter':
@@ -658,7 +657,6 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
 
                 else:
                     kw = style.errorbar_kwargs[k]
-                    kw['capsize'] = 1.0
                     ax.errorbar(xvalues, yvalues, yerr=yerr, label=lbl, **kw)
 
         # --- Label over group ---
