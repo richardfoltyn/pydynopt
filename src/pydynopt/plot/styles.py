@@ -736,7 +736,7 @@ class AbstractStyle:
     @property
     def zorder(self):
         if self._zorder is None:
-            self._zorder = ConstFillProperty(const=100)
+            self._zorder = ConstFillProperty(const=0)
         return self._zorder
 
     @zorder.setter
@@ -745,7 +745,7 @@ class AbstractStyle:
             self._zorder = deepcopy(value)
         else:
             value = _to_tuple(value)
-            self._zorder = ConstFillProperty(100, value)
+            self._zorder = ConstFillProperty(0, value)
 
     @property
     def margins(self):
