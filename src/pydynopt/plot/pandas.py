@@ -534,7 +534,13 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
             xvar = df.index.name
     else:
         if xvar in df.columns and xvar not in df.index:
-            df = df.set_index(xvar, append=True)
+            # Append xvar to index where it's expected by plotting functions.
+            # Perform this indirectly so that MultiIndex columns work as well
+            midx = df.index.to_frame(index=False)
+            midx[xvar] = df[xvar].to_numpy()
+            midx = pd.MultiIndex.from_frame(midx)
+            df.index = midx
+            del df[xvar]
 
     varlist = [over_var, by_var, xvar]
     index_other = [name for name in df.index.names if name not in varlist]
@@ -652,8 +658,19 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
                     size = _get_scatter_size(scatter_size, df_panel.loc[by_value],
                                              style.markersize[k])
 
-                    kw = style.scatter_kwargs[k]
-                    ax.scatter(xvalues, yvalues, s=size, **kw)
+                    if style.split_scatter:
+                        # Plot face component of scatter
+                        kw = style.scatter_face_kwargs[k]
+                        ax.scatter(xvalues, yvalues, s=size, **kw)
+
+                        # Plot edge component of scatter
+                        kw = style.scatter_edge_kwargs[k]
+                        kw['zorder'] += 1
+                        ax.scatter(xvalues, yvalues, s=size, **kw)
+                    else:
+                        # Default: plot edges and faces in single call
+                        kw = style.scatter_kwargs[k]
+                        ax.scatter(xvalues, yvalues, s=size, **kw)
 
                 else:
                     kw = style.errorbar_kwargs[k]
