@@ -266,6 +266,7 @@ class AbstractStyle:
         self._title = None
         self._suptitle = None
         self._legend = None
+        self.split_scatter = False
 
         self._plot_all = PlotStyleDict(self)
 
@@ -896,18 +897,80 @@ class AbstractStyle:
 
     @property
     def scatter_kwargs(self):
+        """
+        Returns a sequence of collections of key/value pairs that can be passed
+        to matplotlib's scatter().
+
+        Returns
+        -------
+        StyleAttrMapping
+        """
 
         mapping = {
             'facecolors': 'facecolor',
             'edgecolors': 'edgecolor',
             'linewidths': 'edgelinewidth',
             'linestyles': 'edgelinestyle',
-            'alpha': 'facealpha',
+            'alpha': 'alpha',
             'marker': None,
             'zorder': None
         }
 
         kwargs = StyleAttrMapping(self, mapping)
+
+        return kwargs
+
+    @property
+    def scatter_face_kwargs(self):
+        """
+        Returns a sequence of collections of key/value parts that can be used
+        to plot the "face" component of split scatter plots and should
+        be passed to matplotlib's scatter().
+
+        Returns
+        -------
+        StyleAttrMapping
+        """
+        mapping = {
+            'facecolors': 'facecolor',
+            'alpha': 'facealpha',
+            'linewidths': 'linewidth',
+            'zorder': None
+        }
+
+        style = deepcopy(self)
+        style.linewidth = 0.0
+
+        kwargs = StyleAttrMapping(style, mapping)
+
+        return kwargs
+
+    @property
+    def scatter_edge_kwargs(self):
+        """
+        Returns a sequence of collections of key/value parts that can be used
+        to plot the "edge" component of split scatter plots and should
+        be passed to matplotlib's scatter().
+
+        Returns
+        -------
+        StyleAttrMapping
+        """
+
+        mapping = {
+            'facecolors': 'facecolor',
+            'edgecolors': 'edgecolor',
+            'linewidths': 'edgelinewidth',
+            'linestyles': 'edgelinestyle',
+            'alpha': 'edgealpha',
+            'marker': None,
+            'zorder': None
+        }
+
+        style = deepcopy(self)
+        style.facecolor = ('none', )
+
+        kwargs = StyleAttrMapping(style, mapping)
 
         return kwargs
 
