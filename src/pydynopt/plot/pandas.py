@@ -242,7 +242,7 @@ def _process_slice(df, varlist=None, labels=None, order=None):
             df_tmp = None
             for var in varlist:
                 if var in order:
-                    df_new = pd.DataFrame({var: order[var]})
+                    df_new = pd.DataFrame({var: np.atleast_1d(order[var])})
                 else:
                     values = df_values[[var]].drop_duplicates(keep='first')
                     df_new = pd.DataFrame({var: values})
