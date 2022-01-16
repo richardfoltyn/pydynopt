@@ -683,11 +683,11 @@ class AbstractStyle:
 
     @mec.setter
     def mec(self, value):
-        if isinstance(value, ConstFillProperty):
+        if isinstance(value, Colors):
             self._mec = deepcopy(value)
         else:
             value = _to_tuple(value)
-            self._mec = ConstFillProperty('none', value)
+            self._mec = Colors(colors=value)
 
     @property
     def mew(self):
