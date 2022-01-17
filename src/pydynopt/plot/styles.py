@@ -235,7 +235,7 @@ class AbstractStyle:
         self.dpi = 96
         self.aspect = 1.0
         self._margins = 0.02
-        self._grid = cls.GRID_KWARGS
+        self._grid = cls.GRID_KWARGS.copy()
         self._color = None
         self._facecolor = None
         self._facealpha = None
@@ -258,7 +258,8 @@ class AbstractStyle:
         self._hatch = None
         self._barmargin = 0.0
         self._zorder = None
-        self._figure = cls.FIGURE_KWARGS
+        self._figure = cls.FIGURE_KWARGS.copy()
+        self._subplot = cls.SUBPLOT_KWARGS.copy()
         self._ylabel = None
         self._xlabel = None
         self._xticklabels = None
@@ -266,6 +267,7 @@ class AbstractStyle:
         self._title = None
         self._suptitle = None
         self._legend = None
+        self._text = None
         self.split_scatter = False
 
         self._plot_all = PlotStyleDict(self)
@@ -274,7 +276,7 @@ class AbstractStyle:
         cls = self.__class__
         obj = cls()
 
-        blacklist = '_figure',
+        blacklist = ()
 
         for attr in dir(self):
             if attr in blacklist:
@@ -305,7 +307,7 @@ class AbstractStyle:
 
     @property
     def figure(self):
-        return self._figure.copy()
+        return self._figure
 
     @property
     def legend(self):
@@ -323,11 +325,16 @@ class AbstractStyle:
 
     @property
     def text(self):
-        cls = self.__class__
-        fp = FontProperties(**cls.TEXT_FONTPROP_KWARGS)
-        kwargs = cls.TEXT_KWARGS.copy()
-        kwargs.update({'fontproperties': fp})
-        return kwargs
+        if self._text is None:
+            cls = self.__class__
+            fp = FontProperties(**cls.TEXT_FONTPROP_KWARGS)
+            self._text = cls.TEXT_KWARGS.copy()
+            self._text.update({'fontproperties': fp})
+        return self._text
+
+    @text.setter
+    def text(self, value):
+        self._text = dict(value)
 
     @property
     def title(self):
@@ -423,7 +430,7 @@ class AbstractStyle:
 
     @property
     def grid(self):
-        return self._grid.copy()
+        return self._grid
 
     @grid.setter
     def grid(self, value):
@@ -435,7 +442,7 @@ class AbstractStyle:
                     # not produce any grid once it's been turned off.
                     # Do this only if b=False, otherwise ignore grid=True
                     # as it's enabled in some form anyways.
-                    self._grid = self.__class__.GRID_KWARGS
+                    self._grid = self.__class__.GRID_KWARGS.copy()
             else:
                 self._grid = {'b': value}
         else:
@@ -443,8 +450,10 @@ class AbstractStyle:
 
     @property
     def subplot(self):
-        cls = self.__class__
-        return cls.SUBPLOT_KWARGS.copy()
+        if self._subplot is None:
+            cls = self.__class__
+            self._subplot = cls.SUBPLOT_KWARGS.copy()
+        return self._subplot
 
     @property
     def color(self):
