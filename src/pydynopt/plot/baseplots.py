@@ -102,10 +102,15 @@ def plot_grid(fun, nrow=1, ncol=1,
     column_title = np.atleast_1d(column_title)
 
     if legend_at is not None:
-        legend_at = np.array(legend_at, dtype=np.int)
-        assert 1 <= legend_at.ndim <= 2
-        assert legend_at.shape[-1] == 2
-        legend_at = legend_at.reshape((-1, 2))
+        if isinstance(legend_at, str):
+            if legend_at.lower() != 'figure':
+                msg = f'Invalid string value for legend_at: {legend_at}'
+                raise ValueError(msg)
+        else:
+            legend_at = np.array(legend_at, dtype=np.int)
+            assert 1 <= legend_at.ndim <= 2
+            assert legend_at.shape[-1] == 2
+            legend_at = legend_at.reshape((-1, 2))
 
     if style is None:
         style = DefaultStyle()
@@ -219,9 +224,15 @@ def plot_grid(fun, nrow=1, ncol=1,
             for lbl in ax.get_yticklabels():
                 _set_properties(lbl, **style.yticklabels)
 
-    if legend and legend_loc is not None and legend_at is not None:
-        for i, idx in enumerate(legend_at):
-            axes[idx[0], idx[1]].legend(loc=legend_loc, **style.legend)
+    if legend:
+        if isinstance(legend_at, str) and legend_at.lower() == 'figure':
+            # Legend should be placed relative to whole figure. This will only
+            # work if constrained_layout is NOT used, needs to be turned off
+            # in figure kwargs in style!
+            leg = fig.legend(loc=legend_loc, **style.legend)
+        elif legend_loc is not None and legend_at is not None:
+            for i, idx in enumerate(legend_at):
+                axes[idx[0], idx[1]].legend(loc=legend_loc, **style.legend)
 
     if suptitle is not None and suptitle:
         fig.suptitle(suptitle, **style.suptitle)
