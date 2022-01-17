@@ -680,7 +680,7 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
 
         lbl = over_labels.get(over_order[ipanel], None)
         if lbl and over_label_pos:
-            kw = style.text
+            kw = style.text.copy()
             kw.update(_text_loc_to_kwargs(over_label_pos))
             kw['s'] = lbl
             kw['transform'] = ax.transAxes
