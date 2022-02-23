@@ -303,6 +303,10 @@ class AbstractStyle:
             else:
                 setattr(obj, attr, deepcopy(value, memodict))
 
+        # Manually fix this legacy thing, it will otherwise point to wrong
+        # object
+        obj._plot_all = PlotStyleDict(obj)
+
         return obj
 
     @property

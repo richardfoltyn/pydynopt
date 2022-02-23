@@ -69,7 +69,7 @@ def plot_grid(fun, nrow=1, ncol=1,
         Subplot in which legend should be placed (default: (0,0)). Accepts
         either a single tuple if legend should be placed in only one subplot,
         or a list of tuples for multiple legends.
-    legend_loc : str
+    legend_loc : str, tuple of float
         MPL-compatible string identifying where the legend should be placed
         within a subplot
     legend : bool
