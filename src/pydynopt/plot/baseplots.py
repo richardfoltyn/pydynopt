@@ -248,8 +248,17 @@ def plot_grid(fun, nrow=1, ncol=1,
             if ylim is not None:
                 ylim_same = all(np.all(ylim[i] == ylim[i, 0:1], axis=0))
 
-            for j in range(ncol):
-                if j > 0 and ylim_same and not sharey:
+            yticks_same = True
+            yticks0 = axes[i, 0].get_yticks()
+            for j in range(1, ncol):
+                yticks_j = axes[i, j].get_yticks()
+                if len(yticks0) != len(yticks_j) or \
+                        np.amax(np.abs(yticks0 - yticks_j)) > 1.0e-8:
+                    yticks_same = False
+                    break
+
+            if ylim_same and yticks_same:
+                for j in range(1, ncol):
                     axes[i, j].set_yticklabels([])
 
     render(fig, outfile, close_fig, metadata)
