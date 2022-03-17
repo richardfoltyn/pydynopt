@@ -535,7 +535,7 @@ def newton_bisect(func, x0, a=None, b=None, args=(), jac=False,
     if full_output:
         return root, res
     else:
-        return res
+        return root
 
 
 @overload(newton_bisect, jit_options={'parallel': False, 'nogil': True})
