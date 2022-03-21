@@ -13,6 +13,7 @@ def plot_grid(fun, nrow=1, ncol=1,
               xlabel=None, ylabel=None, xlim=None, ylim=None,
               xticks=None, yticks=None, xticklabels=None, yticklabels=None,
               legend_at=(0, 0), legend_loc='best', legend=False,
+              bbox_to_anchor=None,
               outfile=None, style=None, aspect=None, close_fig=True,
               pass_style=False, metadata=None, *args, **kwargs):
     """
@@ -74,6 +75,8 @@ def plot_grid(fun, nrow=1, ncol=1,
         within a subplot
     legend : bool
         If true, legend is displayed in the subplot identified by `legend_at`
+    bbox_to_anchor : 2-tuple or 4-tuple of floats, optional
+        Passed to legend() call.
     outfile : str or None
         If not None, figure is saved into given file
     style : styles.AbstractStyle
@@ -229,10 +232,13 @@ def plot_grid(fun, nrow=1, ncol=1,
             # Legend should be placed relative to whole figure. This will only
             # work if constrained_layout is NOT used, needs to be turned off
             # in figure kwargs in style!
-            leg = fig.legend(loc=legend_loc, **style.legend)
+            leg = fig.legend(loc=legend_loc, bbox_to_anchor=bbox_to_anchor,
+                             **style.legend)
         elif legend_loc is not None and legend_at is not None:
             for i, idx in enumerate(legend_at):
-                axes[idx[0], idx[1]].legend(loc=legend_loc, **style.legend)
+                axes[idx[0], idx[1]].legend(loc=legend_loc,
+                                            bbox_to_anchor=bbox_to_anchor,
+                                            **style.legend)
 
     if suptitle is not None and suptitle:
         fig.suptitle(suptitle, **style.suptitle)
