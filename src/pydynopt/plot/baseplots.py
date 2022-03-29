@@ -228,17 +228,22 @@ def plot_grid(fun, nrow=1, ncol=1,
                 _set_properties(lbl, **style.yticklabels)
 
     if legend:
+        # Merge keywords that might be present in style with potential
+        # overrides passed as arguments.
+        kw = style.legend.copy()
+        if bbox_to_anchor is not None:
+            kw['bbox_to_anchor'] = bbox_to_anchor
+        if legend_loc:
+            kw['loc'] = legend_loc
+
         if isinstance(legend_at, str) and legend_at.lower() == 'figure':
             # Legend should be placed relative to whole figure. This will only
             # work if constrained_layout is NOT used, needs to be turned off
             # in figure kwargs in style!
-            leg = fig.legend(loc=legend_loc, bbox_to_anchor=bbox_to_anchor,
-                             **style.legend)
+            leg = fig.legend(**kw)
         elif legend_loc is not None and legend_at is not None:
             for i, idx in enumerate(legend_at):
-                axes[idx[0], idx[1]].legend(loc=legend_loc,
-                                            bbox_to_anchor=bbox_to_anchor,
-                                            **style.legend)
+                axes[idx[0], idx[1]].legend(**kw)
 
     if suptitle is not None and suptitle:
         fig.suptitle(suptitle, **style.suptitle)
