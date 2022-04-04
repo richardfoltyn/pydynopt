@@ -195,7 +195,7 @@ def weighted_pmf(df, varlist_outer, varlist_inner, varname_weight='weight',
         df_outer = pd.DataFrame(weight_sum, index=df_inner.index, columns=['weight_sum'])
 
     df_inner = df_inner.join(df_outer, how='left')
-    df_inner[generate] = df_inner['weight']/df_inner['weight_sum']
+    df_inner[generate] = df_inner[varname_weight]/df_inner['weight_sum']
 
     df_pmf = df_inner[[generate]].copy()
 
