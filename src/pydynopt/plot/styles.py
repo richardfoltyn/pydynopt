@@ -10,6 +10,20 @@ import copy
 
 from pydynopt.utils import anything_to_tuple
 
+import enum
+
+
+class FigureLayout(enum.Enum):
+    DEFAULT = 1
+    TIGHT_LAYOUT = 2
+    CONSTRAINED_LAYOUT = 3
+
+
+_FIGURE_LAYOUT_MAP = {
+    'constrained_layout': FigureLayout.CONSTRAINED_LAYOUT,
+    'tight_layout': FigureLayout.TIGHT_LAYOUT
+}
+
 
 def _to_tuple(value):
     """
@@ -793,6 +807,46 @@ class AbstractStyle:
                     raise ValueError('margins value not understood')
 
         self._margins = value
+
+    @property
+    def figure_layout(self):
+        """
+        Return the figure layout setting
+
+        Returns
+        -------
+        FigureLayout
+        """
+        if not self._figure:
+            return FigureLayout.DEFAULT
+
+        for k, v in _FIGURE_LAYOUT_MAP.items():
+            if self._figure.get(k, False):
+                return v
+        else:
+            return FigureLayout.DEFAULT
+
+    @figure_layout.setter
+    def figure_layout(self, value):
+        """
+        Set the figure layout
+
+        Parameters
+        ----------
+        value : FigureLayout
+        """
+        if not isinstance(value, FigureLayout):
+            raise ValueError('Argument must be of FigureLayout type')
+
+        # Delete all layout entries, add (back) only the one requested by caller
+
+        for k in _FIGURE_LAYOUT_MAP.keys():
+            if k in self._figure:
+                del self._figure[k]
+
+        for k, v in _FIGURE_LAYOUT_MAP.items():
+            if value == v:
+                self._figure[k] = True
 
     @property
     def plot_kwargs(self):
