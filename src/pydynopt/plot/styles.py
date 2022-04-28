@@ -684,7 +684,7 @@ class AbstractStyle:
             self._markersize = deepcopy(value)
         else:
             value = _to_tuple(value)
-            default = value[len(value)-1]
+            default = value[-1]
             self._markersize = ConstFillProperty(default, value)
 
     @property
@@ -699,7 +699,7 @@ class AbstractStyle:
             self._markevery = deepcopy(value)
         else:
             value = _to_tuple(value)
-            default = value[len(value)-1]
+            default = value[-1]
             self._markevery = ConstFillProperty(default, value)
 
     @property
