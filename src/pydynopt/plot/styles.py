@@ -248,6 +248,7 @@ class AbstractStyle:
         self.cell_size = 6
         self.dpi = 96
         self.aspect = 1.0
+        self.ax_aspect = None   # Aspect ratio to set via ax.set_aspect()
         self._margins = 0.02
         self._grid = cls.GRID_KWARGS.copy()
         self._color = None

@@ -1,5 +1,7 @@
 __author__ = 'Richard Foltyn'
 
+import collections.abc
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -15,7 +17,7 @@ def plot_grid(fun, nrow=1, ncol=1,
               legend_at=(0, 0), legend_loc='best', legend=False,
               bbox_to_anchor=None,
               outfile=None, style=None, aspect=None, close_fig=True,
-              pass_style=False, metadata=None, *args, **kwargs):
+              pass_style=False, metadata=None, identity=None, *args, **kwargs):
     """
     Creates a rectangular grid of subplots and calls a user-provided function
     for each subplot to render user-supplied content.
@@ -82,7 +84,7 @@ def plot_grid(fun, nrow=1, ncol=1,
     style : styles.AbstractStyle
         Instance of AbstractStyle controlling various rendering options.
     aspect : float, optional
-        Aspect ratio
+        Aspect ratio used to construct figure
     close_fig : bool
         If true (default), close the figure after plotting if an output
         file is specified. This can be disabled if the figure should
@@ -93,6 +95,9 @@ def plot_grid(fun, nrow=1, ncol=1,
     metadata : dict, optional
         Dictionary of metadata passed to savefig(). Admissible values depend
         on backend used to generate the figure.
+    identity : bool or Mapping, optional
+        Plot identity line. If passed as mapping, key/value pairs
+        are passed as kwargs to ax.axline() to control plot style.
     args :
         Positional arguments passed directly to `fun`
     kwargs :
@@ -127,10 +132,13 @@ def plot_grid(fun, nrow=1, ncol=1,
     aspect_default = 1.0
     if style is not None:
         aspect_default = getattr(style, 'aspect', 1.0)
-    if aspect is not None:
-        aspect_default = aspect
+    aspect = aspect if aspect is not None else aspect_default
 
-    aspect = aspect_default
+    ax_aspect = None
+    if style is not None:
+        ax_aspect = getattr(style, 'ax_aspect', None)
+
+    ax_aspect_default = ax_aspect if ax_aspect is not None else aspect
 
     if pass_style and style is not None:
         kwargs = kwargs.copy()
@@ -190,8 +198,8 @@ def plot_grid(fun, nrow=1, ncol=1,
 
             if xlim is not None:
                 dx = xlim[1] - xlim[0]
-                xlb = xlim[0] - margins1d[0] / aspect * dx
-                xub = xlim[1] + margins1d[2] / aspect * dx
+                xlb = xlim[0] - margins1d[0] / ax_aspect_default * dx
+                xub = xlim[1] + margins1d[2] / ax_aspect_default * dx
                 ax.set_xlim((xlb, xub))
 
             if ylim is not None:
@@ -226,6 +234,22 @@ def plot_grid(fun, nrow=1, ncol=1,
 
             for lbl in ax.get_yticklabels():
                 _set_properties(lbl, **style.yticklabels)
+
+            # Apply axis aspect
+            if ax_aspect is not None:
+                ax.set_aspect(ax_aspect)
+
+            # Plot identity line
+            if identity is not None:
+                # If frame / axes are turned off, skip identity
+                ax_on = ax.xaxis.get_visible() and ax.yaxis.get_visible()
+                frame_on = ax.get_frame_on()
+                if ax_on or frame_on:
+                    kw = dict(lw=0.5, alpha=0.8, zorder=-1, color='black')
+                    # Update keyword arguments, if applicable
+                    if isinstance(identity, collections.abc.Mapping):
+                        kw.update(identity)
+                    ax.axline((0, 0), slope=1, **kw)
 
     if legend:
         # Merge keywords that might be present in style with potential
