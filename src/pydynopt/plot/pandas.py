@@ -206,7 +206,7 @@ def _process_slice(df, varlist=None, labels=None, order=None):
         elif isinstance(labels, Sequence):
             labels = {k: labels[i] for i, k in enumerate(order)}
         elif callable(labels):
-            labels = {v: labels({varname: v}) for v in order}
+            labels = {v: labels(**{varname: v}) for v in order}
     else:
         # Multiple variables given, we need to consolidate them into a single
         # one respecting any sort order, etc.
