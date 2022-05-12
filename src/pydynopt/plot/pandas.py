@@ -674,7 +674,24 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
 
                 else:
                     kw = style.errorbar_kwargs[k]
-                    ax.errorbar(xvalues, yvalues, yerr=yerr, label=lbl, **kw)
+                    # Check whether style includes a marker
+                    marker = kw.get('marker', None)
+                    has_marker = bool(marker)
+                    if marker:
+                        marker = marker.lower().strip()
+                        has_marker = marker != '' and marker != 'none'
+
+                    # Split between line/marker components only if marker is
+                    # present
+                    if style.split_scatter and has_marker:
+                        kw = style.errorbar_no_marker_kwargs[k]
+                        ax.errorbar(xvalues, yvalues, yerr=yerr, label=lbl, **kw)
+
+                        kw = style.marker_no_line_kwargs[k]
+                        ax.plot(xvalues, yvalues, **kw)
+                    else:
+                        kw = style.errorbar_kwargs[k]
+                        ax.errorbar(xvalues, yvalues, yerr=yerr, label=lbl, **kw)
 
         # --- Label over group ---
 

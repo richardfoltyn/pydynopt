@@ -199,13 +199,18 @@ class StyleAttrMapping:
                         # plotted items.
                         dct[subattr] = value
                 result[key] = dct
-            else:
+            elif isinstance(attr, str) and hasattr(self._style, attr):
+                # attr is attribute of style object, extract value
                 value = getattr(self._style, attr)
                 try:
                     result[key] = value[item]
                 except TypeError:
-                    # Constant properties that should not vary across plotted items.
+                    # Constant properties that should not vary across
+                    # plotted items.
                     result[key] = value
+            else:
+                # Use literal value, does not map into existing attribute
+                result[key] = attr
 
         return result
 
@@ -925,6 +930,64 @@ class AbstractStyle:
             'markevery': None,
             'zorder': None,
             'errorevery': 'markevery'
+        }
+
+        kwargs = StyleAttrMapping(self, mapping)
+
+        return kwargs
+
+    @property
+    def errorbar_no_marker_kwargs(self):
+        """
+        Return a sequence of collections of key/value pairs that can be passed to
+        matplotlib's errorbar(). All marker-related attributes are
+        stripped and marker attribute is set to 'None' so that no markers
+        are plotted.
+
+        Returns
+        -------
+        StyleAttrMapping
+        """
+        mapping = {
+            'ecolor': None,
+            'elinewidth': None,
+            'capsize': None,
+            'capthick': None,
+            'color': None,
+            'ls': None,
+            'lw': None,
+            'alpha': None,
+            'zorder': None,
+            'marker': 'None',
+            'errorevery': 'markevery',
+        }
+
+        kwargs = StyleAttrMapping(self, mapping)
+
+        return kwargs
+
+    @property
+    def marker_no_line_kwargs(self):
+        """
+        Return a sequence of collections of key/value pairs that can be passed to
+        matplotlib's plot() or errorbar(). Only includes marker-related
+        attributes and disables connecting lines.
+
+        Returns
+        -------
+        StyleAttrMapping
+        """
+        mapping = {
+            'color': 'facecolor',
+            'marker': None,
+            'markersize': None,
+            'mec': None,
+            'mew': None,
+            'ls': 'none',
+            'lw': 0,
+            'alpha': 'facealpha',
+            'zorder': None,
+            'markevery': None
         }
 
         kwargs = StyleAttrMapping(self, mapping)
