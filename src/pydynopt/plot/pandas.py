@@ -687,7 +687,11 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
                         kw = style.errorbar_no_marker_kwargs[k]
                         ax.errorbar(xvalues, yvalues, yerr=yerr, label=lbl, **kw)
 
-                        kw = style.marker_no_line_kwargs[k]
+                        kw = style.marker_no_line_kwargs[k].copy()
+                        if 'zorder' in kw:
+                            kw['zorder'] += 1
+                        else:
+                            kw['zorder'] = 1
                         ax.plot(xvalues, yvalues, **kw)
                     else:
                         kw = style.errorbar_kwargs[k]
