@@ -222,8 +222,10 @@ def plot_grid(fun, nrow=1, ncol=1,
 
             if yticks is not None:
                 ax.set_yticks(yticks)
-                if (j == (ncol - 1) or not sharey) and yticklabels is not None:
+                if (j == 0 or not sharey) and yticklabels is not None:
                     ax.set_yticklabels(yticklabels, **style.yticklabels)
+            if getattr(style, 'rotate_yticklabels', False):
+                ax.tick_params(axis='y', labelrotation=90)
 
             fun(ax, (i, j), *args, **kwargs)
 
