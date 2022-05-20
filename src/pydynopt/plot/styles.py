@@ -289,6 +289,7 @@ class AbstractStyle:
         self._legend = None
         self._text = None
         self.split_scatter = False
+        self.rotate_yticklabels = False
 
         self._plot_all = PlotStyleDict(self)
 
@@ -1065,14 +1066,11 @@ class AbstractStyle:
         mapping = {
             'facecolors': 'facecolor',
             'alpha': 'facealpha',
-            'linewidths': 'linewidth',
+            'linewidths': 0,
             'zorder': None
         }
 
-        style = deepcopy(self)
-        style.linewidth = 0.0
-
-        kwargs = StyleAttrMapping(style, mapping)
+        kwargs = StyleAttrMapping(self, mapping)
 
         return kwargs
 
@@ -1089,7 +1087,7 @@ class AbstractStyle:
         """
 
         mapping = {
-            'facecolors': 'facecolor',
+            'facecolor': 'none',
             'edgecolors': 'edgecolor',
             'linewidths': 'edgelinewidth',
             'linestyles': 'edgelinestyle',
@@ -1098,10 +1096,7 @@ class AbstractStyle:
             'zorder': None
         }
 
-        style = deepcopy(self)
-        style.facecolor = ('none', )
-
-        kwargs = StyleAttrMapping(style, mapping)
+        kwargs = StyleAttrMapping(self, mapping)
 
         return kwargs
 
