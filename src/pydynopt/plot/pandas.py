@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from .styles import DefaultStyle
+from .styles import DefaultStyle, AbstractStyle
 from .baseplots import plot_grid
 
 from ..utils import anything_to_list
@@ -98,10 +98,9 @@ def _get_yerr(data, moment_name, yvalues=None):
                n.lower() == f'{moment_name.lower()}_se']
     if se_name:
         se = data[se_name[0]].to_numpy()
-        if np.any(np.isfinite(se)):
-            yerr_lb = 1.96 * se
-            yerr_ub = 1.96 * se
-            yerr = (yerr_lb, yerr_ub)
+        yerr_lb = 1.96 * se
+        yerr_ub = 1.96 * se
+        yerr = (yerr_lb, yerr_ub)
 
     ci_lb_name = [n for n in columns if
                   n.lower() == f'{moment_name.lower()}_ci_lb']
@@ -217,6 +216,8 @@ def _process_slice(df, varlist=None, labels=None, order=None):
         df_values.columns = varlist
         # Drop duplicates, this should preserve sort order
         df_values_uniq = df_values.drop_duplicates(keep='first').copy()
+        # Sort in given variable order
+        df_values_uniq = df_values_uniq.sort_values(varlist)
 
         if order is None:
             df_values_uniq[varname] = np.arange(df_values_uniq.shape[0])
@@ -440,6 +441,8 @@ def _get_scatter_size(scatter_size, data, default):
 
     if scatter_size in columns:
         size = data[scatter_size].to_numpy().flatten()
+        # Prevent non-finite sizes due to NaN data as this will break legend
+        size[~np.isfinite(size)] = 0.0
     else:
         try:
             size = float(scatter_size)
@@ -449,12 +452,12 @@ def _get_scatter_size(scatter_size, data, default):
     return size
 
 
-def plot_dataframe(df, xvar=None, yvar=None, moment=None,
+def plot_dataframe(df, xvar=None, yvar=None, yvar_labels=None, moment=None,
                    by=None, by_labels=None, by_order=None,
                    over=None, over_order=None, over_labels=None, over_label_pos=None,
                    ncol=None, jitter=None, plot_type=None,
                    callback=None, callback_args=(),
-                   scatter_size=None, style=DefaultStyle(),
+                   scatter_size='size', style=DefaultStyle(),
                    hline=None, **kwargs):
     """
     Plot selected variables in DataFrame, optionally disaggregating by groups.
@@ -464,8 +467,10 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
     df : pd.DataFrame
     xvar : str, optional
         Variable or index name storing x-values.
-    yvar : str, optional
+    yvar : str or Iterable of str, optional
         Column names storing y-values to be plotted.
+    yvar_labels : str or Iterable of str or Mapping, optional
+        Variable labels
     moment : str, optional
         Name of moment to be plotted
     by : str or Iterable of str, optional
@@ -493,7 +498,7 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
     jitter : float, optional
         Perturb x-location by given fraction of x-range (ignored unless `by`
         is given)
-    plot_type : str, optional
+    plot_type : str or Mapping or Iterable of str, optional
         Plot type ('bar', 'area' or None, the default)
     callback : callable, optional
         If not None, will be called at the end of plotting code executed
@@ -505,7 +510,7 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
         If string, it is interpreted as a column name in `df`
         with values to be interpreted as marker sizes. If float,
         the value is used as a uniform marker size.
-    style
+    style : pydynopt.plot.styles.AbstractStyle or Iterable or Mapping, optional
     hline : array_like, optional
         List of y-values for horizontal rules that should be added to plot.
     kwargs :
@@ -514,7 +519,6 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
     """
 
     jitter = float(jitter) if jitter is not None else None
-    plot_type = '' if not plot_type else plot_type.lower()
     hline = anything_to_list(hline, force=True)
 
     df = df.copy()
@@ -548,6 +552,53 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
     # Reorder index levels (specific order is required below), push
     # user-given index levels that are not required to the end.
     df = df.reorder_levels(varlist + index_other)
+
+    # --- Fix plot types, labels and styles for each variable ---
+
+    # Plot types
+    if plot_type is None:
+        plot_type = {v: '' for v in yvars}
+    elif isinstance(plot_type, str):
+        # Same plot type for all variables
+        plot_type = {v: plot_type for v in yvars}
+    elif isinstance(plot_type, collections.abc.Mapping):
+        # Expected data type
+        pass
+    elif isinstance(plot_type, collections.abc.Iterable):
+        # Plot types passed as list, assumed in same order as variables
+        plot_type = {v: t for v, t in zip(yvars, plot_type)}
+    else:
+        raise ValueError('Unsupported plot_type value')
+
+    # Process variable labels
+    if isinstance(yvar_labels, str):
+        yvar_labels = {yvars[0]: yvar_labels}
+    elif isinstance(yvar_labels, collections.abc.Mapping):
+        # Expected data type
+        pass
+    elif isinstance(yvar_labels, collections.abc.Iterable):
+        # Convert from list to dict
+        yvar_labels = {v: lbl for v, lbl in zip(yvars, yvar_labels)}
+    elif yvar_labels is None:
+        pass
+    else:
+        raise ValueError('Unsupported yvar_labels value')
+
+    # Replicate style for all variables, if needed
+    if isinstance(style, AbstractStyle):
+        # Will be propagated / converted to dict below
+        style = [style]
+    if isinstance(style, collections.abc.Mapping):
+        # Expected data type
+        styles = style
+    elif isinstance(style, collections.abc.Sequence):
+        styles = anything_to_list(style)
+        if len(styles) == 1 and len(yvars) > 1:
+            styles = styles * len(yvars)
+        # Convert to dict
+        styles = {v: s for v, s in zip(yvars, styles)}
+    else:
+        raise ValueError('Unsupported style vale')
 
     # Determine number of rows and columns from number of vars to be plotted.
     ncol = len(over_order) if not ncol else ncol
@@ -584,7 +635,9 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
 
         xvalues_are_int = True
 
-        for yvar in yvars:
+        for ivar, yvar in enumerate(yvars):
+            # Variable-specific style
+            style = styles[yvar]
             data = df_panel[yvar]
 
             if moment_name:
@@ -603,7 +656,19 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
                 xmin = min(xmin, np.amin(xvalues))
                 xmax = max(xmax, np.amax(xvalues))
 
-                if plot_type == 'bar':
+                # Legend labels. by-labels take precedence due to backwards
+                # compatibility!
+                leglbl = None
+                if by_labels and yvar_labels:
+                    bylbl = by_labels.get(by_value, by_value)
+                    vlbl = yvar_labels.get(yvar, yvar)
+                    leglbl = f'{vlbl}: {bylbl}'
+                elif by_labels:
+                    leglbl = by_labels.get(by_value, by_value)
+                elif yvar_labels:
+                    leglbl = yvar_labels.get(yvar, yvar)
+
+                if plot_type[yvar] == 'bar':
                     if xvalues.size > 1:
                         dx = np.amin(xvalues[1:] - xvalues[:-1]) * 0.8
                         barwidth = dx / len(by_order)
@@ -623,8 +688,6 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
                     offset = dx * jitter * k
                     xvalues = xvalues - left + offset
 
-                lbl = by_labels.get(by_value, by_value)
-
                 xmin_jit = min(xmin_jit, np.amin(xvalues))
                 xmax_jit = max(xmax_jit, np.amax(xvalues))
 
@@ -635,27 +698,31 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
 
                     bw = barwidth * (1.0 - 2.0 * style.barmargin)
 
-                    ax.bar(xvalues, yvalues, width=bw, yerr=yerr, label=lbl, **kw)
+                    ax.bar(xvalues, yvalues, width=bw, yerr=yerr, label=leglbl, **kw)
 
-                elif plot_type == 'area' and yerr is not None:
+                elif plot_type[yvar] == 'area' and yerr is not None:
 
-                    kw = style.fill_between_kwargs[k]
-                    kw['lw'] = 0.0
-                    ax.fill_between(xvalues, yvalues - yerr[0], yvalues + yerr[1], **kw)
+                    ylb = yvalues - yerr[0]
+                    yub = yvalues + yerr[1]
+                    isfin = any(np.isfinite(ylb) & np.isfinite(yub))
+                    if isfin:
+                        kw = style.fill_between_kwargs[k]
+                        kw['lw'] = 0.0
+                        ax.fill_between(xvalues, ylb, yub, **kw)
 
-                    # Create lower and upper boundaries manually
-                    kw = style.fill_between_edge_kwargs[k]
-                    kw['zorder'] += 10
-                    ax.plot(xvalues, yvalues - yerr[0], **kw)
-                    ax.plot(xvalues, yvalues + yerr[1], **kw)
+                        # Create lower and upper boundaries manually
+                        kw = style.fill_between_edge_kwargs[k]
+                        kw['zorder'] += 10
+                        ax.plot(xvalues, ylb, **kw)
+                        ax.plot(xvalues, yub, **kw)
 
                     kw = style.plot_kwargs[k]
                     kw['zorder'] += 20
-                    ax.plot(xvalues, yvalues, label=lbl, **kw)
+                    ax.plot(xvalues, yvalues, label=leglbl, **kw)
 
-                elif plot_type == 'scatter':
+                elif plot_type[yvar] == 'scatter':
 
-                    size = _get_scatter_size(scatter_size, df_panel.loc[by_value],
+                    size = _get_scatter_size(scatter_size, data.loc[by_value],
                                              style.markersize[k])
 
                     if style.split_scatter:
@@ -666,11 +733,11 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
                         # Plot edge component of scatter
                         kw = style.scatter_edge_kwargs[k]
                         kw['zorder'] += 1
-                        ax.scatter(xvalues, yvalues, s=size, **kw)
+                        ax.scatter(xvalues, yvalues, s=size, label=leglbl, **kw)
                     else:
                         # Default: plot edges and faces in single call
                         kw = style.scatter_kwargs[k]
-                        ax.scatter(xvalues, yvalues, s=size, **kw)
+                        ax.scatter(xvalues, yvalues, s=size, label=leglbl, **kw)
 
                 else:
                     kw = style.errorbar_kwargs[k]
@@ -685,7 +752,7 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
                     # present
                     if style.split_scatter and has_marker:
                         kw = style.errorbar_no_marker_kwargs[k]
-                        ax.errorbar(xvalues, yvalues, yerr=yerr, label=lbl, **kw)
+                        ax.errorbar(xvalues, yvalues, yerr=yerr, label=leglbl, **kw)
 
                         kw = style.marker_no_line_kwargs[k].copy()
                         if 'zorder' in kw:
@@ -695,12 +762,13 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
                         ax.plot(xvalues, yvalues, **kw)
                     else:
                         kw = style.errorbar_kwargs[k]
-                        ax.errorbar(xvalues, yvalues, yerr=yerr, label=lbl, **kw)
+                        ax.errorbar(xvalues, yvalues, yerr=yerr, label=leglbl, **kw)
 
         # --- Label over group ---
 
         lbl = over_labels.get(over_order[ipanel], None)
         if lbl and over_label_pos:
+            style = styles[yvars[0]]
             kw = style.text.copy()
             kw.update(_text_loc_to_kwargs(over_label_pos))
             kw['s'] = lbl
@@ -711,10 +779,10 @@ def plot_dataframe(df, xvar=None, yvar=None, moment=None,
         # --- Call any user-provided callback function ---
 
         if callable(callback):
-            callback(ax, idx, df_panel, style, *callback_args)
+            callback(ax, idx, df_panel, styles[yvars[0]], *callback_args)
 
     kwargs_default = {
-        'style': style,
+        'style': styles[yvars[0]],
     }
 
     kwargs_default.update(kwargs)
