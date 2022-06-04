@@ -6,16 +6,17 @@ import pydynopt.stats
 from pydynopt.utils import anything_to_list
 
 
-def weighted_mean(df, varlist=None, weight_var='weight', multi_index=False,
-                  index_names=('Variables', 'Moments')):
+def weighted_mean(data, varlist=None, weights='weight', weight_var=None,
+                  multi_index=False, index_names=('Variables', 'Moments')):
     """
     Compute weighted mean of variable given by varname, ignoring any NaNs.
 
     Parameters
     ----------
-    df : pd.DataFrame
+    data : pd.DataFrame or pd.Series
     varlist : str or list of str, optional
         List of variables for which to compute weighted mean.
+    weights : str or tuple or array_like, optional
     weight_var : str, optional
         Name of DataFrame column containing the weights.
     multi_index : bool, optional
@@ -32,26 +33,54 @@ def weighted_mean(df, varlist=None, weight_var='weight', multi_index=False,
 
     isscalar = isinstance(varlist, str)
 
+    if isinstance(data, pd.Series):
+        data = data.to_frame('v0')
+        varlist = ['v0']
+        isscalar = True
+
+    # Legacy: if weight_var is passed, interpret this is the column name
+    # in df.
+    if weight_var is not None:
+        weights = weight_var
+
+    if weights is not None and not isinstance(weights, (pd.Series, np.ndarray)):
+        try:
+            weight_var = weights
+            weights = data[weight_var]
+        except:
+            raise ValueError('Unsupported weight argument')
+
+    has_weights = (weights is not None)
+    if has_weights:
+        weights = np.array(weights, copy=False)
+
     varlist = anything_to_list(varlist)
     if varlist is None:
-        varlist = [name for name in df.columns if name != weight_var]
+        varlist = [name for name in data.columns if name != weight_var]
 
     # Find appropriate dtype for weighted values
-    dtypes = tuple(df[varname].dtype for varname in varlist + [weight_var])
+
+    dtypes = tuple(data[varname].dtype for varname in varlist)
+    if has_weights:
+        dtypes += (weights.dtype, )
     dtype = np.result_type(*dtypes)
 
-    n = df.shape[0]
+    n = data.shape[0]
     mask = np.empty(n, dtype=np.bool_)
     var_weighted = np.empty(n, dtype=dtype)
 
     means = np.full(len(varlist), fill_value=np.nan)
 
     for i, varname in enumerate(varlist):
-        np.isfinite(df[varname].to_numpy(), out=mask)
-        sum_wgt = np.sum(df[weight_var].to_numpy(), where=mask)
-        np.multiply(df[varname].to_numpy(), df[weight_var].to_numpy(), out=var_weighted)
+        np.isfinite(data[varname].to_numpy(), out=mask)
 
-        sum_var = np.sum(var_weighted, where=mask)
+        if has_weights:
+            sum_wgt = np.sum(weights, where=mask)
+            np.multiply(data[varname].to_numpy(), weights, out=var_weighted)
+            sum_var = np.sum(var_weighted, where=mask)
+        else:
+            sum_wgt = np.sum(mask)
+            sum_var = np.sum(data[varname].to_numpy(), where=mask)
 
         means[i] = sum_var / sum_wgt
 
