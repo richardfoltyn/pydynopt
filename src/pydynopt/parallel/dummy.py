@@ -12,6 +12,17 @@ class SerialPool:
     def __init__(self, *args, **kwargs):
         pass
 
+    def __enter__(self):
+        """
+        No-op method to support context managers.
+        """
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        No-op method to support context managers.
+        """
+
     def starmap(self, func, args):
         """
         Dummy serial implementation for Python's Pool.starmap() method.
