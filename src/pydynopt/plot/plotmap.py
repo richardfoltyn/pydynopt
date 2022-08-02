@@ -8,7 +8,7 @@ from __future__ import print_function, division, absolute_import
 
 import itertools as it
 import re
-from collections import Callable
+from collections.abc import Callable
 from copy import deepcopy, copy
 
 import numpy as np

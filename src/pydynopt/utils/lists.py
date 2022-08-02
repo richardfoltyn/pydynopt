@@ -27,7 +27,7 @@ def anything_to_list(value, force=False):
     if isinstance(value, list):
         return value
 
-    from collections import Iterable
+    from collections.abc import Iterable
 
     has_pandas = False
 
@@ -80,7 +80,7 @@ def anything_to_tuple(value, force=False):
     if isinstance(value, tuple):
         return value
 
-    from collections import Iterable
+    from collections.abc import Iterable
 
     has_pandas = False
 

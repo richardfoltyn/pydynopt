@@ -5,7 +5,7 @@ from numpy import linspace
 
 import pytest
 
-from collections import Iterable
+from collections.abc import Iterable
 from itertools import combinations
 
 
