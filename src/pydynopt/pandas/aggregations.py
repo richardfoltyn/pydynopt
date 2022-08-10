@@ -7,7 +7,7 @@ from pydynopt.utils import anything_to_list
 
 
 def weighted_mean(data, varlist=None, weights='weight', weight_var=None,
-                  multi_index=False, index_names=('Variables', 'Moments')):
+                  multi_index=False, index_names=('Variable', 'Moment')):
     """
     Compute weighted mean of variable given by varname, ignoring any NaNs.
 
@@ -102,7 +102,7 @@ def weighted_mean(data, varlist=None, weights='weight', weight_var=None,
 
 
 def percentile(df, prank, varlist=None, weight_var='weight', multi_index=False,
-               index_names=('Variables', 'Moments')):
+               index_names=('Variable', 'Moment')):
     """
     Compute (weighted) percentiles for a given list of variables.
 
