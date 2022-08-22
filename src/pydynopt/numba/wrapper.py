@@ -126,7 +126,10 @@ if use_numba:
         from numba.types import boolean, string
         from numba import prange
         from numba import from_dtype
+
+        has_numba = True
+
     except ImportError:
         # Nothing to do, use the default decorators defined above
-        pass
+        has_numba = False
 
