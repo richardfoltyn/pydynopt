@@ -1,4 +1,7 @@
 
+from collections.abc import Iterable
+from typing import Optional, Union
+
 import numpy as np
 import pandas as pd
 
@@ -6,8 +9,52 @@ import pydynopt.stats
 from pydynopt.utils import anything_to_list
 
 
-def weighted_mean(data, varlist=None, weights='weight', weight_var=None,
-                  multi_index=False, index_names=('Variable', 'Moment')):
+from pydynopt.numba import jit, has_numba
+
+
+@jit(nopython=True, parallel=False)
+def _weighed_mean_impl(data: np.ndarray, weights: np.ndarray) -> float:
+    """
+    Helper routine for fast weighted means of data with NAs.
+
+    Parameters
+    ----------
+    data
+    weights
+
+    Returns
+    -------
+    float
+    """
+
+    N = len(data)
+
+    sw = 0.0
+    m = 0.0
+
+    for i in range(N):
+        xi = data[i]
+        if np.isfinite(xi):
+            w = weights[i]
+            sw += w
+            m += w * xi
+
+    if sw > 0.0:
+        m /= sw
+
+    return m
+
+
+def weighted_mean(
+        data: pd.DataFrame,
+        varlist: Optional[Union[str, Iterable[str]]] = None,
+        weights: Optional[Union[str, pd.Series, np.ndarray]] = 'weight',
+        weight_var: Optional[str] = None,
+        index_varlist: bool = True,
+        multi_index: bool = False,
+        index_names: Optional[tuple[str]] = ('Variable', 'Moment'),
+        dtype: Optional[Union[np.dtype, type]] = float
+) -> Union[float, pd.Series]:
     """
     Compute weighted mean of variable given by varname, ignoring any NaNs.
 
@@ -19,11 +66,15 @@ def weighted_mean(data, varlist=None, weights='weight', weight_var=None,
     weights : str or tuple or array_like, optional
     weight_var : str, optional
         Name of DataFrame column containing the weights.
+    index_varlist : bool, optional
+        If true, create index from variable list (slow).
     multi_index : bool, optional
         If true, insert an additional index level with value 'Mean'
-        for each variable.
+        for each variable (very slow!).
     index_names : str or array_like, optional
         Names for (multi)-index levels of resulting Series.
+    dtype : np.dtype or type, optional
+        If present, determines dtype of output array.
 
     Returns
     -------
@@ -58,38 +109,45 @@ def weighted_mean(data, varlist=None, weights='weight', weight_var=None,
     if varlist is None:
         varlist = [name for name in data.columns if name != weight_var]
 
-    # Find appropriate dtype for weighted values
+    if not has_weights:
+        means = data[varlist].sum().to_numpy()
 
-    dtypes = tuple(data[varname].dtype for varname in varlist)
-    if has_weights:
-        dtypes += (weights.dtype, )
-    dtype = np.result_type(*dtypes)
-
-    n = data.shape[0]
-    mask = np.empty(n, dtype=np.bool_)
-    var_weighted = np.empty(n, dtype=dtype)
-
-    means = np.full(len(varlist), fill_value=np.nan)
-
-    for i, varname in enumerate(varlist):
-        np.isfinite(data[varname].to_numpy(), out=mask)
-
-        if has_weights:
-            sum_wgt = np.sum(weights, where=mask)
-            np.multiply(data[varname].to_numpy(), weights, out=var_weighted)
-            sum_var = np.sum(var_weighted, where=mask)
-        else:
-            sum_wgt = np.sum(mask)
-            sum_var = np.sum(data[varname].to_numpy(), where=mask)
-
-        means[i] = sum_var / sum_wgt
-
-    # Force deallocated of temporary arrays.
-    del mask, var_weighted
-
-    if isscalar and not multi_index:
-        result = means[0]
+    elif has_numba:
+        means = np.full(len(varlist), fill_value=np.nan)
+        for i, varname in enumerate(varlist):
+            dnp = data[varname].to_numpy(copy=False)
+            means[i] = _weighed_mean_impl(dnp, weights)
     else:
+        # Find appropriate dtype for weighted values
+        if dtype is None:
+            dtypes = tuple(data[varname].dtype for varname in varlist)
+            if has_weights:
+                dtypes += (weights.dtype, )
+            dtype = np.result_type(*dtypes)
+
+        n = data.shape[0]
+        mask = np.empty(n, dtype=np.bool_)
+        var_weighted = np.empty(n, dtype=dtype)
+        means = np.full(len(varlist), fill_value=np.nan)
+
+        for i, varname in enumerate(varlist):
+            dnp = data[varname].to_numpy(copy=False)
+            np.isfinite(dnp, out=mask)
+
+            if has_weights:
+                sum_wgt = np.sum(weights, where=mask)
+                np.multiply(data[varname].to_numpy(), weights, out=var_weighted)
+                sum_var = np.sum(var_weighted, where=mask)
+            else:
+                sum_wgt = np.sum(mask)
+                sum_var = np.sum(data[varname].to_numpy(), where=mask)
+
+            means[i] = sum_var / sum_wgt
+
+        # Force deallocated of temporary arrays.
+        del mask, var_weighted
+
+    if index_varlist or multi_index:
         index_names = anything_to_list(index_names)
         if multi_index:
             idx = pd.MultiIndex.from_product((varlist, ['Mean']),
@@ -97,8 +155,103 @@ def weighted_mean(data, varlist=None, weights='weight', weight_var=None,
         else:
             idx = pd.Index(varlist, name=index_names[0])
         result = pd.Series(means, index=idx)
+    elif isscalar:
+        result = means[0]
+    else:
+        result = pd.Series(means)
 
     return result
+
+
+def df_weighted_mean(
+        data: Union[pd.Series, pd.DataFrame],
+        groups: Optional[Union[str, Iterable[str]]] = None,
+        varlist: Optional[Union[str, Iterable[str]]] = None,
+        weights: Optional[Union[pd.Series, np.ndarray, str]] = 'weight',
+        na_min_count: Optional[int] = 1,
+        multi_index: bool = False,
+        index_names: Optional[Union[str, Iterable[str]]] = ('Variable', 'Moment')
+) -> Union[pd.Series, pd.DataFrame]:
+    """
+    Compute (within-group) weighted mean of variables.
+
+    Parameters
+    ----------
+    data : pd.DataFrame or pd.Series
+    groups : str or Iterable of str, optional
+        List of variables defining groups.
+    varlist : str or list of str, optional
+        List of variables for which to compute weighted mean.
+    weights : str or tuple or array_like, optional
+    na_min_count : int, optional
+        Groups with number of observations below this value are assigned NA.
+    multi_index : bool, optional
+        If true, insert an additional index level with value 'Mean'
+        for each variable.
+    index_names : str or array_like, optional
+        Names for (multi)-index levels of resulting Series.
+
+    Returns
+    -------
+    pd.Series or pd.DataFrame
+        Series containing weighted means with variable names used as index.
+    """
+
+    isscalar = isinstance(varlist, str)
+    groups = anything_to_list(groups, force=True)
+
+    data = data.copy()
+
+    if isinstance(data, pd.Series):
+        data = data.to_frame('v0')
+        varlist = ['v0']
+        isscalar = True
+
+    if isinstance(weights, str):
+        weight_var = weights
+    elif weights is not None:
+        weight_var = '__weight'
+        data[weight_var] = weights
+    else:
+        weight_var = None
+
+    varlist = anything_to_list(varlist)
+    if varlist is None:
+        varlist = [name for name in data.columns
+                   if name != weight_var and name not in groups]
+
+    if not weight_var:
+        if groups:
+            means = data[varlist].groupby(groups).sum()
+        else:
+            means = data[varlist].sum()
+    else:
+        means = []
+        wgt_notna = f'__{weight_var}_not_na'
+
+        for i, varname in enumerate(varlist):
+            data[varname] *= data[weight_var]
+            data[wgt_notna] = data[weight_var] * data[varname].notna()
+            if groups:
+                data[varname] /= data.groupby(groups)[wgt_notna].transform('sum')
+                mean_var = data.groupby(groups)[varname].sum(min_count=na_min_count)
+            else:
+                data[varname] /= data[wgt_notna].sum()
+                mean_var = data[varname].sum(min_count=na_min_count)
+            means.append(mean_var.to_frame(varname))
+
+        means = pd.concat(means, axis=1)
+
+    if isscalar and not multi_index:
+        means = means.iloc[:, 0].copy()
+    elif multi_index:
+        index_names = anything_to_list(index_names)
+        means.columns = pd.MultiIndex.from_product(
+            (varlist, ['Mean']),
+            names=index_names
+        )
+
+    return means
 
 
 def percentile(df, prank, varlist=None, weight_var='weight', multi_index=False,
