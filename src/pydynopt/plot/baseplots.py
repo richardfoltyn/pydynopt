@@ -1,23 +1,45 @@
 __author__ = 'Richard Foltyn'
 
 import collections.abc
+from collections.abc import Mapping, Sequence
+from typing import Optional, Union
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import Formatter
 
-from .styles import DefaultStyle
+from .styles import DefaultStyle, AbstractStyle
 
 
-def plot_grid(fun, nrow=1, ncol=1,
-              column_title=None, suptitle=None,
-              figure_kw=None, subplot_kw=None,
-              sharex=True, sharey=True,
-              xlabel=None, ylabel=None, xlim=None, ylim=None,
-              xticks=None, yticks=None, xticklabels=None, yticklabels=None,
-              legend_at=(0, 0), legend_loc='best', legend=False,
+def plot_grid(fun, nrow: int = 1, ncol: int = 1,
+              *,
+              column_title: Optional[Union[Sequence[str], str]] = None,
+              suptitle: Optional[str] = None,
+              figure_kw: Optional[Mapping] = None,
+              subplot_kw: Optional[Mapping] = None,
+              sharex: bool = True,
+              sharey: bool = True,
+              xlabel: Optional[str] = None,
+              ylabel: Optional[str] = None,
+              xlim: Optional[tuple[float, float]] = None,
+              ylim: Optional[tuple[float, float]] = None,
+              xticks: Optional[Sequence[float]] = None,
+              yticks: Optional[Sequence[float]] = None,
+              xticklabels: Optional[Sequence[str]] = None,
+              yticklabels: Optional[Sequence[str]] = None,
+              ytickformatter: Optional[Formatter] = None,
+              legend_at: tuple[int, int] = (0, 0),
+              legend_loc: str = 'best',
+              legend: bool = False,
               bbox_to_anchor=None,
-              outfile=None, style=None, aspect=None, close_fig=True,
-              pass_style=False, metadata=None, identity=None, *args, **kwargs):
+              outfile: Optional[str] = None,
+              style: Optional[AbstractStyle] = None,
+              aspect: Optional[float] = None,
+              close_fig: bool = True,
+              pass_style: bool = False,
+              metadata: Optional[Mapping] = None,
+              identity: bool = None,
+              **kwargs):
     """
     Creates a rectangular grid of subplots and calls a user-provided function
     for each subplot to render user-supplied content.
@@ -68,6 +90,7 @@ def plot_grid(fun, nrow=1, ncol=1,
         y-values.
     yticklabels : array_like, optional
         Ticklabels for y-ticks. Ignored if y-ticks not given or not used.
+    ytickformatter : matplotlib.ticker.Formatter, optional
     legend_at : array_like
         Subplot in which legend should be placed (default: (0,0)). Accepts
         either a single tuple if legend should be placed in only one subplot,
@@ -98,8 +121,6 @@ def plot_grid(fun, nrow=1, ncol=1,
     identity : bool or Mapping, optional
         Plot identity line. If passed as mapping, key/value pairs
         are passed as kwargs to ax.axline() to control plot style.
-    args :
-        Positional arguments passed directly to `fun`
     kwargs :
         Keyword arguments passed directly to `fun`
     """
@@ -220,6 +241,9 @@ def plot_grid(fun, nrow=1, ncol=1,
                 if (i == (nrow - 1) or not sharex) and xticklabels is not None:
                     ax.set_xticklabels(xticklabels, **style.xticklabels)
 
+            if ytickformatter is not None:
+                ax.yaxis.set_major_formatter(ytickformatter)
+
             if yticks is not None:
                 ax.set_yticks(yticks)
                 if (j == 0 or not sharey) and yticklabels is not None:
@@ -227,7 +251,7 @@ def plot_grid(fun, nrow=1, ncol=1,
             if getattr(style, 'rotate_yticklabels', False):
                 ax.tick_params(axis='y', labelrotation=90)
 
-            fun(ax, (i, j), *args, **kwargs)
+            fun(ax, (i, j), **kwargs)
 
             # Apply tick label styles after calling the function since
             # user actions might have unset style settings.
