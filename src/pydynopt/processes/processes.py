@@ -298,3 +298,156 @@ def istransm(m, transposed=False, tol=1e-12):
     valid = valid and np.all(np.abs(np.sum(m, axis=axis) - 1 < tol))
 
     return valid
+
+
+def discretize_markov(nobs: int,
+                      tm: np.ndarray,
+                      verbose: bool = False,
+                      logger=None) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Create a discrete approximation for a Markov process for a given number
+    of cross-sectional units.
+
+    This function (slightly) perturbs transition probabilities as needed such
+    that in a finite-sample cross-section the simulated cross-section
+    is still ergodic.
+
+    Parameters
+    ----------
+    nobs : int
+        Size of the simulated cross-section
+    tm : np.ndarray
+        Markov chain transition matrix
+    verbose : bool, optional
+    logger
+        If not None, use logger instance for status messages.
+
+    Returns
+    -------
+    inv_dist_approx : np.ndarray
+        Invariant distribution in terms of observations
+    tm_approx : np.ndarray
+        Transition "histogram" in terms of observations
+    """
+
+    nstates = tm.shape[0]
+    tm_approx = np.empty_like(tm, dtype=int)
+
+    inv_dist = markov_ergodic_dist(tm, inverse=True)
+    inv_dist_approx = pmf_to_histogram(nobs, inv_dist, verbose, logger)
+
+    for i in range(nstates):
+        tm_approx[i] = pmf_to_histogram(inv_dist_approx[i], tm[i],
+                                        verbose, logger)
+
+    inv_to = np.sum(tm_approx, axis=0)
+    while not np.all(inv_dist_approx == inv_to):
+        i = np.argmax(inv_dist_approx - inv_to)
+        j = np.argmin(inv_dist_approx - inv_to)
+
+        cidx = np.array([[i, j]], dtype=int)
+
+        # need to flip columns i and j in one row. As candidate rows we
+        # consider only those rows where original transition matrix has no
+        # exact zeros in columns i, j, as we do not want to artificially
+        # introduce transitions that did not exist with non-zero probability
+        # in the original process.
+        ridx = (tm[:, i] > 0.0)
+        # Do not subtract from elements in approx. that are already zero!
+        ridx &= (tm_approx[:, j] > 0)
+        # Resulting matrix for all candidate rows
+        tm_try = np.copy(tm_approx)
+        tm_try[:, i] += 1
+        tm_try[:, j] -= 1
+        # Remove all rows that would lead to absorbing state, i.e. rows
+        # with only one non-zero element.
+        absorb = np.any(np.sum(tm_try, axis=1, keepdims=True) == tm_try, axis=1)
+        ridx &= ~absorb
+
+        if not np.any(ridx):
+            raise ValueError('Cannot discretize transition matrix')
+
+        ridx = np.arange(nstates)[ridx].reshape((-1, 1))
+
+        m = tm_approx[ridx, cidx] + np.array([[1.0, -1.0]])
+        m /= inv_dist_approx[ridx]
+        diff = m - tm[ridx, cidx]
+
+        eps = np.sum(np.abs(diff), axis=1)
+        # row with least distortions
+        k = np.argmin(eps)
+        tm_approx[ridx[k], cidx] += np.array([[1, -1]])
+        inv_to = np.sum(tm_approx, axis=0)
+
+    # Perform some consistency checks and diagnostics
+    # Implied transition matrix of sample-size-adjusted process
+    tm_impl = tm_approx / inv_to[:, None]
+    # this should hold by construction
+    assert np.max(np.abs(np.sum(tm_impl, axis=1) - 1)) < 1e-12
+
+    inv_dist_impl = markov_ergodic_dist(tm_impl, inverse=True)
+    inv_dist_impl_smpl = pmf_to_histogram(nobs, inv_dist_impl, verbose=False)
+    assert np.all(inv_dist_impl_smpl == inv_dist_approx)
+
+    tm_smpl_impl = np.empty_like(tm_approx)
+    for i in range(nstates):
+        tm_smpl_impl[i] = pmf_to_histogram(inv_dist_approx[i], tm_impl[i],
+                                           verbose=False)
+
+    assert np.all(tm_smpl_impl == tm_approx)
+
+    eps = np.max(np.abs(tm_impl - tm))
+    msg = f'MARKOV_SIM: trans. mat. max delta: {eps:.3e}'
+
+    if logger is not None:
+        logger.debug(msg)
+    elif verbose:
+        print(msg)
+
+    tm_approx = np.array(tm_approx, dtype=np.int)
+
+    return inv_dist_approx, tm_approx
+
+
+def pmf_to_histogram(nobs: int,
+                     pmf: np.ndarray,
+                     verbose: bool = False,
+                     logger=None) -> np.ndarray:
+    """
+    Convert a PMF to an "optimal" histogram for a given number of observations.
+
+    Parameters
+    ----------
+    nobs
+    pmf
+    verbose
+    logger
+
+    Returns
+    -------
+    np.ndarray
+    """
+
+    assert np.all(pmf >= 0)
+    idx = np.where(pmf > 0)[0]
+
+    arr = np.zeros_like(pmf)
+    arr[idx] = np.around(nobs * pmf[idx])
+
+    while np.sum(arr) > nobs:
+        i = np.argmax(arr[idx] / nobs - pmf[idx])
+        arr[idx[i]] -= 1
+    while np.sum(arr) < nobs:
+        i = np.argmax(pmf[idx] - arr[idx] / nobs)
+        arr[idx[i]] += 1
+
+    eps = np.max(np.abs(arr / nobs - pmf))
+    msg = f'PMF_TO_HISTOGRAM: max. deviation: {eps:.3e}'
+
+    if logger is not None:
+        logger.debug(msg)
+    elif verbose:
+        print(msg)
+
+    arr = np.array(arr, dtype=np.int)
+    return arr
