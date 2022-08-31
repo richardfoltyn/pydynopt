@@ -24,7 +24,10 @@ def _suffix_formatter(value: float, pos: int) -> str:
         Formatted tick label
     """
     suffix = ''
-    if value >= 1.0e9:
+    if value >= 1.0e12:
+        value /= int(1.0e12)
+        suffix = 'tr'
+    elif value >= 1.0e9:
         value /= int(1.0e9)
         suffix = 'bn'
     elif value >= 1.0e6:
