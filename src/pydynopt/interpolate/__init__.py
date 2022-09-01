@@ -29,13 +29,12 @@ JIT_OPTIONS = {'parallel': False, 'nogil': True, 'cache': True}
 @overload(interp1d, jit_options=JIT_OPTIONS)
 def _interp1d_generic(x, xp, fp, ilb=0, extrapolate=True, left=np.nan,
                      right=np.nan, out=None):
-    from numba.types.scalars import Number
-    from numba.types.npytypes import Array
+    from numba import types
     f = None
 
-    if isinstance(x, Number):
+    if isinstance(x, types.Number):
         f = interp1d_scalar
-    elif isinstance(x, Array):
+    elif isinstance(x, types.Array):
         f = interp1d_array
 
     return f
@@ -44,15 +43,15 @@ def _interp1d_generic(x, xp, fp, ilb=0, extrapolate=True, left=np.nan,
 @overload(interp1d, jit_options=JIT_OPTIONS)
 def _interp1d_impl_generic(x, xp, fp, out, ilb=0, extrapolate=True, left=np.nan,
                            right=np.nan):
-    from numba.types.scalars import Number
-    from numba.types.npytypes import Array
+    from numba import types
+    
     f = None
 
     from .numba.linear import interp1d_array_impl
 
-    if isinstance(x, Number):
+    if isinstance(x, types.Number):
         pass
-    elif isinstance(x, Array):
+    elif isinstance(x, types.Array):
         f = interp1d_array_impl
 
     return f
@@ -60,13 +59,13 @@ def _interp1d_impl_generic(x, xp, fp, out, ilb=0, extrapolate=True, left=np.nan,
 
 @overload(interp1d_locate, jit_options=JIT_OPTIONS)
 def _interp1d_locate_generic(x, xp, ilb=0, index_out=None, weight_out=None):
-    from numba.types.scalars import Number
-    from numba.types.npytypes import Array
+    from numba import types
+    
     f = None
 
-    if isinstance(x, Number):
+    if isinstance(x, types.Number):
         f = interp1d_locate_scalar
-    elif isinstance(x, Array):
+    elif isinstance(x, types.Array):
         f = interp1d_locate_array
 
     return f
@@ -75,13 +74,13 @@ def _interp1d_locate_generic(x, xp, ilb=0, index_out=None, weight_out=None):
 @overload(interp1d_eval, jit_options=JIT_OPTIONS)
 def _interp1d_eval_generic(index, weight, fp, extrapolate=True,
                           left=np.nan, right=np.nan, out=None):
-    from numba.types.scalars import Number
-    from numba.types.npytypes import Array
+    from numba import types
+    
 
     f = None
-    if isinstance(index, Number):
+    if isinstance(index, types.Number):
         f = interp1d_eval_scalar
-    elif isinstance(index, Array):
+    elif isinstance(index, types.Array):
         f = interp1d_eval_array
 
     return f
@@ -89,13 +88,13 @@ def _interp1d_eval_generic(index, weight, fp, extrapolate=True,
 
 @overload(interp2d, jit_options=JIT_OPTIONS)
 def _interp2d_generic(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
-    from numba.types.scalars import Number
-    from numba.types.npytypes import Array
+    from numba import types
+    
     f = None
 
-    if isinstance(x0, Number):
+    if isinstance(x0, types.Number):
         f = interp2d_scalar
-    elif isinstance(x0, Array):
+    elif isinstance(x0, types.Array):
         f = interp2d_array
 
     return f
@@ -104,15 +103,15 @@ def _interp2d_generic(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None
 @overload(interp2d_locate, jit_options=JIT_OPTIONS)
 def _interp2d_locate_generic(x0, x1, xp0, xp1, ilb=None, index_out=None,
                             weight_out=None):
-    from numba.types.scalars import Number
-    from numba.types.npytypes import Array
+    from numba import types
+    
 
     f = None
 
-    if isinstance(x0, Number):
+    if isinstance(x0, types.Number):
         if ilb is None or index_out is None or weight_out is None:
             f = interp2d_locate_scalar
-    elif isinstance(x0, Array):
+    elif isinstance(x0, types.Array):
         f = interp2d_locate_array
 
     return f
@@ -120,14 +119,13 @@ def _interp2d_locate_generic(x0, x1, xp0, xp1, ilb=None, index_out=None,
 
 @overload(interp2d_locate, jit_options=JIT_OPTIONS)
 def _interp2d_locate_impl_generic(x0, x1, xp0, xp1, ilb, index_out, weight_out):
-    from numba.types.scalars import Number
-    from numba.types.npytypes import Array
+    from numba import types
 
     from .numba.linear import interp2d_locate_scalar_impl
 
     f = None
 
-    if isinstance(x0, Number):
+    if isinstance(x0, types.Number):
         f = interp2d_locate_scalar_impl
 
     return f
@@ -135,19 +133,19 @@ def _interp2d_locate_impl_generic(x0, x1, xp0, xp1, ilb, index_out, weight_out):
 
 @overload(interp2d_eval, jit_options=JIT_OPTIONS)
 def _interp2d_eval_generic(index, weight, fp, extrapolate=True, out=None):
-    from numba.types.npytypes import Array
-    from numba.types import Optional
+    
+    from numba import types
 
     f = None
 
-    # For whatever reason, index might be inferred as optionl type, so
+    # For whatever reason, index might be inferred as optional type, so
     # first recover underlying type if necessary.
-    if isinstance(index, Optional):
+    if isinstance(index, types.Optional):
         index = index.type
 
-    if isinstance(index, Array) and index.ndim == 1:
+    if isinstance(index, types.Array) and index.ndim == 1:
         f = interp2d_eval_scalar
-    elif isinstance(index, Array):
+    elif isinstance(index, types.Array):
         f = interp2d_eval_array
 
     return f
