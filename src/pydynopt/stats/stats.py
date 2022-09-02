@@ -355,10 +355,11 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False,
 @overload(quantile, jit_options={'nogil': True, 'parallel': False})
 def quantile_generic(x, pmf, qrank, assume_sorted=False, assume_unique=False,
                      interpolation='nearest'):
-    from numba.types import Number
+
+    from numba import types
 
     f = None
-    if isinstance(qrank, Number):
+    if isinstance(qrank, types.Number):
         f = quantile_scalar
     else:
         f = quantile_array
@@ -451,10 +452,10 @@ def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False,
 def percentile_generic(x, pmf, prank, assume_sorted=False, assume_unique=False,
                        interpolation='nearest'):
 
-    from numba.types import Number
+    from numba import types
 
     f = None
-    if isinstance(prank, Number):
+    if isinstance(prank, types.Number):
         f = percentile_scalar
     else:
         f = percentile_array

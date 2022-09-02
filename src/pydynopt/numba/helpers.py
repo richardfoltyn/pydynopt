@@ -83,10 +83,10 @@ def to_array_default(obj, dtype=None):
 @overload(to_array, jit_options={'nogil': True, 'parallel': False})
 def array_generic(obj, dtype=None):
 
-    from numba.types import UniTuple, List
+    from numba import types
 
     f = to_array_default
-    if isinstance(obj, (UniTuple, List)):
+    if isinstance(obj, (types.UniTuple, types.List)):
         f = to_array_iterable
 
     return f

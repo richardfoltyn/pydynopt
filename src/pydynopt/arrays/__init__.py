@@ -20,13 +20,12 @@ JIT_OPTIONS = {'parallel': False, 'nogil': True, 'cache': True}
 
 @overload(insert, jit_options=JIT_OPTIONS)
 def insert_generic(arr, obj, values, axis=None):
-    from numba.types import Integer, Number
-    from numba.types.npytypes import Array
+    from numba import types
 
     f = None
-    if isinstance(obj, Integer) and isinstance(values, Number):
+    if isinstance(obj, types.Integer) and isinstance(values, types.Number):
         f = _insert
-    elif isinstance(obj, Array) and isinstance(values, Array):
+    elif isinstance(obj, types.Array) and isinstance(values, types.Array):
         if obj.ndim <= 1:
             f = _insert
 
@@ -36,14 +35,14 @@ def insert_generic(arr, obj, values, axis=None):
 @overload(ravel_multi_index, jit_options=JIT_OPTIONS)
 def ravel_multi_index_generic(multi_index, dims, mode='raise', order='C'):
 
-    from numba.types.npytypes import Array
+    from numba import types
     from .numba.arrays import _ravel_multi_index, _ravel_multi_index_array
     from .numba.arrays import _ravel_multi_index_array1d
 
     f = None
-    if isinstance(multi_index, Array) and multi_index.ndim >= 2:
+    if isinstance(multi_index, types.Array) and multi_index.ndim >= 2:
         f = _ravel_multi_index_array
-    elif isinstance(multi_index, Array) and multi_index.ndim == 1:
+    elif isinstance(multi_index, types.Array) and multi_index.ndim == 1:
         f = _ravel_multi_index_array1d
     else:
         f = _ravel_multi_index
@@ -53,15 +52,15 @@ def ravel_multi_index_generic(multi_index, dims, mode='raise', order='C'):
 
 @overload(unravel_index, jit_options=JIT_OPTIONS)
 def unravel_index_generic(indices, shape, order='C'):
-    from numba.types import Integer
-    from numba.types.npytypes import Array
+    
+    from numba import types
 
     from .numba.arrays import _unravel_index_scalar, _unravel_index_array
 
     f = None
-    if isinstance(indices, Integer):
+    if isinstance(indices, types.Integer):
         f = _unravel_index_scalar
-    elif isinstance(indices, Array):
+    elif isinstance(indices, types.Array):
         f = _unravel_index_array
 
     return f
@@ -78,16 +77,16 @@ def ind2sub_impl_generic(indices, shape, axis, out):
     when axis=None).
 
     """
-    from numba.types import Integer
-    from numba.types.npytypes import Array
+    
+    from numba import types
 
     f = None
-    if isinstance(indices, Integer):
+    if isinstance(indices, types.Integer):
         if axis is not None and out is not None:
             from .numba.arrays import ind2sub_axis_scalar as f
         elif axis is not None:
             from .numba.arrays import ind2sub_scalar_impl as f
-    elif isinstance(indices, Array):
+    elif isinstance(indices, types.Array):
         if axis is not None and out is not None:
             from .numba.arrays import ind2sub_axis_array_impl as f
         elif out is not None:
@@ -106,11 +105,10 @@ def ind2sub_generic(indices, shape, axis=None, out=None):
     the case when one of them is missing.
     """
 
-    from numba.types import Integer
-    from numba.types.npytypes import Array
+    from numba import types
 
     f = None
-    if isinstance(indices, Integer):
+    if isinstance(indices, types.Integer):
         if axis is not None:
             # out missing, will be ignored by implementation
             from .numba.arrays import ind2sub_axis_scalar_impl as f
@@ -118,7 +116,7 @@ def ind2sub_generic(indices, shape, axis=None, out=None):
             # axis is missing, so implementation will return 1d-array with
             # all coordinates. out array will be allocated if missing.
             from .numba.arrays import ind2sub_scalar as f
-    elif isinstance(indices, Array):
+    elif isinstance(indices, types.Array):
         if axis is not None:
             # out missing, will be allocated on demand
             from .numba.arrays import ind2sub_axis_array as f
@@ -133,13 +131,13 @@ def ind2sub_generic(indices, shape, axis=None, out=None):
 @overload(sub2ind, jit_options=JIT_OPTIONS)
 def sub2ind_generic(coords, shape, out=None):
 
-    from numba.types.npytypes import Array
+    from numba import types
 
     from .numba.arrays import sub2ind_array, sub2ind_scalar
 
     f = None
     if out is None:
-        if isinstance(coords, Array):
+        if isinstance(coords, types.Array):
             if coords.ndim == 1:
                 f = sub2ind_scalar
             elif coords.ndim >= 2:
@@ -154,12 +152,12 @@ def sub2ind_generic(coords, shape, out=None):
 
 @overload(sub2ind, jit_options=JIT_OPTIONS)
 def sub2ind_impl_generic(coords, shape, out):
-    from numba.types.npytypes import Array
+    from numba import types
 
     from .numba.arrays import sub2ind_array_impl
 
     f = None
-    if isinstance(coords, Array) and out is not None:
+    if isinstance(coords, types.Array) and out is not None:
         if coords.ndim >= 2:
             f = sub2ind_array_impl
 

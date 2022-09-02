@@ -76,13 +76,12 @@ def _extract_arg(arg, index=0):
 @overload(_extract_arg, jit_options={'nogil': True})
 def _extract_arg_generic(arg, index=0):
 
-    from numba.types import Number
-    from numba.types.npytypes import Array
+    from numba import types
 
     f = None
-    if isinstance(arg, Number):
+    if isinstance(arg, types.Number):
         f = _extract_arg_identity
-    elif isinstance(arg, Array):
+    elif isinstance(arg, types.Array):
         f = _extract_arg_identity
     else:
         f = _extract_arg_by_index
@@ -222,13 +221,12 @@ def nderiv(func, x, fx=np.nan, eps=1.0e-8, *args):
 @overload(nderiv, jit_options={'parallel': False, 'nogil': True})
 def nderiv_generic(func, x, fx=np.nan, eps=1.0e-8, *args):
 
-    from numba.types import Number
-    from numba.types.npytypes import Array
+    from numba import types
 
     f = None
-    if isinstance(x, Number):
+    if isinstance(x, types.Number):
         f = _nderiv_scalar
-    elif isinstance(x, Array):
+    elif isinstance(x, types.Array):
         f = _nderiv_array
 
     return f
