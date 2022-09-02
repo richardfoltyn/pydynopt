@@ -693,7 +693,7 @@ def plot_dataframe(df, xvar=None, yvar=None, yvar_labels=None, moment=None,
 
                 yerr = _get_yerr(data.loc[by_value], mname, yvalues)
 
-                if plot_type == 'bar':
+                if plot_type[yvar] == 'bar':
                     kw = style.bar_kwargs[k]
 
                     bw = barwidth * (1.0 - 2.0 * style.barmargin)
