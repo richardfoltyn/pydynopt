@@ -631,7 +631,7 @@ def plot_dataframe(df, xvar=None, yvar=None, yvar_labels=None, moment=None,
 
         # Add any horizontal lines
         for ycoord in hline:
-            ax.axhline(ycoord, color='black', lw=0.5)
+            ax.axhline(ycoord, color='black', lw=0.5, zorder=1000)
 
         xvalues_are_int = True
 
