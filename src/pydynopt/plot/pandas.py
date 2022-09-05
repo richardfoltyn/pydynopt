@@ -668,6 +668,10 @@ def plot_dataframe(df, xvar=None, yvar=None, yvar_labels=None, moment=None,
                 elif yvar_labels:
                     leglbl = yvar_labels.get(yvar, yvar)
 
+                if not np.any(np.isfinite(xvalues) & np.isfinite(yvalues)):
+                    # Disable artificial legend labels when nothing is displayed
+                    leglbl = None
+
                 if plot_type[yvar] == 'bar':
                     if xvalues.size > 1:
                         dx = np.amin(xvalues[1:] - xvalues[:-1]) * 0.8
