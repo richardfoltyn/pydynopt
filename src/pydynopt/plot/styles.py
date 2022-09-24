@@ -1105,28 +1105,28 @@ class DefaultStyle(AbstractStyle):
 
     LEG_FONTPROP_KWARGS = {
         'family': 'serif',
-        'size': 10
+        'size': 'small'
     }
 
     LBL_FONTPROP_KWARGS = {
         'family': 'serif',
-        'size': 12
+        'size': 'medium'
     }
 
     TICKLABEL_FONTPROP_KWARGS = {
         'family': 'serif',
-        'size': 10
+        'size': 'small'
     }
 
     TITLE_FONTPROP_KWARGS = {
         'family': 'serif',
-        'size': 14,
+        'size': 'medium',
         'style': 'italic'
     }
 
     SUBTITLE_FONTPROP_KWARGS = {
         'family': 'serif',
-        'size': 14,
+        'size': 'x-large',
         'style': 'italic',
         'weight': 'semibold'
     }
@@ -1134,7 +1134,7 @@ class DefaultStyle(AbstractStyle):
     TEXT_FONTPROP_KWARGS = {
         'family': 'serif',
         'style': 'italic',
-        'size': 10
+        'size': 'small'
     }
 
     # Keyword arguments (other than font properties) for various objects
