@@ -17,8 +17,8 @@ def plot_grid(fun, nrow: int = 1, ncol: int = 1,
               suptitle: Optional[str] = None,
               figure_kw: Optional[Mapping] = None,
               subplot_kw: Optional[Mapping] = None,
-              sharex: bool = True,
-              sharey: bool = True,
+              sharex: Union[bool, str] = True,
+              sharey: Union[bool, str] = True,
               xlabel: Optional[str] = None,
               ylabel: Optional[str] = None,
               xlim: Optional[tuple[float, float]] = None,
@@ -66,10 +66,12 @@ def plot_grid(fun, nrow: int = 1, ncol: int = 1,
         via **kwargs.
     subplot_kw : dict
         Dictionary passed to MPL's subplots() as the `subplot_kw` argument
-    sharex : bool
-        If true, identical x-limits are enforced across all subplots
-    sharey : bool
-        If true, identical y-limits are enforced across all subplots
+    sharex : bool or str, optional
+        Controls sharing of properties among x axes. Valid values are
+        True (or 'all'), False (or 'none'), 'row' and 'col'
+    sharey : bool or str, optional
+        Controls sharing of properties among y axes. Valid values are
+        True (or 'all'), False (or 'none'), 'row' and 'col'
     xlabel : str
         x-axis label
     ylabel : str or array_like or None
@@ -208,6 +210,18 @@ def plot_grid(fun, nrow: int = 1, ncol: int = 1,
     else:
         margins1d = np.zeros(4)
 
+    # determine whether subplots have the same x-axes
+    if isinstance(sharex, str):
+        has_sharex = (sharex == 'col') or (sharex == 'all')
+    else:
+        has_sharex = bool(sharex)
+
+    # determine whether subplots have the same y-axes
+    if isinstance(sharey, str):
+        has_sharey = (sharey == 'row') or (sharey == 'all')
+    else:
+        has_sharey = bool(sharey)
+
     for i in range(nrow):
         for j in range(ncol):
 
@@ -238,7 +252,7 @@ def plot_grid(fun, nrow: int = 1, ncol: int = 1,
 
             if xticks is not None:
                 ax.set_xticks(xticks)
-                if (i == (nrow - 1) or not sharex) and xticklabels is not None:
+                if (i == (nrow - 1) or not has_sharex) and xticklabels is not None:
                     ax.set_xticklabels(xticklabels, **style.xticklabels)
 
             if ytickformatter is not None:
@@ -246,7 +260,7 @@ def plot_grid(fun, nrow: int = 1, ncol: int = 1,
 
             if yticks is not None:
                 ax.set_yticks(yticks)
-                if (j == 0 or not sharey) and yticklabels is not None:
+                if (j == 0 or not has_sharey) and yticklabels is not None:
                     ax.set_yticklabels(yticklabels, **style.yticklabels)
             if getattr(style, 'rotate_yticklabels', False):
                 ax.tick_params(axis='y', labelrotation=90)
