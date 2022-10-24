@@ -1,7 +1,7 @@
 
 
 import collections.abc
-from collections.abc import Sequence
+from collections.abc import Sequence, Mapping
 import math
 
 import numpy as np
@@ -287,6 +287,14 @@ def _process_slice(df, varlist=None, labels=None, order=None):
                 i = dct.pop('Index')
                 lbl[i] = labels(**dct)
             labels = lbl
+        elif isinstance(labels, Mapping):
+            lbl = {}
+            for row in df_values_uniq.itertuples():
+                dct = row._asdict()
+                # Index attribute of names tuple is called 'Index'
+                i = dct.pop('Index')
+                lbl[i] = ', '.join(labels[k][v] for k, v in dct.items())
+            labels = lbl                
         elif labels is None:
             labels = {}
         else:
