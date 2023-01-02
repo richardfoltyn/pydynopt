@@ -425,7 +425,7 @@ def _find_moment_name(df):
     return mname
 
 
-def _get_scatter_size(scatter_size, data, default):
+def _get_scatter_size(scatter_size, yvar, data, default):
     """
     Return the marker size for scatter plots, either as a uniform constant,
     or as values of a given column from a DataFrame.
@@ -445,9 +445,11 @@ def _get_scatter_size(scatter_size, data, default):
     if scatter_size is None:
         return size
 
-    columns = data.columns.get_level_values(0)
-
-    if scatter_size in columns:
+    if scatter_size in data[yvar].columns.get_level_values(0):
+        size = data[(yvar, scatter_size)].to_numpy().flatten()
+        # Prevent non-finite sizes due to NaN data as this will break legend
+        size[~np.isfinite(size)] = 0.0
+    elif scatter_size in data.columns.get_level_values(0):
         size = data[scatter_size].to_numpy().flatten()
         # Prevent non-finite sizes due to NaN data as this will break legend
         size[~np.isfinite(size)] = 0.0
@@ -734,8 +736,11 @@ def plot_dataframe(df, xvar=None, yvar=None, yvar_labels=None, moment=None,
 
                 elif plot_type[yvar] == 'scatter':
 
-                    size = _get_scatter_size(scatter_size, data.loc[by_value],
-                                             style.markersize[k])
+                    size = _get_scatter_size(
+                        scatter_size, yvar,
+                        df_panel.loc[by_value],
+                        style.markersize[k]
+                    )
 
                     if style.split_scatter:
                         # Plot face component of scatter
