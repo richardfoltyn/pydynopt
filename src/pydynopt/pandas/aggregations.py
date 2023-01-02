@@ -254,8 +254,14 @@ def df_weighted_mean(
     return means
 
 
-def percentile(df, prank, varlist=None, weight_var='weight', multi_index=False,
-               index_names=('Variable', 'Moment')):
+def percentile(
+        df: pd.DataFrame,
+        prank: Union[float, Iterable[float]],
+        varlist: Union[str, Iterable[str]] = None,
+        weight_var: str = 'weight',
+        multi_index: bool = False,
+        index_names: Union[str, Iterable[str]] = ('Variable', 'Moment')
+) -> pd.DataFrame:
     """
     Compute (weighted) percentiles for a given list of variables.
 
@@ -341,8 +347,13 @@ def percentile(df, prank, varlist=None, weight_var='weight', multi_index=False,
     return result
 
 
-def weighted_pmf(df, varlist_outer, varlist_inner, varname_weight='weight',
-                 generate='pmf'):
+def weighted_pmf(
+        df: pd.DataFrame,
+        varlist_outer: Optional[Union[str, Iterable]],
+        varlist_inner: Union[str, Iterable],
+        varname_weight: str = 'weight',
+        generate: str = 'pmf'
+) -> pd.DataFrame:
     """
     Compute weight weighted PMF over "inner" cells defined by `varlist_inner`
     within "outer" cells defined by `varlist_outer`.
