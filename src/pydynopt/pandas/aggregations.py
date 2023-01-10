@@ -230,14 +230,15 @@ def df_weighted_mean(
         wgt_notna = f'__{weight_var}_not_na'
 
         for i, varname in enumerate(varlist):
-            data[varname] *= data[weight_var]
-            data[wgt_notna] = data[weight_var] * data[varname].notna()
+            varname_wgt = f'__{varname}_wgt'
+            data[varname_wgt] = data[varname] * data[weight_var]
+            data[wgt_notna] = data[weight_var] * data[varname_wgt].notna()
             if groups:
-                data[varname] /= data.groupby(groups)[wgt_notna].transform('sum')
-                mean_var = data.groupby(groups)[varname].sum(min_count=na_min_count)
+                data[varname_wgt] /= data.groupby(groups)[wgt_notna].transform('sum')
+                mean_var = data.groupby(groups)[varname_wgt].sum(min_count=na_min_count)
             else:
-                data[varname] /= data[wgt_notna].sum()
-                mean_var = data[varname].sum(min_count=na_min_count)
+                data[varname_wgt] /= data[wgt_notna].sum()
+                mean_var = data[varname_wgt].sum(min_count=na_min_count)
             means.append(mean_var.to_frame(varname))
 
         means = pd.concat(means, axis=1)
