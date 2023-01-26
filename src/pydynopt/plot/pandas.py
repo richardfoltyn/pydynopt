@@ -1,8 +1,9 @@
 
 
 import collections.abc
-from collections.abc import Sequence, Mapping
+from collections.abc import Sequence, Mapping, Iterable, Callable
 import math
+from typing import Union, Optional
 
 import numpy as np
 import pandas as pd
@@ -462,13 +463,29 @@ def _get_scatter_size(scatter_size, yvar, data, default):
     return size
 
 
-def plot_dataframe(df, xvar=None, yvar=None, yvar_labels=None, moment=None,
-                   by=None, by_labels=None, by_order=None,
-                   over=None, over_order=None, over_labels=None, over_label_pos=None,
-                   ncol=None, jitter=None, plot_type=None,
-                   callback=None, callback_args=(),
-                   scatter_size='size', style=DefaultStyle(),
-                   hline=None, **kwargs):
+def plot_dataframe(
+        df: pd.DataFrame,
+        xvar: str = None,
+        yvar: str = None,
+        yvar_labels: Union[Iterable[str], Mapping[str, str]] = None,
+        moment: Optional[str] = None,
+        by: Optional[str] = None,
+        by_labels: Optional[Union[Iterable[str], Mapping]] = None,
+        by_order: Optional[Sequence] = None,
+        over: Optional[Union[str, Iterable[str]]] = None,
+        over_order: Optional[Sequence] = None,
+        over_labels: Optional[Union[Iterable[str], Mapping, Callable]] = None,
+        over_label_pos: Optional[str] = None,
+        ncol: Optional[int] = None,
+        jitter: Optional[float] = None,
+        plot_type: Optional[str] = None,
+        callback: Optional[Callable] = None,
+        callback_args: tuple = (),
+        scatter_size: Union[str, float] = 'size',
+        style: Union[Sequence[AbstractStyle], Mapping[str, AbstractStyle], AbstractStyle] = DefaultStyle(),
+        hline: Optional[Iterable[float]] = None,
+        **kwargs
+):
     """
     Plot selected variables in DataFrame, optionally disaggregating by groups.
 
@@ -785,13 +802,16 @@ def plot_dataframe(df, xvar=None, yvar=None, yvar_labels=None, moment=None,
 
         lbl = over_labels.get(over_order[ipanel], None)
         if lbl and over_label_pos:
-            style = styles[yvars[0]]
-            kw = style.text.copy()
-            kw.update(_text_loc_to_kwargs(over_label_pos))
-            kw['s'] = lbl
-            kw['transform'] = ax.transAxes
+            style: AbstractStyle = styles[yvars[0]]
+            if over_label_pos.lower() == 'title':
+                ax.set_title(lbl, **style.title)
+            else:
+                kw = style.text.copy()
+                kw.update(_text_loc_to_kwargs(over_label_pos))
+                kw['s'] = lbl
+                kw['transform'] = ax.transAxes
 
-            ax.text(**kw)
+                ax.text(**kw)
 
         # --- Call any user-provided callback function ---
 
