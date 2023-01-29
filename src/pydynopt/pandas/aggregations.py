@@ -303,7 +303,7 @@ def percentile(
     n = df.shape[0]
     mask = np.empty(n, dtype=np.bool_)
     var_contiguous = np.empty(n, dtype=dtype)
-    pmf = np.empty(n, dtype=df[weight_var].dtype)
+    pmf = np.empty(n, dtype=float)
 
     pctl = np.full((len(varlist), len(prank)), fill_value=np.nan)
 
