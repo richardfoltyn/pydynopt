@@ -260,6 +260,7 @@ def percentile(
         prank: Union[float, Iterable[float]],
         varlist: Union[str, Iterable[str]] = None,
         weight_var: str = 'weight',
+        interpolation: str = 'linear',
         multi_index: bool = False,
         index_names: Union[str, Iterable[str]] = ('Variable', 'Moment')
 ) -> pd.DataFrame:
@@ -275,6 +276,8 @@ def percentile(
         (default: all columns except for weight variable).
     weight_var : str, optional
         Name of weight variable
+    interpolation : str
+        Interpolation method passed to pydynopt.stats.percentile()
     multi_index : bool, optional
         If true, insert an additional index level with value 'Mean'
         for each variable.
@@ -326,10 +329,12 @@ def percentile(
 
         pmf[:ni] /= mass
 
-        pctl[i] = pydynopt.stats.percentile(x[:ni], pmf[:ni], prank,
-                                            assume_sorted=False,
-                                            assume_unique=False,
-                                            interpolation='linear')
+        pctl[i] = pydynopt.stats.percentile(
+            x[:ni], pmf[:ni], prank,
+            assume_sorted=False,
+            assume_unique=False,
+            interpolation=interpolation
+        )
 
     # Force deallocated of temporary arrays.
     del mask, pmf, var_contiguous
@@ -338,12 +343,10 @@ def percentile(
         result = pctl[0, 0]
     else:
         index_names = anything_to_list(index_names)
-        idx = pd.Index(varlist, name=index_names[0])
+        columns = pd.Index(varlist, name=index_names[0])
+        idx = pd.Index(prank, name=index_names[1])
 
-        columns = pd.Index(prank, name=index_names[1])
-        result = pd.DataFrame(pctl, index=idx, columns=columns)
-        # Move column index into rows, create Series
-        result = result.stack()
+        result = pd.DataFrame(pctl.T, index=idx, columns=columns)
 
     return result
 
