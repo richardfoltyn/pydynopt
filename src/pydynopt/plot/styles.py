@@ -147,7 +147,7 @@ class PlotStyleDict(object):
 
     def __getitem__(self, item):
 
-        keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec', 'mew',
+        keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec', 'mfc', 'mew',
                 'markersize', 'markevery',  'zorder'}
         res = dict()
 
@@ -245,6 +245,7 @@ class AbstractStyle:
     EDGELINEWIDTH = [0.25]
     MARKERSIZE = [1.0]
     MEC = ['none']
+    MFC = [None]
     HATCH = [None]
 
     def __init__(self):
@@ -274,6 +275,7 @@ class AbstractStyle:
         self._markersize = None
         self._markevery = None
         self._mec = None
+        self._mfc = None
         self._mew = None
         self._hatch = None
         self._barmargin = 0.0
@@ -724,6 +726,20 @@ class AbstractStyle:
             self._mec = Colors(colors=value)
 
     @property
+    def mfc(self):
+        if self._mfc is None:
+            self._mfc = Colors(type(self).MFC)
+        return self._mfc
+
+    @mfc.setter
+    def mfc(self, value):
+        if isinstance(value, Colors):
+            self._mfc = deepcopy(value)
+        else:
+            value = _to_tuple(value)
+            self._mfc = Colors(colors=value)
+
+    @property
     def mew(self):
         if self._mew is None:
             self._mew = LineWidth((0.5, ))
@@ -926,6 +942,7 @@ class AbstractStyle:
             'alpha': None,
             'marker': None,
             'mec': None,
+            'mfc': None,
             'mew': None,
             'markersize': None,
             'markevery': None,
@@ -983,6 +1000,7 @@ class AbstractStyle:
             'marker': None,
             'markersize': None,
             'mec': None,
+            'mfc': None,
             'mew': None,
             'ls': 'none',
             'lw': 0,
