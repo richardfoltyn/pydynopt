@@ -1,5 +1,7 @@
 import collections.abc
+from collections.abc import Mapping
 from copy import deepcopy
+from typing import Optional
 
 import matplotlib
 from matplotlib.font_manager import FontProperties
@@ -233,6 +235,7 @@ class AbstractStyle:
     SUBPLOT_KWARGS = {}
     GRID_KWARGS = {}
     TEXT_KWARGS = {}
+    GUIDELINE_KWARGS = {}
 
     COLORS = ['black']
     FACECOLORS = ['white']
@@ -292,6 +295,7 @@ class AbstractStyle:
         self._text = None
         self.split_scatter = False
         self.rotate_yticklabels = False
+        self._guideline = dict(cls.GUIDELINE_KWARGS)
 
         self._plot_all = PlotStyleDict(self)
 
@@ -799,6 +803,17 @@ class AbstractStyle:
             self._zorder = ConstFillProperty(10, value)
 
     @property
+    def guideline(self) -> dict:
+        return self._guideline
+
+    @guideline.setter
+    def guideline(self, value: Optional[Mapping] = None):
+        if value is not None:
+            self._guideline = dict(value)
+        else:
+            self._guideline = dict()
+
+    @property
     def margins(self):
         return self._margins
 
@@ -1153,6 +1168,14 @@ class DefaultStyle(AbstractStyle):
         'family': 'serif',
         'style': 'italic',
         'size': 'small'
+    }
+
+    GUIDELINE_KWARGS = {
+        'lw': 0.75,
+        'ls': (0, (1, 1)),
+        'alpha': 0.7,
+        'color': 'black',
+        'zorder': -10
     }
 
     # Keyword arguments (other than font properties) for various objects

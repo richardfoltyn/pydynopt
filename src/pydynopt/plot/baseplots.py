@@ -9,37 +9,42 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import Formatter
 
 from .styles import DefaultStyle, AbstractStyle
+from ..utils import anything_to_tuple
 
 
-def plot_grid(fun, nrow: int = 1, ncol: int = 1,
-              *,
-              column_title: Optional[Union[Sequence[str], str]] = None,
-              suptitle: Optional[str] = None,
-              figure_kw: Optional[Mapping] = None,
-              subplot_kw: Optional[Mapping] = None,
-              sharex: Union[bool, str] = True,
-              sharey: Union[bool, str] = True,
-              xlabel: Optional[str] = None,
-              ylabel: Optional[str] = None,
-              xlim: Optional[tuple[float, float]] = None,
-              ylim: Optional[tuple[float, float]] = None,
-              xticks: Optional[Sequence[float]] = None,
-              yticks: Optional[Sequence[float]] = None,
-              xticklabels: Optional[Sequence[str]] = None,
-              yticklabels: Optional[Sequence[str]] = None,
-              ytickformatter: Optional[Formatter] = None,
-              legend_at: tuple[int, int] = (0, 0),
-              legend_loc: str = 'best',
-              legend: bool = False,
-              bbox_to_anchor=None,
-              outfile: Optional[str] = None,
-              style: Optional[AbstractStyle] = None,
-              aspect: Optional[float] = None,
-              close_fig: bool = True,
-              pass_style: bool = False,
-              metadata: Optional[Mapping] = None,
-              identity: bool = None,
-              **kwargs):
+def plot_grid(
+        fun, nrow: int = 1, ncol: int = 1,
+        *,
+        column_title: Optional[Union[Sequence[str], str]] = None,
+        suptitle: Optional[str] = None,
+        figure_kw: Optional[Mapping] = None,
+        subplot_kw: Optional[Mapping] = None,
+        sharex: Union[bool, str] = True,
+        sharey: Union[bool, str] = True,
+        xlabel: Optional[str] = None,
+        ylabel: Optional[str] = None,
+        xlim: Optional[tuple[float, float]] = None,
+        ylim: Optional[tuple[float, float]] = None,
+        xticks: Optional[Sequence[float]] = None,
+        yticks: Optional[Sequence[float]] = None,
+        xticklabels: Optional[Sequence[str]] = None,
+        yticklabels: Optional[Sequence[str]] = None,
+        ytickformatter: Optional[Formatter] = None,
+        legend_at: tuple[int, int] = (0, 0),
+        legend_loc: str = 'best',
+        legend: bool = False,
+        bbox_to_anchor=None,
+        outfile: Optional[str] = None,
+        style: Optional[AbstractStyle] = None,
+        aspect: Optional[float] = None,
+        close_fig: bool = True,
+        pass_style: bool = False,
+        metadata: Optional[Mapping] = None,
+        identity: bool = None,
+        hline: Optional[Sequence[float]] = None,
+        vline: Optional[Sequence[float]] = None,
+        **kwargs
+) -> None:
     """
     Creates a rectangular grid of subplots and calls a user-provided function
     for each subplot to render user-supplied content.
@@ -123,9 +128,16 @@ def plot_grid(fun, nrow: int = 1, ncol: int = 1,
     identity : bool or Mapping, optional
         Plot identity line. If passed as mapping, key/value pairs
         are passed as kwargs to ax.axline() to control plot style.
+    hline : array_like, optional
+        List of y-values for horizontal rules that should be added to each panel.
+    vline : array_like, optional
+        List of x-values for vertical rules that should be added to each panel.
     kwargs :
         Keyword arguments passed directly to `fun`
     """
+
+    hline = anything_to_tuple(hline, force=True)
+    vline = anything_to_tuple(vline, force=True)
 
     if column_title is None:
         column_title = np.ndarray((nrow, ), dtype=object)
@@ -290,6 +302,14 @@ def plot_grid(fun, nrow: int = 1, ncol: int = 1,
                     if isinstance(identity, collections.abc.Mapping):
                         kw.update(identity)
                     ax.axline((0, 0), slope=1, **kw)
+
+            # Plot horizontal guide lines
+            for ycoord in hline:
+                ax.axhline(ycoord, **style.guideline)
+
+            # Plot vertical guide lines
+            for xcoord in vline:
+                ax.axvline(xcoord, **style.guideline)
 
     if legend:
         # Merge keywords that might be present in style with potential

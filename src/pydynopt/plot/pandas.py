@@ -483,7 +483,6 @@ def plot_dataframe(
         callback_args: tuple = (),
         scatter_size: Union[str, float] = 'size',
         style: Union[Sequence[AbstractStyle], Mapping[str, AbstractStyle], AbstractStyle] = DefaultStyle(),
-        hline: Optional[Iterable[float]] = None,
         **kwargs
 ):
     """
@@ -538,15 +537,12 @@ def plot_dataframe(
         with values to be interpreted as marker sizes. If float,
         the value is used as a uniform marker size.
     style : pydynopt.plot.styles.AbstractStyle or Iterable or Mapping, optional
-    hline : array_like, optional
-        List of y-values for horizontal rules that should be added to plot.
     kwargs :
         Keyword arguments passed to plot_grid()
 
     """
 
     jitter = float(jitter) if jitter is not None else None
-    hline = anything_to_list(hline, force=True)
 
     df = df.copy()
 
@@ -655,10 +651,6 @@ def plot_dataframe(
         xmax_jit = - np.inf
         xmin = np.inf
         xmax = - np.inf
-
-        # Add any horizontal lines
-        for ycoord in hline:
-            ax.axhline(ycoord, color='black', lw=0.5, zorder=1000)
 
         xvalues_are_int = True
 
