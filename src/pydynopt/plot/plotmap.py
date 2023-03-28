@@ -986,8 +986,8 @@ def axis_plot_args(maps, styles):
 
 def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, xlim=None, ylim=None,
             extendx=0.01, extendy=0.01, identity=False, sharey=True,
-            legend=True, xlabel=None, ylabel=None, callback=None,
-            label_first_only=True, **kwargs):
+            legend=True, xlabel=None, ylabel=None, xticklabels=None,
+            callback=None, label_first_only=True, **kwargs):
     """
     Plot multiple sets of data using their corrsponding plot maps and styles.
 
@@ -1022,6 +1022,8 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, xlim=None, ylim=None,
         X-axis label.
     ylabel : str, optional
         Y-axis label.
+    xticklabels : array_like, optional
+        Explicitly set ticklabels on x-axis
     callback : callable, optional
         If not None, this function will be invoked for each panel within
         the graph, proving access to the axis object, allowing for further
@@ -1143,8 +1145,11 @@ def plot_pm(pm, data, style=DefaultStyle(), trim_iqr=2.0, xlim=None, ylim=None,
         if identity:
             plot_identity(ax, xlim[0], xlim[1])
 
-        ax.ticklabel_format(style='sci', axis='both', scilimits=(-2, 3))
+        if xticklabels is None:
+            # Don't set formatter if ticklabel are set manually
+            ax.ticklabel_format(style='sci', axis='both', scilimits=(-2, 3))
 
     plot_grid(subplot, nrow=nrow, ncol=ncol, style=style[0], sharey=sharey,
               legend=legend, xlabel=xlabel, ylabel=ylabel, xlim=xlim, ylim=ylim,
+              xticklabels=xticklabels,
               **kwargs)
