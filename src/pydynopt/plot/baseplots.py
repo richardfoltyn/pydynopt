@@ -24,7 +24,7 @@ def plot_grid(
         xlabel: Optional[str] = None,
         ylabel: Optional[str] = None,
         xlim: Optional[tuple[float, float]] = None,
-        ylim: Optional[tuple[float, float]] = None,
+        ylim: Optional[tuple[float, float] | np.ndarray] = None,
         xticks: Optional[Sequence[float]] = None,
         yticks: Optional[Sequence[float]] = None,
         xticklabels: Optional[Sequence[str]] = None,
