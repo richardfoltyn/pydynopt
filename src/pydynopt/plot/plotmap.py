@@ -4,18 +4,15 @@ INSERT MODULE DOCSTRING HERE
 Author: Richard Foltyn
 """
 
-from __future__ import print_function, division, absolute_import
 
-import itertools as it
 import re
 from collections.abc import Callable, Sequence
-from copy import deepcopy, copy
+from copy import deepcopy
 from typing import Optional
 
 import numpy as np
 
-from pydynopt.plot import AbstractStyle
-from pydynopt.plot.styles import DefaultStyle
+from pydynopt.plot.styles import DefaultStyle, AbstractStyle
 from pydynopt.plot.baseplots import plot_grid
 
 
