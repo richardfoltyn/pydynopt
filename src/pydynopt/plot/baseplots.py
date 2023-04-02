@@ -208,14 +208,6 @@ def plot_grid(
                 raise ValueError('Non-conformable number of ylabels passed')
             ylabel = np.repeat(ylabel, nrow)
 
-    if xlabel is not None:
-        for j in range(ncol):
-            axes[-1, j].set_xlabel(xlabel[j], **style.xlabel)
-
-    if ylabel is not None:
-        for i in range(nrow):
-            axes[i, 0].set_ylabel(ylabel[i], **style.ylabel)
-
     margins = style.margins
     if margins is not None:
         margins1d, *rest = np.broadcast_arrays(margins, np.arange(4))
@@ -276,6 +268,12 @@ def plot_grid(
                     ax.set_yticklabels(yticklabels, **style.yticklabels)
             if getattr(style, 'rotate_yticklabels', False):
                 ax.tick_params(axis='y', labelrotation=90)
+
+            if xlabel is not None and (i == (nrow - 1) or not sharex):
+                ax.set_xlabel(xlabel[j], **style.xlabel)
+
+            if ylabel is not None and (j == 0 or not sharey):
+                ax.set_ylabel(ylabel[i], **style.ylabel)
 
             fun(ax, (i, j), **kwargs)
 
