@@ -77,7 +77,7 @@ class PlotDimension(object):
                 # Plot everything if nothing else was specified
                 at_idx = slice(None)
         elif not isinstance(at_idx, slice):
-            at_idx = np.array(at_idx, dtype=np.int).flatten()
+            at_idx = np.array(at_idx, dtype=int).flatten()
 
         if at_val is not None:
             at_val = np.array(at_val).flatten()

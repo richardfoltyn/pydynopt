@@ -150,7 +150,7 @@ def plot_grid(
                 msg = f'Invalid string value for legend_at: {legend_at}'
                 raise ValueError(msg)
         else:
-            legend_at = np.array(legend_at, dtype=np.int)
+            legend_at = np.array(legend_at, dtype=int)
             assert 1 <= legend_at.ndim <= 2
             assert legend_at.shape[-1] == 2
             legend_at = legend_at.reshape((-1, 2))

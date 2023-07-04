@@ -404,7 +404,7 @@ def discretize_markov(nobs: int,
     elif verbose:
         print(msg)
 
-    tm_approx = np.array(tm_approx, dtype=np.int)
+    tm_approx = np.array(tm_approx, dtype=int)
 
     return inv_dist_approx, tm_approx
 
@@ -449,5 +449,5 @@ def pmf_to_histogram(nobs: int,
     elif verbose:
         print(msg)
 
-    arr = np.array(arr, dtype=np.int)
+    arr = np.array(arr, dtype=int)
     return arr
