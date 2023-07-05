@@ -4,11 +4,7 @@
 *.backup
 build/
 .spyder*
-*.pyc
-*.so
-*.pyd
-*.c
-*.html
 .cache/
 __pycache__/
 *.pyc
+.pytest_cache/
