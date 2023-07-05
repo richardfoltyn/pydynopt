@@ -553,7 +553,7 @@ def quantile_rank(x, pmf, qntl, interpolation='linear'):
 
     if rank is not None:
         if is_scalar:
-            rank = np.asscalar(rank)
+            rank = rank[()]
         else:
             rank = rank.reshape(shp_in)
 
