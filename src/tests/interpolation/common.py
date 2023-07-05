@@ -1,16 +1,37 @@
 __author__ = 'Richard Foltyn'
 
+from abc import abstractmethod
+from typing import Optional
+
 import numpy as np
 from numpy import linspace
 
 import pytest
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence, Callable
 from itertools import combinations
 
+from numpy.random import Generator
 
-def f_array(f, *xp):
-    xp = ascontainer(xp)
+from pydynopt.utils import anything_to_tuple
+
+
+def f_cartesian(f: Callable, *xp) -> np.ndarray:
+    """
+    Evaluate function on the Cartesian product of points given as individual
+    dimensions.
+
+    Parameters
+    ----------
+    f : callable
+    xp :
+
+    Returns
+    -------
+    np.ndarray
+    """
+    xp = anything_to_tuple(xp)
+
     if len(xp) > 1:
         mgrid = np.meshgrid(*xp, indexing='ij')
         return f(*mgrid)
@@ -18,14 +39,13 @@ def f_array(f, *xp):
         return f(*xp)
 
 
-def ascontainer(x, container=tuple):
-    if isinstance(x, (list, tuple)):
-        return container(x)
-    else:
-        return container((x,))
-
-
-def func_generator(n, low=1, high=None, coefs=None):
+def func_generator(
+        n: int,
+        low: int = 1,
+        high: Optional[int] = None,
+        coefs: Optional[Sequence[float]] = None,
+        rng: Optional[Generator] = None
+):
     """
     Generate a set of functions that are linear in all possible interactions
     between the dimensions spanning the domain
@@ -41,15 +61,25 @@ def func_generator(n, low=1, high=None, coefs=None):
     If no adequate list of coefficients (a1,a2,a3,c) is passed, these are
     drawn from a standard-normal distribution.
 
-    :type n: int
-    :type coefs: unknown or ndarray
-    :return:
+    Parameters
+    ----------
+    n : int
+        Number of dimensions of function domain
+    low : int
+        Minimum sum of exponents of interaction terms to include
+    high : int, optional
+        Maximum sum of exponents of interaction terms to include
+    coefs : array_like, optional
+        Coefficients used for polynomial
     """
+
     # With at most n dimensions, we get 2 ** n - 1 possible interaction terms,
     # and need one additional coefficient for the constant
     ncoef = 2 ** n
     if coefs is None or len(coefs) < ncoef:
-        coefs = np.random.randn(ncoef)
+        coefs = rng.normal(size=ncoef)
+    else:
+        coefs = np.atleast_1d(coefs)
 
     if high is None:
         high = n
@@ -78,7 +108,7 @@ def func_generator(n, low=1, high=None, coefs=None):
             # build function that contains all interactions of indices in
             # subset and a constant
             def f(*args):
-                args = ascontainer(args)
+                args = anything_to_tuple(args)
                 res = 0
                 cidx = 0
                 for j in range(len(subset)):
@@ -96,8 +126,11 @@ def func_generator(n, low=1, high=None, coefs=None):
 class TestBase:
 
     @pytest.fixture
+    @abstractmethod
     def f_interp(self):
-        raise NotImplementedError()
+        """
+
+        """
 
     @pytest.fixture
     def ndim(self):
@@ -111,35 +144,40 @@ class TestBase:
     def f_bilinear(self):
         return func_generator(2)
 
-    @pytest.fixture
-    def f_trilinear(self):
-        return func_generator(3)
+    @pytest.fixture(scope='session')
+    def rng(self):
+        seed = 1234
+        rng = np.random.default_rng(seed)
+        return rng
 
     @pytest.fixture
     def f_zero(self):
         def f(*args):
-            args = ascontainer(args)
+            args = anything_to_tuple(args)
             return np.zeros_like(args[0])
         return f
 
     @pytest.fixture
-    def f_const(self):
-        c = np.asscalar(np.random.randn(1))
+    def f_const(self, rng):
+        c = float(rng.normal(size=1))
 
         def f(*args):
-            args = ascontainer(args)
-            return np.ones_like(args[0]) * c
+            args = anything_to_tuple(args)
+            return np.full_like(args[0], fill_value=c)
         return f
 
     @pytest.fixture
+    @abstractmethod
     def data_shape(self):
-        raise NotImplementedError()
+        """
+        Return shape of data defining function to be interpolated.
+        """
 
     @pytest.fixture
-    def data(self, data_shape):
+    def data(self, data_shape: tuple[int], rng):
 
-        xp = tuple(np.sort(np.random.randn(s)) for s in data_shape)
-        x = tuple([linspace(np.min(z), np.max(z), 5) for z in xp])
+        xp = tuple(np.sort(rng.normal(size=s)) for s in data_shape)
+        x = tuple(linspace(np.min(z), np.max(z), 5) for z in xp)
 
         return xp, x
 
@@ -161,7 +199,7 @@ class TestBase:
         xp, _ = data
         # we need to do this on a cartesian product of dimensions in xp,
         # as the vectors in xp might be of different length (if we have
-        # different number of knots in each dimension.
+        # different number of knots in each dimension).
 
         if len(xp) > 1:
             x = np.meshgrid(*xp, indexing='ij')
@@ -179,7 +217,7 @@ class TestBase:
         xp, x = data
         test_equality(f_interp, f_zero, xp, x)
 
-    def test_extrapolate(self, data, f_interp, ndim):
+    def test_extrapolate(self, data, f_interp, ndim, rng):
         """
         Verify that extrapolation of linear functions of appropriate
         dimension works.
@@ -187,16 +225,16 @@ class TestBase:
         xp, x = data
         x_ext = extend(x)
 
-        for f in func_generator(ndim, high=1):
+        for f in func_generator(ndim, high=1, rng=rng):
             test_equality(f_interp, f, xp, x_ext, tol=1e-9)
 
-    def test_interpolate(self, data, f_interp, ndim):
+    def test_interpolate(self, data, f_interp, ndim, rng):
         """
         Verify that interpolation of 'pseudo'-linear functions works exactly.
         """
 
         xp, x = data
-        for f in func_generator(ndim):
+        for f in func_generator(ndim, rng=rng):
             test_equality(f_interp, f, xp, x, tol=1e-9)
 
 
@@ -208,7 +246,7 @@ def get_margins(ndim, excluded):
     :param excluded:
     :return:
     """
-    excluded = ascontainer(excluded)
+    excluded = anything_to_tuple(excluded)
     return tuple(np.sort(tuple(set(range(ndim)) - set(excluded))))
 
 
@@ -219,7 +257,7 @@ def extend(array_like, by_frac=0.4, add_n=None):
     elements to each end of the array.
     """
 
-    arrays = ascontainer(array_like)
+    arrays = anything_to_tuple(array_like)
 
     arr_extended = list()
     for arr in arrays:
@@ -251,10 +289,10 @@ def test_dimensions(f_interp, f, xp, length=(1, 2, 10, 100, 1001)):
     """
 
     xp = list(xp)
-    fp = f_array(f, *xp)
+    fp = f_cartesian(f, *xp)
 
     for n in length:
-        x = [linspace(np.min(z), np.max(z), n) for z in xp]
+        x = [np.linspace(np.amin(z), np.amax(z), n) for z in xp]
         args = x + xp + [fp]
         fx = f_interp(*args)
 
@@ -294,7 +332,7 @@ def test_equality(f_interp, f, xp, x, tol=1e-10):
     xp = tuple(xp)
     x = tuple(x)
 
-    fp = f_array(f, *xp)
+    fp = f_cartesian(f, *xp)
     args = x + xp + (fp, )
     fx_hat = f_interp(*args)
 
@@ -312,9 +350,9 @@ def test_margin(f_interp, f, xp, x, marg,
     function (f is assumed to be lower-dimensional).
     """
 
-    xp = ascontainer(xp)
-    x = ascontainer(x)
-    marg = ascontainer(marg)
+    xp = anything_to_tuple(xp)
+    x = anything_to_tuple(x)
+    marg = anything_to_tuple(marg)
 
     # check that we are actually testing lower-dimensional interpolation
     assert len(marg) < len(xp)
@@ -325,11 +363,11 @@ def test_margin(f_interp, f, xp, x, marg,
         xp_marg.append(xp[i])
         x_marg.append(x[i])
 
-    fp = f_array(f, *xp)
+    fp = f_cartesian(f, *xp)
     args = x + xp + (fp, )
     fx = f_interp(*args)
 
-    fp_marg = f_array(f_marg, *xp_marg)
+    fp_marg = f_cartesian(f_marg, *xp_marg)
     # interpolate using lower-dimensional function
     args = x_marg + xp_marg + [fp_marg]
     fx_marg = f_interp_marg(*args)

@@ -4,7 +4,7 @@ __author__ = 'Richard Foltyn'
 import numpy as np
 import pytest
 
-from pydynopt.interpolate import interp1d_linear
+from pydynopt.interpolate import interp1d
 
 import common
 
@@ -13,7 +13,7 @@ class TestLinear(common.TestBase):
 
     @pytest.fixture
     def f_interp(self):
-        return interp1d_linear
+        return interp1d
 
     @pytest.fixture
     def ndim(self):
