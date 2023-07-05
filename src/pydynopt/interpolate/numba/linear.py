@@ -3,6 +3,9 @@ Numba implementations of linear interpolation routines.
 
 NOTE: Do not add @jit decorators as that does not work with @overload.
 
+This work is licensed under CC BY 4.0,
+https://creativecommons.org/licenses/by/4.0/
+
 Author: Richard Foltyn
 """
 

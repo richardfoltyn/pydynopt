@@ -1,4 +1,9 @@
-__author__ = 'Richard Foltyn'
+"""
+This work is licensed under CC BY 4.0,
+https://creativecommons.org/licenses/by/4.0/
+
+Author: Richard Foltyn
+"""
 
 import collections.abc
 from collections.abc import Mapping, Sequence
