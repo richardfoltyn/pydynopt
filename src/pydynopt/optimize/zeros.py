@@ -4,6 +4,7 @@ https://creativecommons.org/licenses/by/4.0/
 
 Author: Richard Foltyn
 """
+
 import numpy as np
 
 from pydynopt.numba import overload
@@ -11,14 +12,6 @@ from pydynopt.numba import register_jitable
 from ._zeros_scipy import _ECONVERGED, _EVALUEERR, _EMAXITER, \
     RootResult
 from .common import nderiv
-
-overload_scipy = False
-try:
-    from scipy.optimize import brentq
-    overload_scipy = True
-except ImportError:
-    brentq = None
-    pass
 
 
 __all__ = ['newton_bisect']
