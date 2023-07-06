@@ -8,3 +8,4 @@ Author: Richard Foltyn
 from .common import OptimResult
 
 from .zeros import *
+from ._zeros_scipy import *

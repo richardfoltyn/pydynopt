@@ -27,5 +27,5 @@ conda env create -f environment.yml
 
 # License
 
-This work is licensed under
+Unless stated otherwise in individual files, this work is licensed under
 [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
