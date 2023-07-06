@@ -1,4 +1,4 @@
-from __future__ import division, absolute_import, print_function
+
 __author__ = 'Richard Foltyn'
 
 import numpy as np

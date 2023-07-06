@@ -4,8 +4,6 @@ INSERT MODULE DOCSTRING HERE
 Author: Richard Foltyn
 """
 
-from __future__ import print_function, division, absolute_import
-
 
 from pydynopt.plot import PlotMap, DefaultStyle
 import numpy as np
