@@ -8,7 +8,7 @@ Author: Richard Foltyn
 import collections.abc
 from collections.abc import Mapping
 from copy import deepcopy
-from typing import Optional
+from typing import Optional, Union
 
 import matplotlib
 from matplotlib.font_manager import FontProperties
@@ -467,23 +467,27 @@ class AbstractStyle:
         self._yticklabels = dict(value)
 
     @property
-    def grid(self):
+    def grid(self) -> dict:
         return self._grid
 
     @grid.setter
-    def grid(self, value):
+    def grid(self, value: Union[Mapping, bool]):
         if isinstance(value, bool):
-            b = self._grid.get('b', None)
+            # b has been removed from recent versions of MPL
+            b = self._grid.get('b', True)
+            visible = self._grid.get('visible', True)
             if value:
-                if b is not None and not b:
+                if not (b or visible):
                     # re-apply default grid params, as just setting b=True will
                     # not produce any grid once it's been turned off.
                     # Do this only if b=False, otherwise ignore grid=True
                     # as it's enabled in some form anyways.
                     self._grid = self.__class__.GRID_KWARGS.copy()
+                self._grid['visible'] = True
             else:
-                self._grid = {'b': value}
+                self._grid = {'visible': False}
         else:
+            # Create dictionary from given value
             self._grid = dict(value)
 
     @property
