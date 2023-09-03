@@ -173,10 +173,13 @@ def df_weighted_mean(
         data: Union[pd.Series, pd.DataFrame],
         groups: Optional[Union[str, Iterable[str]]] = None,
         varlist: Optional[Union[str, Iterable[str]]] = None,
+        *,
         weights: Optional[Union[pd.Series, np.ndarray, str]] = 'weight',
         na_min_count: Optional[int] = 1,
         multi_index: bool = False,
-        index_names: Optional[Union[str, Iterable[str]]] = ('Variable', 'Moment')
+        index_names: Optional[Union[str, Iterable[str]]] = ('Variable', 'Moment'),
+        add_weights_column: bool = False,
+        nobs_column: Optional[str] = None
 ) -> Union[pd.Series, pd.DataFrame]:
     """
     Compute (within-group) weighted mean of variables.
@@ -196,6 +199,12 @@ def df_weighted_mean(
         for each variable.
     index_names : str or array_like, optional
         Names for (multi)-index levels of resulting Series.
+    add_weights_column : bool
+        If true, add the sum of weights for each bin in the output DataFrame
+        (implies `multi_index = True`)
+    nobs_column: str, optional
+        If not None, add the number of observations for each bin in the output DataFrame
+        (implies `multi_index = True`)
 
     Returns
     -------
@@ -206,6 +215,9 @@ def df_weighted_mean(
     isscalar = isinstance(varlist, str)
     groups = anything_to_list(groups, force=True)
 
+    # Force MultiIndex output if several stats are computed for each variable
+    multi_index = multi_index or add_weights_column or nobs_column
+
     data = data.copy()
 
     if isinstance(data, pd.Series):
@@ -214,51 +226,115 @@ def df_weighted_mean(
         isscalar = True
 
     if isinstance(weights, str):
-        weight_var = weights
+        weight_varname = weights
     elif weights is not None:
-        weight_var = '__weight'
-        data[weight_var] = weights
+        weight_varname = '__weight'
+        data[weight_varname] = weights
     else:
-        weight_var = None
+        weight_varname = None
 
     varlist = anything_to_list(varlist)
     if varlist is None:
         varlist = [name for name in data.columns
-                   if name != weight_var and name not in groups]
+                   if name != weight_varname and name not in groups]
 
-    if not weight_var:
+    if not weight_varname:
         if groups:
-            means = data[varlist].groupby(groups).sum()
+            df_means = data[varlist].groupby(groups).sum()
+
+            if nobs_column:
+                df_nobs = data[varlist].groupby(groups).count()
+            if add_weights_column:
+                # No weights provided, use N obs. as weights
+                df_sum_weights = data[varlist].groupby(groups).count()
         else:
-            means = data[varlist].sum()
+            df_means = data[varlist].sum()
+
+            if nobs_column:
+                df_nobs = data[varlist].count()
+            if add_weights_column:
+                # No weights provided, use N obs. as weights
+                df_sum_weights = data[varlist].count()
     else:
         means = []
-        wgt_notna = f'__{weight_var}_not_na'
+        sum_weights = []
+        nobs = []
+
+        wgt_notna = f'__{weight_varname}_not_na'
 
         for i, varname in enumerate(varlist):
             varname_wgt = f'__{varname}_wgt'
-            data[varname_wgt] = data[varname] * data[weight_var]
-            data[wgt_notna] = data[weight_var] * data[varname_wgt].notna()
+            data[varname_wgt] = data[varname] * data[weight_varname]
+            data[wgt_notna] = data[weight_varname] * data[varname_wgt].notna()
             if groups:
                 data[varname_wgt] /= data.groupby(groups)[wgt_notna].transform('sum')
                 mean_var = data.groupby(groups)[varname_wgt].sum(min_count=na_min_count)
+
+                if nobs_column:
+                    nobs_var = data.groupby(groups)[varname_wgt].count()
+                if add_weights_column:
+                    sum_weights_var = data.groupby(groups)[wgt_notna].sum()
+                    sum_weights_var[mean_var.isna()] = np.nan
             else:
                 data[varname_wgt] /= data[wgt_notna].sum()
-                mean_var = data[varname_wgt].sum(min_count=na_min_count)
+                mean_var = pd.Series(data[varname_wgt].sum(min_count=na_min_count))
+
+                if nobs_column:
+                    nobs_var = pd.Series(data[varname_wgt].count())
+                if add_weights_column and np.isfinite(mean_var):
+                    sum_weights_var = pd.Series(data[wgt_notna].sum())
+                else:
+                    sum_weights_var = np.nan
+
             means.append(mean_var.to_frame(varname))
 
-        means = pd.concat(means, axis=1)
+            if nobs_column:
+                nobs.append(nobs_var.to_frame(varname))
+            if add_weights_column:
+                sum_weights.append(sum_weights_var.to_frame(varname))
+
+        df_means = pd.concat(means, axis=1)
+
+        if nobs_column:
+            df_nobs = pd.concat(nobs, axis=1)
+            df_nobs.columns = df_means.columns
+        if add_weights_column:
+            df_sum_weights = pd.concat(sum_weights, axis=1)
+            df_sum_weights.columns = df_means.columns
 
     if isscalar and not multi_index:
-        means = means.iloc[:, 0].copy()
+        result = df_means.iloc[:, 0].copy()
     elif multi_index:
         index_names = anything_to_list(index_names)
-        means.columns = pd.MultiIndex.from_product(
-            (varlist, ['Mean']),
-            names=index_names
-        )
+        if nobs_column or add_weights_column:
+            stats = ['Mean']
+            components = [df_means]
+            if nobs_column:
+                stats += [nobs_column]
+                components += [df_nobs]
+            if add_weights_column:
+                stats += [weight_varname]
+                components += [df_sum_weights]
 
-    return means
+            result = pd.concat(components, axis=1, keys=stats, names=index_names[::-1])
+            # Flip index order so that variables are on top, sort second level and
+            # make sure that variable order is the same as in the input DF
+            result = (
+                result.
+                reorder_levels(index_names, axis=1).
+                sort_index(axis=1, level=-1)
+                [varlist]
+            ).copy()
+        else:
+            result = df_means
+            result.columns = pd.MultiIndex.from_product(
+                (varlist, ['Mean']),
+                names=index_names
+            )
+    else:
+        result = df_means
+
+    return result
 
 
 def percentile(
