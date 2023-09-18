@@ -435,10 +435,13 @@ def percentile(
 
 def weighted_pmf(
         df: pd.DataFrame,
-        varlist_outer: Optional[Union[str, Iterable]],
+        *,
+        varlist_outer: Optional[Union[str, Iterable]] = None,
         varlist_inner: Union[str, Iterable],
+        weights: Optional[str | pd.Series | np.ndarray] = 'weight',
         varname_weight: str = 'weight',
-        generate: str = 'pmf'
+        skipna: bool = True,
+        generate: Optional[str] = 'pmf',
 ) -> pd.DataFrame:
     """
     Compute weight weighted PMF over "inner" cells defined by `varlist_inner`
@@ -449,8 +452,14 @@ def weighted_pmf(
     df : pd.DataFrame
     varlist_outer : str or array_like
     varlist_inner: str or array_like
+    weights : str or pd.Series or np.ndarray
+        Weights to be used, passed either as conformable numerical or as a column
+        name in `df`.
     varname_weight : str, optional
-        Name of variable containing weights.
+        Name of variable containing weights. Deprecated in favor of `weights`.
+    skipna : bool
+        If true, drop obs with missing values in any of the variables in
+        `varlist_inner`, `varlist_outer` or with missing weights.
     generate : str, optional
         Name of output variable.
 
@@ -459,13 +468,39 @@ def weighted_pmf(
     pd.DataFrame
     """
 
+    if weights is not None:
+        if isinstance(weights, str):
+            weights = df[weights]
+    elif varname_weight is not None:
+        # Deprecated legacy way to specify weights
+        weights = df[weights]
+    else:
+        # Degenerate uniform weights weights
+        weights = np.ones(len(df))
+
+    # Set to internal weight variable name
+    varname_weight = "_weight"
+    varname_generate = generate if generate else "_pmf"
+
     varlist_outer = anything_to_list(varlist_outer, force=True)
     varlist_inner = anything_to_list(varlist_inner)
 
     varlist_all = varlist_outer + varlist_inner
 
+    df = df[varlist_all].copy()
+    df[varname_weight] = weights
+
+    if skipna:
+        # Keep only obs with nonmissing values AND nonmissing weights. Missing obs with
+        # nonmissing weights will otherwise create results that don't sum to 1.
+        keep = df.notna().all(axis=1)
+        # Do not create needless copies
+        if keep.sum() < len(df):
+            df = df[keep].copy()
+
     grp = df.groupby(varlist_all)
     df_inner = grp.agg({varname_weight: np.sum})
+
     if varlist_outer:
         df_outer = df_inner.groupby(varlist_outer)[varname_weight].sum()
         df_outer = df_outer.to_frame(name='weight_sum')
@@ -474,8 +509,13 @@ def weighted_pmf(
         df_outer = pd.DataFrame(weight_sum, index=df_inner.index, columns=['weight_sum'])
 
     df_inner = df_inner.join(df_outer, how='left')
-    df_inner[generate] = df_inner[varname_weight]/df_inner['weight_sum']
+    df_inner[varname_generate] = df_inner[varname_weight]/df_inner['weight_sum']
 
-    df_pmf = df_inner[[generate]].copy()
+    if generate:
+        # Return as DataFrame with requested column name
+        pmf = df_inner[[varname_generate]].copy()
+    else:
+        # Return as Series
+        pmf = df_inner[varname_generate].copy()
 
-    return df_pmf
+    return pmf
