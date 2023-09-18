@@ -11,6 +11,7 @@ from typing import Optional, Union
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.ticker import Formatter
 
 from .styles import DefaultStyle, AbstractStyle
@@ -434,3 +435,22 @@ def _set_properties(obj, **kwargs):
                 setattr(obj, key, value)
             except:
                 pass
+
+
+def hide_subplot(ax: Axes):
+    """
+    Set various parameters to hide the frame, axes, ticks, etc. of a subplot. This
+    can be used to hide "residual" subplots that are not needed when plotting a
+    rectangular grid of subplots.
+
+    Parameters
+    ----------
+    ax
+    """
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+    ax.set_ylabel("")
+    ax.set_xlabel("")
+    ax.tick_params(bottom=False, left=False)
+    ax.set_frame_on(False)
+    ax.grid(None)
