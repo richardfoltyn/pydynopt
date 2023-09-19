@@ -12,7 +12,7 @@ from typing import Optional, Union
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
-from matplotlib.ticker import Formatter
+from matplotlib.ticker import Formatter, Locator
 
 from .styles import DefaultStyle, AbstractStyle
 from ..utils import anything_to_tuple
@@ -31,8 +31,8 @@ def plot_grid(
         ylabel: Optional[str] = None,
         xlim: Optional[tuple[float, float]] = None,
         ylim: Optional[tuple[float, float] | np.ndarray] = None,
-        xticks: Optional[Sequence[float]] = None,
-        yticks: Optional[Sequence[float]] = None,
+        xticks: Optional[Sequence[float] | Locator] = None,
+        yticks: Optional[Sequence[float] | Locator] = None,
         xticklabels: Optional[Sequence[str]] = None,
         yticklabels: Optional[Sequence[str]] = None,
         ytickformatter: Optional[Formatter] = None,
@@ -260,7 +260,9 @@ def plot_grid(
             if style.grid:
                 ax.grid(**style.grid)
 
-            if xticks is not None:
+            if isinstance(xticks, Locator):
+                ax.xaxis.set_major_locator(xticks)
+            elif isinstance(xticks, Sequence):
                 ax.set_xticks(xticks)
                 if (i == (nrow - 1) or not has_sharex) and xticklabels is not None:
                     ax.set_xticklabels(xticklabels, **style.xticklabels)
@@ -268,10 +270,13 @@ def plot_grid(
             if ytickformatter is not None:
                 ax.yaxis.set_major_formatter(ytickformatter)
 
-            if yticks is not None:
+            if isinstance(yticks, Locator):
+                ax.yaxis.set_major_locator(yticks)
+            elif isinstance(yticks, Sequence):
                 ax.set_yticks(yticks)
                 if (j == 0 or not has_sharey) and yticklabels is not None:
                     ax.set_yticklabels(yticklabels, **style.yticklabels)
+
             if getattr(style, 'rotate_yticklabels', False):
                 ax.tick_params(axis='y', labelrotation=90)
 
