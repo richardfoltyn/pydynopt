@@ -18,6 +18,8 @@ from pydynopt.utils import anything_to_list
 from pydynopt.numba import jit, has_numba
 
 
+__all__ = ["weighted_mean", "df_weighted_mean", "percentile", "weighted_pmf"]
+
 @jit(nopython=True, parallel=False)
 def _weighed_mean_impl(data: np.ndarray, weights: np.ndarray) -> float:
     """
