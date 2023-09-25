@@ -13,19 +13,15 @@ import re
 from os.path import join
 from typing import Any, Optional
 
-__all__ = [
-    'dump',
-    'load',
-    'get_cached_object'
-]
+__all__ = ["dump", "load", "get_cached_object"]
 
 
 def dump(
-        path: str,
-        obj: Any,
-        directory: Optional[str] = None,
-        compress: bool = True,
-        overwrite: bool = True
+    path: str,
+    obj: Any,
+    directory: Optional[str] = None,
+    compress: bool = True,
+    overwrite: bool = True
 ):
     """
     Pickle object and dump it to a file, optionally using GZIP or LZ4
@@ -45,7 +41,7 @@ def dump(
         before the extension to create a unique file name.
     """
 
-    logger = logging.getLogger('IO')
+    logger = logging.getLogger("IO")
 
     if not os.path.isabs(path):
         if directory:
@@ -57,47 +53,47 @@ def dump(
         has_lz4 = False
         try:
             import lz4.frame
+
             has_lz4 = True
         except ImportError:
             pass
 
-        if not any(path.endswith(ext) for ext in ('.gz', '.lz4')):
-            path += '.lz4' if has_lz4 else '.gz'
+        if not any(path.endswith(ext) for ext in (".gz", ".lz4")):
+            path += ".lz4" if has_lz4 else ".gz"
 
-        if path.endswith('.gz'):
+        if path.endswith(".gz"):
             lopen = gzip.open
-        elif path.endswith('.lz4') and has_lz4:
+        elif path.endswith(".lz4") and has_lz4:
             lopen = lz4.frame.open
         else:
-            raise RuntimeError('Unsupported compression format')
+            raise RuntimeError("Unsupported compression format")
     else:
         lopen = open
 
     if os.path.isfile(path) and not overwrite:
-
         # Use non-greedy match to get multiple extensions, if present
-        pattern = r'(?P<root>.*?)(?P<ext>\.[^.]+)(?P<compress>\.[^.]+)?$'
+        pattern = r"(?P<root>.*?)(?P<ext>\.[^.]+)(?P<compress>\.[^.]+)?$"
         m = re.match(pattern, path)
 
-        root = m.group('root')
-        ext = m.group('ext')
-        ext_compress = m.group('compress')
+        root = m.group("root")
+        ext = m.group("ext")
+        ext_compress = m.group("compress")
         if ext_compress:
             ext += ext_compress
 
         i = 0
         while True:
-            fn_try = '{:s}_{:03d}{:s}'.format(root, i, ext)
+            fn_try = "{:s}_{:03d}{:s}".format(root, i, ext)
             if not os.path.isfile(fn_try):
                 path = fn_try
                 break
             else:
                 i += 1
 
-    with lopen(path, 'wb') as f:
+    with lopen(path, "wb") as f:
         pickle.dump(obj, f)
 
-    msg = 'Saved to {:s}'.format(path)
+    msg = "Saved to {:s}".format(path)
     logger.info(msg)
 
 
@@ -117,7 +113,7 @@ def load(path: str, directory: Optional[str] = None):
         Unpickled object
     """
 
-    logger = logging.getLogger('IO')
+    logger = logging.getLogger("IO")
 
     if not os.path.isfile(path):
         if directory:
@@ -125,31 +121,40 @@ def load(path: str, directory: Optional[str] = None):
 
     path = os.path.normpath(path)
 
-    logger.info('Loading from {:s}'.format(path))
+    logger.info("Loading from {:s}".format(path))
 
-    if path.endswith('.gz'):
-        lopen = gzip.open
-    elif path.endswith('.lz4'):
-        try:
-            import lz4.frame
-            lopen = lz4.frame.open
-        except ImportError:
-            raise IOError('LZ4 library not installed')
+    if m := re.match(r".*\.(?P<ext>[^.]+)$", path):
+        ext = m.group("ext").lower()
+
+        if ext in ("gz", "gzip"):
+            lopen = gzip.open
+        elif ext in ("lz4", ):
+            try:
+                import lz4.frame
+                lopen = lz4.frame.open
+            except ImportError:
+                raise IOError("LZ4 library not installed")
+        elif ext in ("xz", "lzma"):
+            import lzma
+
+            lopen = lzma.open
+        else:
+            lopen = open
     else:
         lopen = open
 
-    with lopen(path, 'rb') as f:
+    with lopen(path, "rb") as f:
         obj = pickle.load(f)
 
     return obj
 
 
 def get_cached_object(
-        fcn: callable,
-        *args,
-        cache_file: Optional[str] = None,
-        cache_dir: Optional[str] = None,
-        **kwargs
+    fcn: callable,
+    *args,
+    cache_file: Optional[str] = None,
+    cache_dir: Optional[str] = None,
+    **kwargs
 ):
     """
     Load object from cache file, if present. Otherwise, call given function
@@ -181,15 +186,15 @@ def get_cached_object(
             path = cache_file
 
     if path:
-        extensions = ('', '.lz4', '.gz')
+        extensions = ("", ".lz4", ".gz")
         for ext in extensions:
-            p = f'{path}{ext}'
+            p = f"{path}{ext}"
             if os.path.isfile(p):
                 obj = load(p)
                 return obj
 
     # Cached result does not exist, compute it
-    logging.info(f'Cached result not found, calling {fcn}')
+    logging.info(f"Cached result not found, calling {fcn}")
 
     obj = fcn(*args, **kwargs)
 
