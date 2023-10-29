@@ -4,6 +4,7 @@ https://creativecommons.org/licenses/by/4.0/
 
 Author: Richard Foltyn
 """
+from logging import FileHandler
 
 import logging
 import sys
@@ -46,7 +47,7 @@ def add_logfile(
         logdir: Optional[str] = None,
         file_timestamp: bool = False,
         append: bool = False
-):
+) -> FileHandler:
     """
     Add file handler to current logger.
 
@@ -86,3 +87,5 @@ def add_logfile(
     logger.addHandler(fh)
 
     logger.info(f'Logging to {file}')
+
+    return fh
