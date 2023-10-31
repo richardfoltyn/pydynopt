@@ -41,11 +41,20 @@ def configure_logging():
     logger = logging.getLogger('numexpr.utils')
     logger.setLevel(logging.WARNING)
 
+    # Disable JAX compilation debug info
+    logger = logging.getLogger("jax")
+    logger.setLevel(logging.WARNING)
+    logger = logging.getLogger("jaxlib")
+    logger.setLevel(logging.WARNING)
+
 
 def add_logfile(
         file: str,
+        *,
         logdir: Optional[str] = None,
         file_timestamp: bool = False,
+        date: bool = True,
+        time: bool = True,
         append: bool = False
 ) -> FileHandler:
     """
@@ -59,6 +68,10 @@ def add_logfile(
         Log directory
     file_timestamp : bool
         If true, append time stamp to log file
+    date : bool
+        Add date to log output.
+    time : bool
+        Add time stamp to log output.
     append : bool
         If true, append to existing log file
     """
@@ -78,9 +91,20 @@ def add_logfile(
     mode = 'a' if append else 'w'
     fh = logging.FileHandler(file, mode=mode)
     fh.setLevel(logging.DEBUG)
-    fmt = '%(asctime)s %(name)s %(levelname)s: %(message)s'
+    if date or time:
+        fmt = '%(asctime)s %(name)s %(levelname)s: %(message)s'
+    else:
+        fmt = '%(name)s %(levelname)s: %(message)s'
+
     # Format used the (asctime) field
-    datefmt = '%Y-%m-%d %H:%M:%S'
+    tokens = []
+    if date:
+        tokens.append('%Y-%m-%d')
+    if time:
+        tokens.append('%H:%M:%S')
+
+    datefmt = ' '.join(tokens)
+
     formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
     fh.setFormatter(formatter)
 
