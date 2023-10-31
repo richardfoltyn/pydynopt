@@ -76,8 +76,10 @@ def add_logfile(
         If true, append to existing log file
     """
 
+    timestamp = datetime.datetime.now()
+
     if file_timestamp:
-        suffix = datetime.datetime.now().strftime('%Y%m%d-%Hh%Mm')
+        suffix = timestamp.strftime('%Y%m%d-%Hh%Mm')
         root, ext = os.path.splitext(file)
         if not ext:
             ext = '.log'
@@ -110,6 +112,7 @@ def add_logfile(
 
     logger.addHandler(fh)
 
+    logger.info(f'Log started on {timestamp.strftime("%Y-%m-%d %H:%M:%S")}')
     logger.info(f'Logging to {file}')
 
     return fh
