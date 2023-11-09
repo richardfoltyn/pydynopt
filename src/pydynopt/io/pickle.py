@@ -58,12 +58,15 @@ def dump(
         except ImportError:
             pass
 
-        if not any(path.endswith(ext) for ext in (".gz", ".lz4")):
-            path += ".lz4" if has_lz4 else ".gz"
+        if not re.match(".*((gz)|(lz4)|(xz))$", path, re.IGNORECASE):
+            path += ".xz"
 
-        if path.endswith(".gz"):
+        if re.match(r".*\.gz$", path, re.IGNORECASE):
             lopen = gzip.open
-        elif path.endswith(".lz4") and has_lz4:
+        elif re.match(r".*\.xz$", path, re.IGNORECASE):
+            import lzma
+            lopen = lzma.open
+        elif re.match(r".*\.lz4$", path, re.IGNORECASE) and has_lz4:
             lopen = lz4.frame.open
         else:
             raise RuntimeError("Unsupported compression format")
