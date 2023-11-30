@@ -31,8 +31,8 @@ def plot_grid(
         ylabel: Optional[str] = None,
         xlim: Optional[tuple[float, float]] = None,
         ylim: Optional[tuple[float, float] | np.ndarray] = None,
-        xticks: Optional[Sequence[float] | Locator] = None,
-        yticks: Optional[Sequence[float] | Locator] = None,
+        xticks: Optional[Sequence[float] | np.ndarray | Locator] = None,
+        yticks: Optional[Sequence[float] | np.ndarray | Locator] = None,
         xticklabels: Optional[Sequence[str]] = None,
         yticklabels: Optional[Sequence[str]] = None,
         ytickformatter: Optional[Formatter] = None,
@@ -47,8 +47,8 @@ def plot_grid(
         pass_style: bool = False,
         metadata: Optional[Mapping] = None,
         identity: bool = None,
-        hline: Optional[Sequence[float]] = None,
-        vline: Optional[Sequence[float]] = None,
+        hline: Optional[Sequence[float] | np.ndarray] = None,
+        vline: Optional[Sequence[float] | np.ndarray] = None,
         **kwargs
 ) -> None:
     """
@@ -262,7 +262,7 @@ def plot_grid(
 
             if isinstance(xticks, Locator):
                 ax.xaxis.set_major_locator(xticks)
-            elif isinstance(xticks, Sequence):
+            elif isinstance(xticks, (Sequence, np.ndarray)):
                 ax.set_xticks(xticks)
                 if (i == (nrow - 1) or not has_sharex) and xticklabels is not None:
                     ax.set_xticklabels(xticklabels, **style.xticklabels)
@@ -272,7 +272,7 @@ def plot_grid(
 
             if isinstance(yticks, Locator):
                 ax.yaxis.set_major_locator(yticks)
-            elif isinstance(yticks, Sequence):
+            elif isinstance(yticks, (Sequence, np.ndarray)):
                 ax.set_yticks(yticks)
                 if (j == 0 or not has_sharey) and yticklabels is not None:
                     ax.set_yticklabels(yticklabels, **style.yticklabels)
