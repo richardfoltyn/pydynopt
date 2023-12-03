@@ -262,7 +262,8 @@ def plot_grid(
 
             if isinstance(xticks, Locator):
                 ax.xaxis.set_major_locator(xticks)
-            elif isinstance(xticks, (Sequence, np.ndarray)):
+            elif xticks is not None:
+                xticks = np.atleast_1d(xticks)
                 ax.set_xticks(xticks)
                 if (i == (nrow - 1) or not has_sharex) and xticklabels is not None:
                     ax.set_xticklabels(xticklabels, **style.xticklabels)
@@ -272,7 +273,8 @@ def plot_grid(
 
             if isinstance(yticks, Locator):
                 ax.yaxis.set_major_locator(yticks)
-            elif isinstance(yticks, (Sequence, np.ndarray)):
+            elif yticks is not None:
+                yticks = np.atleast_1d(yticks)
                 ax.set_yticks(yticks)
                 if (j == 0 or not has_sharey) and yticklabels is not None:
                     ax.set_yticklabels(yticklabels, **style.yticklabels)
