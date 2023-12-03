@@ -197,7 +197,7 @@ def get_cached_object(
                 return obj
 
     # Cached result does not exist, compute it
-    logging.info(f"Cached result not found, calling {fcn}")
+    logging.info(f"Cached result not found, calling {fcn.__name__}()")
 
     obj = fcn(*args, **kwargs)
 
