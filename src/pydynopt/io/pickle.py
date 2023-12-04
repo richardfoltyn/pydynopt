@@ -189,7 +189,7 @@ def get_cached_object(
             path = cache_file
 
     if path:
-        extensions = ("", ".lz4", ".gz")
+        extensions = ("", ".xz", ".lz4", ".gz")
         for ext in extensions:
             p = f"{path}{ext}"
             if os.path.isfile(p):
