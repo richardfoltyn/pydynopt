@@ -119,10 +119,10 @@ def _get_yerr(data, moment_name, yvalues=None):
         # CI_lb = yvalues - yerr_lb => yerr_lb = yvalues - CI_lb
         yerr_lb = yvalues - data[ci_lb_name[0]].to_numpy()
         # Upper bound: drawn as yvalues + yerr_ub, so we need to return
-        # CI_ub = yvalues + yerr_ub => yerr_ub - CI_ub - yvalues
+        # CI_ub = yvalues + yerr_ub => yerr_ub = CI_ub - yvalues
         yerr_ub = data[ci_ub_name[0]].to_numpy() - yvalues
         if np.any(np.isfinite(yerr_lb)) and np.any(np.isfinite(yerr_ub)):
-            yerr = (yerr_lb, yerr_ub)
+            yerr = np.stack((yerr_lb, yerr_ub))
 
     return yerr
 
