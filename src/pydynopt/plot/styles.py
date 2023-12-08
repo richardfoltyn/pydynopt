@@ -925,6 +925,26 @@ class AbstractStyle:
         return kwargs
 
     @property
+    def fill_between_face_kwargs(self):
+        """
+        Return a sequence of collections of key/value pairs that can be passed
+        to matplotlib's fill_between() when plotting the "face" component.
+
+        Returns
+        -------
+        StyleAttrMapping
+        """
+        mapping = {
+            'facecolor': None,
+            'alpha': 'facealpha',
+            'zorder': None
+        }
+
+        kwargs = StyleAttrMapping(self, mapping)
+
+        return kwargs
+
+    @property
     def fill_between_edge_kwargs(self):
         """
         Return a sequence of collections of key/value pairs that can be passed to
