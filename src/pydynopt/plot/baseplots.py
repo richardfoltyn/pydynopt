@@ -35,6 +35,7 @@ def plot_grid(
         yticks: Optional[Sequence[float] | np.ndarray | Locator] = None,
         xticklabels: Optional[Sequence[str]] = None,
         yticklabels: Optional[Sequence[str]] = None,
+        xtickformatter: Optional[Formatter] = None,
         ytickformatter: Optional[Formatter] = None,
         legend_at: tuple[int, int] = (0, 0),
         legend_loc: str = 'best',
@@ -103,6 +104,7 @@ def plot_grid(
         y-values.
     yticklabels : array_like, optional
         Ticklabels for y-ticks. Ignored if y-ticks not given or not used.
+    xtickformatter : matplotlib.ticker.Formatter, optional
     ytickformatter : matplotlib.ticker.Formatter, optional
     legend_at : array_like
         Subplot in which legend should be placed (default: (0,0)). Accepts
@@ -259,6 +261,9 @@ def plot_grid(
 
             if style.grid:
                 ax.grid(**style.grid)
+
+            if xtickformatter is not None:
+                ax.xaxis.set_major_formatter(xtickformatter)
 
             if isinstance(xticks, Locator):
                 ax.xaxis.set_major_locator(xticks)
