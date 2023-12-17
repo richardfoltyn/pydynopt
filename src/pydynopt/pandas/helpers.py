@@ -45,7 +45,7 @@ def anything_to_dataframe(
         df = pd.DataFrame(data, columns=[name], copy=copy)
     elif isinstance(data, Mapping):
         # Initialization from dict always copies data
-        dct = {k: np.asarray(v) for k, v in data.items()}
+        dct = {k: np.atleast_1d(v) for k, v in data.items()}
         df = pd.DataFrame(dct)
     elif isinstance(data, np.ndarray) and data.ndim == 2:
         df = pd.DataFrame(data, columns=names, copy=copy)
