@@ -33,6 +33,14 @@ _FIGURE_LAYOUT_MAP = {
     'tight_layout': FigureLayout.TIGHT_LAYOUT
 }
 
+# Mapping from keyword arguments for ticklabels() to tick_params()
+_TICKLABEL_PARAMS_MAP = dict(
+    fontfamily="labelfontfamily",
+    fontsize="labelsize",
+    color="labelcolor",
+    rotation="labelrotation",
+)
+
 
 def _to_tuple(value):
     """
@@ -49,7 +57,7 @@ def _to_tuple(value):
     """
     value = anything_to_tuple(value)
     if value is None:
-        value = (None, )
+        value = (None,)
 
     return value
 
@@ -155,9 +163,19 @@ class PlotStyleDict(object):
         self.style = style
 
     def __getitem__(self, item):
-
-        keys = {'color', 'lw', 'ls', 'alpha', 'marker', 'mec', 'mfc', 'mew',
-                'markersize', 'markevery',  'zorder'}
+        keys = {
+            'color',
+            'lw',
+            'ls',
+            'alpha',
+            'marker',
+            'mec',
+            'mfc',
+            'mew',
+            'markersize',
+            'markevery',
+            'zorder',
+        }
         res = dict()
 
         for k in keys:
@@ -225,10 +243,8 @@ class StyleAttrMapping:
 
 
 class AbstractStyle:
-
     LEG_FONTPROP_KWARGS = {}
     LBL_FONTPROP_KWARGS = {}
-    TICKLABEL_FONTPROP_KWARGS = {}
     TITLE_FONTPROP_KWARGS = {}
     SUBTITLE_FONTPROP_KWARGS = {}
     TEXT_FONTPROP_KWARGS = {}
@@ -236,6 +252,7 @@ class AbstractStyle:
     LEG_KWARGS = {}
     LBL_KWARGS = {}
     TICKLABEL_KWARGS = {}
+    TICK_PARAMS_KWARGS = {}
     TITLE_KWARGS = {}
     SUPTITLE_KWARGS = {}
     FIGURE_KWARGS = {}
@@ -264,7 +281,7 @@ class AbstractStyle:
         self.cell_size = 6
         self.dpi = 96
         self.aspect = 1.0
-        self.ax_aspect = None   # Aspect ratio to set via ax.set_aspect()
+        self.ax_aspect = None  # Aspect ratio to set via ax.set_aspect()
         self._margins = 0.02
         self._grid = cls.GRID_KWARGS.copy()
         self._color = None
@@ -295,13 +312,14 @@ class AbstractStyle:
         self._ylabel = None
         self._xlabel = None
         self._xticklabels = None
+        self._xtick_params = None
         self._yticklabels = None
+        self._ytick_params = None
         self._title = None
         self._suptitle = None
         self._legend = None
         self._text = None
         self.split_scatter = False
-        self.rotate_yticklabels = False
         self._guideline = dict(cls.GUIDELINE_KWARGS)
 
         self._plot_all = PlotStyleDict(self)
@@ -430,9 +448,7 @@ class AbstractStyle:
     def xticklabels(self):
         if self._xticklabels is None:
             cls = self.__class__
-            fp = FontProperties(**cls.TICKLABEL_FONTPROP_KWARGS)
             self._xticklabels = cls.TICKLABEL_KWARGS.copy()
-            self._xticklabels.update({'fontproperties': fp})
         return self._xticklabels
 
     @xticklabels.setter
@@ -450,9 +466,7 @@ class AbstractStyle:
     def yticklabels(self):
         if self._yticklabels is None:
             cls = self.__class__
-            fp = FontProperties(**cls.TICKLABEL_FONTPROP_KWARGS)
             self._yticklabels = cls.TICKLABEL_KWARGS.copy()
-            self._yticklabels.update({'fontproperties': fp})
         return self._yticklabels
 
     @yticklabels.setter
@@ -465,6 +479,78 @@ class AbstractStyle:
         value : collections.abc.Mapping
         """
         self._yticklabels = dict(value)
+
+    @property
+    def xtick_params(self) -> dict:
+        """
+        Returns collection of keyword arguments that can be passed to
+        set_tick_params().
+
+        Returns
+        -------
+        dict
+        """
+        if self._xtick_params is None:
+            cls = self.__class__
+            self._xtick_params = cls.TICK_PARAMS_KWARGS.copy()
+            # Update with label properties. Keyword arguments have different names
+            # when passed to tick_params() and only a subset is supported.
+            self._xtick_params.update(
+                {
+                    _TICKLABEL_PARAMS_MAP[k]: v
+                    for k, v in self.xticklabels.items()
+                    if k in _TICKLABEL_PARAMS_MAP
+                }
+            )
+        return self._xtick_params
+
+    @xtick_params.setter
+    def xtick_params(self, value: Mapping):
+        """
+        Sets the collection of keyword arguments passed to
+        set_tick_params().
+
+        Parameters
+        ----------
+        value : Mapping
+        """
+        self._xtick_params = dict(value)
+
+    @property
+    def ytick_params(self) -> dict:
+        """
+        Returns collection of keyword arguments that can be passed to
+        set_tick_params().
+
+        Returns
+        -------
+        dict
+        """
+        if self._ytick_params is None:
+            cls = self.__class__
+            self._ytick_params = cls.TICK_PARAMS_KWARGS.copy()
+            # Update with label properties. Keyword arguments have different names
+            # when passed to tick_params() and only a subset is supported.
+            self._ytick_params.update(
+                {
+                    _TICKLABEL_PARAMS_MAP[k]: v
+                    for k, v in self.yticklabels.items()
+                    if k in _TICKLABEL_PARAMS_MAP
+                }
+            )
+        return self._ytick_params
+
+    @ytick_params.setter
+    def ytick_params(self, value: Mapping):
+        """
+        Sets the collection of keyword arguments passed to
+        set_tick_params().
+
+        Parameters
+        ----------
+        value : Mapping
+        """
+        self._ytick_params = dict(value)
 
     @property
     def grid(self) -> dict:
@@ -674,7 +760,7 @@ class AbstractStyle:
     @property
     def elinewidth(self):
         if self._elinewidth is None:
-            self._elinewidth = LineWidth((1.0, ))
+            self._elinewidth = LineWidth((1.0,))
         return self._elinewidth
 
     @elinewidth.setter
@@ -762,7 +848,7 @@ class AbstractStyle:
     @property
     def mew(self):
         if self._mew is None:
-            self._mew = LineWidth((0.5, ))
+            self._mew = LineWidth((0.5,))
         return self._mew
 
     @mew.setter
@@ -922,7 +1008,7 @@ class AbstractStyle:
             'lw': 'edgelinewidth',
             'ls': 'edgelinestyle',
             'alpha': 'facealpha',
-            'zorder': None
+            'zorder': None,
         }
 
         kwargs = StyleAttrMapping(self, mapping)
@@ -939,11 +1025,7 @@ class AbstractStyle:
         -------
         StyleAttrMapping
         """
-        mapping = {
-            'facecolor': None,
-            'alpha': 'facealpha',
-            'zorder': None
-        }
+        mapping = {'facecolor': None, 'alpha': 'facealpha', 'zorder': None}
 
         kwargs = StyleAttrMapping(self, mapping)
 
@@ -965,7 +1047,7 @@ class AbstractStyle:
             'ls': 'edgelinestyle',
             'lw': 'edgelinewidth',
             'alpha': 'edgealpha',
-            'zorder': None
+            'zorder': None,
         }
 
         kwargs = StyleAttrMapping(self, mapping)
@@ -998,7 +1080,7 @@ class AbstractStyle:
             'markersize': None,
             'markevery': None,
             'zorder': None,
-            'errorevery': 'markevery'
+            'errorevery': 'markevery',
         }
 
         kwargs = StyleAttrMapping(self, mapping)
@@ -1057,7 +1139,7 @@ class AbstractStyle:
             'lw': 0,
             'alpha': 'facealpha',
             'zorder': None,
-            'markevery': None
+            'markevery': None,
         }
 
         kwargs = StyleAttrMapping(self, mapping)
@@ -1089,7 +1171,7 @@ class AbstractStyle:
             'hatch': None,
             'capsize': None,
             'ecolor': None,
-            'error_kw': ['elinewidth', 'capthick']
+            'error_kw': ['elinewidth', 'capthick'],
         }
 
         kwargs = StyleAttrMapping(self, mapping)
@@ -1114,7 +1196,7 @@ class AbstractStyle:
             'linestyles': 'edgelinestyle',
             'alpha': 'alpha',
             'marker': None,
-            'zorder': None
+            'zorder': None,
         }
 
         kwargs = StyleAttrMapping(self, mapping)
@@ -1136,7 +1218,7 @@ class AbstractStyle:
             'facecolors': 'facecolor',
             'alpha': 'facealpha',
             'linewidths': 0,
-            'zorder': None
+            'zorder': None,
         }
 
         kwargs = StyleAttrMapping(self, mapping)
@@ -1162,7 +1244,7 @@ class AbstractStyle:
             'linestyles': 'edgelinestyle',
             'alpha': 'edgealpha',
             'marker': None,
-            'zorder': None
+            'zorder': None,
         }
 
         kwargs = StyleAttrMapping(self, mapping)
@@ -1171,81 +1253,55 @@ class AbstractStyle:
 
 
 class DefaultStyle(AbstractStyle):
+    LEG_FONTPROP_KWARGS = {'family': 'serif', 'size': 'small'}
 
-    LEG_FONTPROP_KWARGS = {
-        'family': 'serif',
-        'size': 'small'
-    }
+    LBL_FONTPROP_KWARGS = {'family': 'serif', 'size': 'medium'}
 
-    LBL_FONTPROP_KWARGS = {
-        'family': 'serif',
-        'size': 'medium'
-    }
+    TICKLABEL_KWARGS = {'fontfamily': 'serif', 'fontsize': 'small'}
 
-    TICKLABEL_FONTPROP_KWARGS = {
-        'family': 'serif',
-        'size': 'small'
-    }
-
-    TITLE_FONTPROP_KWARGS = {
-        'family': 'serif',
-        'size': 'medium',
-        'style': 'italic'
-    }
+    TITLE_FONTPROP_KWARGS = {'family': 'serif', 'size': 'medium', 'style': 'italic'}
 
     SUBTITLE_FONTPROP_KWARGS = {
         'family': 'serif',
         'size': 'x-large',
         'style': 'italic',
-        'weight': 'semibold'
+        'weight': 'semibold',
     }
 
-    TEXT_FONTPROP_KWARGS = {
-        'family': 'serif',
-        'style': 'italic',
-        'size': 'small'
-    }
+    TEXT_FONTPROP_KWARGS = {'family': 'serif', 'style': 'italic', 'size': 'small'}
 
     GUIDELINE_KWARGS = {
         'lw': 0.75,
         'ls': (0, (1, 1)),
         'alpha': 0.7,
         'color': 'black',
-        'zorder': -10
+        'zorder': -10,
     }
 
     # Keyword arguments (other than font properties) for various objects
-    LEG_KWARGS = {'framealpha': .7, 'frameon': True, 'fancybox': False}
+    LEG_KWARGS = {'framealpha': 0.7, 'frameon': True, 'fancybox': False}
 
     LBL_KWARGS = {}
     TITLE_KWARGS = {}
     SUPTITLE_KWARGS = {}
 
-    SUBPLOT_KWARGS = {
-        'facecolor': 'white',
-        'axisbelow': True
-    }
+    SUBPLOT_KWARGS = {'facecolor': 'white', 'axisbelow': True}
 
-    FIGURE_KWARGS = {
-        'constrained_layout': True
-    }
+    FIGURE_KWARGS = {'constrained_layout': True}
 
     GRID_KWARGS = {
         'color': 'black',
         'alpha': 0.7,
         'zorder': -1000,
         'linestyle': ':',
-        'linewidth': 0.5
+        'linewidth': 0.5,
     }
 
-    TEXT_KWARGS = {
-        'alpha': 1.0,
-        'zorder': 500
-    }
+    TEXT_KWARGS = {'alpha': 1.0, 'zorder': 500}
 
     LINESTYLES = ['-', '--', '-', '--']
     EDGELINESTYLE = ['-']
-    ALPHAS = [.9, 0.7, 0.7, 1.0]
+    ALPHAS = [0.9, 0.7, 0.7, 1.0]
     MARKERS = [None]
     LINEWIDTH = [2]
     EDGELINEWIDTH = [0.5]
@@ -1256,20 +1312,16 @@ class DefaultStyle(AbstractStyle):
     FACECOLORS = None
 
     def __init__(self):
-
         super(DefaultStyle, self).__init__()
 
 
 class PurpleBlue(DefaultStyle):
-
     COLORS = ['#810f7c', '#737373', '#045a8d', '#807dba', '#f768a1', '#3690c0']
     FACECOLORS = ['#8c6bb1', '#dadaeb', '#0570b0', '#8f8cd0', '#fcc5c0', '#a6bddb']
 
 
 class Presentation(DefaultStyle):
-
     def __init__(self):
-
         super().__init__()
 
         self.cell_size = 5.0
@@ -1279,7 +1331,7 @@ class Presentation(DefaultStyle):
         self.color = colors
         self.linestyle = ('-', '-', '-', '--', '-')
         self.linewidth = (2.0, 2.0, 2.0, 2.0, 2.0)
-        self.alpha = (.8, .8, .8, .7, .8)
+        self.alpha = (0.8, 0.8, 0.8, 0.7, 0.8)
         self.marker = (None, 'p', 'o', None, 'd')
         self._mec = Colors((None, 'White', 'White', None, 'White'))
 
@@ -1295,11 +1347,10 @@ class AlternatingStyle(DefaultStyle):
         'alpha': 0.5,
         'zorder': -1000,
         'linestyle': ':',
-        'linewidth': 0.5
+        'linewidth': 0.5,
     }
 
     def __init__(self):
-
         super().__init__()
 
         colors = ['#0570b0', '#e31a1c', '#88419d', '#fc8d59', '#252525']
@@ -1339,11 +1390,10 @@ class QualitativeStyle(DefaultStyle):
         'alpha': 0.5,
         'zorder': -1000,
         'linestyle': ':',
-        'linewidth': 0.35
+        'linewidth': 0.35,
     }
 
     def __init__(self):
-
         super().__init__()
 
         colors = ['#0570b0', 'black', '#e31a1c', '#88419d', '#fc8d59', '#aa5500']

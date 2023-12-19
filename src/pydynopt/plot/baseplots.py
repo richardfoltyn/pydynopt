@@ -19,38 +19,40 @@ from ..utils import anything_to_tuple
 
 
 def plot_grid(
-        fun, nrow: int = 1, ncol: int = 1,
-        *,
-        column_title: Optional[Union[Sequence[str], str]] = None,
-        suptitle: Optional[str] = None,
-        figure_kw: Optional[Mapping] = None,
-        subplot_kw: Optional[Mapping] = None,
-        sharex: Union[bool, str] = True,
-        sharey: Union[bool, str] = True,
-        xlabel: Optional[str] = None,
-        ylabel: Optional[str] = None,
-        xlim: Optional[tuple[float, float]] = None,
-        ylim: Optional[tuple[float, float] | np.ndarray] = None,
-        xticks: Optional[Sequence[float] | np.ndarray | Locator] = None,
-        yticks: Optional[Sequence[float] | np.ndarray | Locator] = None,
-        xticklabels: Optional[Sequence[str]] = None,
-        yticklabels: Optional[Sequence[str]] = None,
-        xtickformatter: Optional[Formatter] = None,
-        ytickformatter: Optional[Formatter] = None,
-        legend_at: tuple[int, int] = (0, 0),
-        legend_loc: str = 'best',
-        legend: bool = False,
-        bbox_to_anchor=None,
-        outfile: Optional[str] = None,
-        style: Optional[AbstractStyle] = None,
-        aspect: Optional[float] = None,
-        close_fig: bool = True,
-        pass_style: bool = False,
-        metadata: Optional[Mapping] = None,
-        identity: bool = None,
-        hline: Optional[Sequence[float] | np.ndarray] = None,
-        vline: Optional[Sequence[float] | np.ndarray] = None,
-        **kwargs
+    fun,
+    nrow: int = 1,
+    ncol: int = 1,
+    *,
+    column_title: Optional[Union[Sequence[str], str]] = None,
+    suptitle: Optional[str] = None,
+    figure_kw: Optional[Mapping] = None,
+    subplot_kw: Optional[Mapping] = None,
+    sharex: Union[bool, str] = True,
+    sharey: Union[bool, str] = True,
+    xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
+    xlim: Optional[tuple[float, float]] = None,
+    ylim: Optional[tuple[float, float] | np.ndarray] = None,
+    xticks: Optional[Sequence[float] | np.ndarray | Locator] = None,
+    yticks: Optional[Sequence[float] | np.ndarray | Locator] = None,
+    xticklabels: Optional[Sequence[str]] = None,
+    yticklabels: Optional[Sequence[str]] = None,
+    xtickformatter: Optional[Formatter] = None,
+    ytickformatter: Optional[Formatter] = None,
+    legend_at: tuple[int, int] = (0, 0),
+    legend_loc: str = 'best',
+    legend: bool = False,
+    bbox_to_anchor=None,
+    outfile: Optional[str] = None,
+    style: Optional[AbstractStyle] = None,
+    aspect: Optional[float] = None,
+    close_fig: bool = True,
+    pass_style: bool = False,
+    metadata: Optional[Mapping] = None,
+    identity: bool = None,
+    hline: Optional[Sequence[float] | np.ndarray] = None,
+    vline: Optional[Sequence[float] | np.ndarray] = None,
+    **kwargs,
 ) -> None:
     """
     Creates a rectangular grid of subplots and calls a user-provided function
@@ -148,7 +150,7 @@ def plot_grid(
     vline = anything_to_tuple(vline, force=True)
 
     if column_title is None:
-        column_title = np.ndarray((nrow, ), dtype=object)
+        column_title = np.ndarray((nrow,), dtype=object)
 
     column_title = np.atleast_1d(column_title)
 
@@ -188,8 +190,7 @@ def plot_grid(
         kwargs['style'] = style
 
     # Aspect ratio is defined as width / height
-    fig_kw = {'figsize': (style.cell_size * ncol,
-                          style.cell_size * nrow / aspect)}
+    fig_kw = {'figsize': (style.cell_size * ncol, style.cell_size * nrow / aspect)}
     fig_kw.update(style.figure)
 
     if figure_kw is not None:
@@ -198,9 +199,15 @@ def plot_grid(
     if subplot_kw is not None:
         style.subplot.update(subplot_kw)
 
-    fig, axes = plt.subplots(nrow, ncol, subplot_kw=style.subplot,
-                             sharex=sharex, sharey=sharey, squeeze=False,
-                             **fig_kw)
+    fig, axes = plt.subplots(
+        nrow,
+        ncol,
+        subplot_kw=style.subplot,
+        sharex=sharex,
+        sharey=sharey,
+        squeeze=False,
+        **fig_kw,
+    )
 
     if xlabel is not None:
         xlabel = np.atleast_1d(xlabel)
@@ -236,7 +243,6 @@ def plot_grid(
 
     for i in range(nrow):
         for j in range(ncol):
-
             ax = axes[i, j]
 
             if i == 0:
@@ -287,6 +293,12 @@ def plot_grid(
             if getattr(style, 'rotate_yticklabels', False):
                 ax.tick_params(axis='y', labelrotation=90)
 
+            # Apply tick_params for both axes. These setting are more robust than
+            # arguments passed to set_xticklabels() which may be discarded when the
+            # graph is modified in various ways.
+            ax.xaxis.set_tick_params(which='major', **style.xtick_params)
+            ax.yaxis.set_tick_params(which='major', **style.ytick_params)
+
             if xlabel is not None and (i == (nrow - 1) or not sharex):
                 ax.set_xlabel(xlabel[j], **style.xlabel)
 
@@ -294,14 +306,6 @@ def plot_grid(
                 ax.set_ylabel(ylabel[i], **style.ylabel)
 
             fun(ax, (i, j), **kwargs)
-
-            # Apply tick label styles after calling the function since
-            # user actions might have unset style settings.
-            for lbl in ax.get_xticklabels():
-                _set_properties(lbl, **style.xticklabels)
-
-            for lbl in ax.get_yticklabels():
-                _set_properties(lbl, **style.yticklabels)
 
             # Apply axis aspect
             if ax_aspect is not None:
@@ -363,8 +367,10 @@ def plot_grid(
             yticks0 = axes[i, 0].get_yticks()
             for j in range(1, ncol):
                 yticks_j = axes[i, j].get_yticks()
-                if len(yticks0) != len(yticks_j) or \
-                        np.amax(np.abs(yticks0 - yticks_j)) > 1.0e-8:
+                if (
+                    len(yticks0) != len(yticks_j)
+                    or np.amax(np.abs(yticks0 - yticks_j)) > 1.0e-8
+                ):
                     yticks_same = False
                     break
 
