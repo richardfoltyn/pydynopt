@@ -129,20 +129,24 @@ def _ppf_nearest(rank, cdf, x, qntl):
 
     # Skip over any potential initially flat region without mass
     imin = 0
-    for imin in range(cdf.size):
+    for imin in range(cdf.size - 1):
         if cdf[imin+1] > 0.0:
             break
 
     for i in range(rank.size):
         ri = rank[i]
-        if ri <= cdf[imin]:
-            qntl[i] = x[imin]
+        if ri <= cdf[0]:
+            # In this case we cannot find a bracketing interval, so return the smallest
+            # value on the support
+            qntl[i] = x[0]
         else:
             j = imin
             for j in range(imin, cdf.size-1):
                 if cdf[j] < ri <= cdf[j+1]:
                     break
-            qntl[i] = x[j]
+            # Desired quantile is in the half-open interval (cdf[j], cdf[j+1]], so
+            # it falls into the bin j+1
+            qntl[i] = x[j+1]
 
 
 @jit(nopython=True, nogil=True, parallel=False)
@@ -171,15 +175,16 @@ def _ppf_interp(rank, cdf, x, qntl):
 
     # Skip over any potential initially flat region without mass
     imin = 0
-    for imin in range(cdf.size):
+    for imin in range(cdf.size-1):
         if cdf[imin+1] > 0.0:
             break
 
     for i in range(rank.size):
         ri = rank[i]
 
-        if ri <= cdf[imin]:
-            qntl[i] = x[imin]
+        if ri <= cdf[0]:
+            # We cannot interpolate to the left, so return min. value on the support
+            qntl[i] = x[0]
         else:
             ilb = imin
             for ilb in range(imin, cdf.size-1):
@@ -278,7 +283,11 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
     else:
         raise ValueError('Non-conformable arrays')
 
-    q = np.empty_like(qrank1d, dtype=x.dtype)
+    q = np.full_like(qrank1d, dtype=x.dtype, fill_value=np.nan)
+
+    # Quick exit: if PMF was all zeros or contained NaNs, we cannot compute anything
+    if cdf[-1] == 0.0 or not np.isfinite(cdf[-1]):
+        return q
 
     if interpolation == 'nearest':
         _ppf_nearest(qrank1d, cdf, x1d, q)
