@@ -275,9 +275,10 @@ def plot_grid(
                 ax.xaxis.set_major_locator(xticks)
             elif xticks is not None:
                 xticks = np.atleast_1d(xticks)
-                ax.set_xticks(xticks)
                 if (i == (nrow - 1) or not has_sharex) and xticklabels is not None:
-                    ax.set_xticklabels(xticklabels, **style.xticklabels)
+                    ax.set_xticks(xticks, xticklabels, **style.xticklabels)
+                else:
+                    ax.set_xticks(xticks)
 
             if ytickformatter is not None:
                 ax.yaxis.set_major_formatter(ytickformatter)
@@ -286,9 +287,10 @@ def plot_grid(
                 ax.yaxis.set_major_locator(yticks)
             elif yticks is not None:
                 yticks = np.atleast_1d(yticks)
-                ax.set_yticks(yticks)
                 if (j == 0 or not has_sharey) and yticklabels is not None:
-                    ax.set_yticklabels(yticklabels, **style.yticklabels)
+                    ax.set_yticks(yticks, yticklabels, **style.yticklabels)
+                else:
+                    ax.set_yticks(yticks)
 
             if getattr(style, 'rotate_yticklabels', False):
                 ax.tick_params(axis='y', labelrotation=90)
