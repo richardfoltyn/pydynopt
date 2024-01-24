@@ -15,7 +15,7 @@ from matplotlib.axes import Axes
 from matplotlib.ticker import Formatter, Locator
 
 from .styles import DefaultStyle, AbstractStyle
-from ..utils import anything_to_tuple
+from ..utils import anything_to_tuple, anything_to_dict
 
 
 def plot_grid(
@@ -146,8 +146,8 @@ def plot_grid(
         Keyword arguments passed directly to `fun`
     """
 
-    hline = anything_to_tuple(hline, force=True)
-    vline = anything_to_tuple(vline, force=True)
+    hline = anything_to_dict(hline, force=True)
+    vline = anything_to_dict(vline, force=True)
 
     if column_title is None:
         column_title = np.ndarray((nrow,), dtype=object)
@@ -326,12 +326,18 @@ def plot_grid(
                     ax.axline((0, 0), slope=1, **kw)
 
             # Plot horizontal guide lines
-            for ycoord in hline:
-                ax.axhline(ycoord, **style.guideline)
+            for ycoord, stl in hline.items():
+                kw = style.guideline.copy()
+                if stl:
+                    kw.update(stl)
+                ax.axhline(ycoord, **kw)
 
             # Plot vertical guide lines
-            for xcoord in vline:
-                ax.axvline(xcoord, **style.guideline)
+            for xcoord, stl in vline.items():
+                kw = style.guideline.copy()
+                if stl:
+                    kw.update(stl)
+                ax.axvline(xcoord, **kw)
 
     if legend:
         # Merge keywords that might be present in style with potential
