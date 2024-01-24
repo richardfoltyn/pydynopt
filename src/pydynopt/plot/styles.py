@@ -559,11 +559,9 @@ class AbstractStyle:
     @grid.setter
     def grid(self, value: Union[Mapping, bool]):
         if isinstance(value, bool):
-            # b has been removed from recent versions of MPL
-            b = self._grid.get('b', True)
             visible = self._grid.get('visible', True)
             if value:
-                if not (b or visible):
+                if not visible:
                     # re-apply default grid params, as just setting b=True will
                     # not produce any grid once it's been turned off.
                     # Do this only if b=False, otherwise ignore grid=True
@@ -576,7 +574,8 @@ class AbstractStyle:
             # Filter legacy 'b' if present
             value = dict(value)
             if 'b' in value:
-                value['visible'] = value['b']
+                if 'visible' not in value:
+                    value['visible'] = value['b']
                 del value['b']
             # Create dictionary from given value
             self._grid = dict(value)
