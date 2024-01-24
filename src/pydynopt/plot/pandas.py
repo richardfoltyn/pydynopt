@@ -691,6 +691,9 @@ def plot_dataframe(
                     leglbl = by_labels.get(by_value, by_value)
                 elif yvar_labels:
                     leglbl = yvar_labels.get(yvar, yvar)
+                else:
+                    # Fallback: use default string representation of -by- value
+                    leglbl = f'{by_value}'
 
                 if not np.any(np.isfinite(xvalues) & np.isfinite(yvalues)):
                     # Disable artificial legend labels when nothing is displayed
