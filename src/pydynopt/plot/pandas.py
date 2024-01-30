@@ -657,8 +657,6 @@ def plot_dataframe(
         xmin = np.inf
         xmax = - np.inf
 
-        xvalues_are_int = True
-
         for ivar, yvar in enumerate(yvars):
             # Variable-specific style
             style = styles[yvar]
@@ -676,7 +674,6 @@ def plot_dataframe(
             for k, by_value in enumerate(by_order):
                 yvalues = df_moment.loc[by_value].to_numpy()
                 xvalues = df_moment.loc[by_value].index.get_level_values(xvar).to_numpy()
-                xvalues_are_int &= np.all(np.asarray(xvalues, dtype=int) == xvalues)
                 xmin = min(xmin, np.amin(xvalues))
                 xmax = max(xmax, np.amax(xvalues))
 
