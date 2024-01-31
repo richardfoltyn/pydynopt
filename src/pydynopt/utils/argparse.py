@@ -3,9 +3,34 @@ Author: Richard Foltyn
 """
 
 from argparse import ArgumentParser
-from typing import Optional
+from typing import Optional, Any
 
 import re
+
+
+def parse_bool(s: Any) -> bool:
+    """
+    Parse string as bool, mapping strings that contain a numerical value 0 or 0.0
+    to False. Otherwise, the usual conversion rules apply.
+
+    Parameters
+    ----------
+    s : object
+
+    Returns
+    -------
+    value : bool
+    """
+
+    if isinstance(s, bool):
+        return s
+
+    try:
+        value = bool(float(s))
+    except ValueError:
+        value = bool(s)
+
+    return value
 
 
 def add_toggle_arg(
@@ -45,8 +70,19 @@ def add_toggle_arg(
         dest = re.sub(r'[^a-z_]+', '_', dest)
 
     grp = parser.add_mutually_exclusive_group(required=required)
-    grp.add_argument('--{:s}'.format(name), action='store_true', dest=dest)
-    grp.add_argument('--no-{:s}'.format(name), action='store_false', dest=dest)
+    # We want to support the following arguments:
+    #       --name (set to True)
+    #       --name=1 (set to True)
+    #       --name=0 (set to False)
+    #       --no-name (set to False)
+    #   Set to default if no argument was specified.
+    # With nargs='?' for optional arguments, when --name was given then the value
+    # from const is used.
+    # If neither --name nor --no-name is given, the default value is used.
+    # We use a custom parser as otherwise '0' is set to true with type=bool.
+    grp.add_argument(f'--{name}', action='store', dest=dest, nargs='?',
+                     default=default, const=True, type=parse_bool)
+    grp.add_argument(f'--no-{name}', action='store_false', dest=dest)
     kwargs = {dest: default}
     parser.set_defaults(**kwargs)
 
