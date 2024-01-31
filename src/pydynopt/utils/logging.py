@@ -12,10 +12,37 @@ import datetime
 import os.path
 from typing import Optional
 
+old_factory = logging.getLogRecordFactory()
 
-def configure_logging():
+def record_factory(*args, **kwargs):
+    record = old_factory(*args, **kwargs)
+
+    # Created timestamp in seconds
+    created = record.relativeCreated / 1000.0
+
+    rdays = int(created/60/60/24)
+    rem = created % (60 * 60 * 24)
+    rhours = int(rem/60/60)
+    rem = rem % (60 * 60)
+    rminutes = int(rem/60)
+    rseconds = rem % 60
+
+    record.rday = rdays
+    record.rhrs = rhours
+    record.rmin = rminutes
+    record.rsec = rseconds
+
+    return record
+
+
+def configure_logging(reltime: bool = True):
     """
     Configure logging framework with default console handler.
+
+    Parameters
+    ----------
+    reltime : bool
+        Print time stamp as relative time since logging start.
     """
 
     logger = logging.getLogger()
@@ -26,10 +53,18 @@ def configure_logging():
     # Set default log level to INFO, otherwise we'll be flooded by MPL, Numba,
     # etc. log messages
     ch.setLevel(logging.INFO)
-    fmt = '%(asctime)s %(name)s %(levelname)s: %(message)s'
-    # Format used the (asctime) field
-    datefmt = '%H:%M:%S'
-    formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
+
+    if reltime:
+        # Set custom RecordFactory to attach relative time attributes
+        logging.setLogRecordFactory(record_factory)
+        fmt = ('[{rday:d}d {rhrs:02d}:{rmin:02d}:{rsec:04.1f}] {name} {levelname}: '
+               '{message}')
+        formatter = logging.Formatter(fmt=fmt, style='{')
+    else:
+        fmt = '[%(asctime)s] %(name)s %(levelname)s: %(message)s'
+        # Format used the (asctime) field
+        datefmt = '%H:%M:%S'
+        formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
     ch.setFormatter(formatter)
 
     logger.addHandler(ch)
@@ -53,8 +88,9 @@ def add_logfile(
         *,
         logdir: Optional[str] = None,
         file_timestamp: bool = False,
-        date: bool = True,
-        time: bool = True,
+        date: bool = False,
+        time: bool = False,
+        reltime: bool = False,
         append: bool = False
 ) -> FileHandler:
     """
@@ -72,6 +108,9 @@ def add_logfile(
         Add date to log output.
     time : bool
         Add time stamp to log output.
+    reltime : bool
+        Add relative time stamp since logging start. Ignores `date` and `time`
+        arguments.
     append : bool
         If true, append to existing log file
     """
@@ -93,21 +132,29 @@ def add_logfile(
     mode = 'a' if append else 'w'
     fh = logging.FileHandler(file, mode=mode)
     fh.setLevel(logging.DEBUG)
+
     if date or time:
         fmt = '%(asctime)s %(name)s %(levelname)s: %(message)s'
+        # Format used the (asctime) field
+        tokens = []
+        if date:
+            tokens.append('%Y-%m-%d')
+        if time:
+            tokens.append('%H:%M:%S')
+        datefmt = ' '.join(tokens)
+        formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
+
+    elif reltime:
+        # Set custom RecordFactory to attach relative time attributes
+        logging.setLogRecordFactory(record_factory)
+        fmt = ('[{rday:d}d {rhrs:02d}:{rmin:02d}:{rsec:04.1f}] {name} {levelname}: '
+               '{message}')
+        style = '{'
+        formatter = logging.Formatter(fmt=fmt, style='{')
     else:
         fmt = '%(name)s %(levelname)s: %(message)s'
+        formatter = logging.Formatter(fmt=fmt)
 
-    # Format used the (asctime) field
-    tokens = []
-    if date:
-        tokens.append('%Y-%m-%d')
-    if time:
-        tokens.append('%H:%M:%S')
-
-    datefmt = ' '.join(tokens)
-
-    formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
     fh.setFormatter(formatter)
 
     logger.addHandler(fh)
