@@ -4,12 +4,12 @@ https://creativecommons.org/licenses/by/4.0/
 
 Author: Richard Foltyn
 """
-from logging import FileHandler
 
-import logging
-import sys
 import datetime
+import logging
 import os.path
+import sys
+from logging import FileHandler, Logger
 from typing import Optional
 
 old_factory = logging.getLogRecordFactory()
@@ -71,6 +71,9 @@ def configure_logging(reltime: bool = True):
 
     # Turn of DEBUG messages for Numba
     logger = logging.getLogger('numba')
+    logger.setLevel(logging.INFO)
+
+    logger = logging.getLogger('matplotlib')
     logger.setLevel(logging.INFO)
 
     logger = logging.getLogger('numexpr.utils')
@@ -163,3 +166,70 @@ def add_logfile(
     logger.info(f'Logging to {file}')
 
     return fh
+
+
+def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) -> None:
+    """
+    Log version info for Python and important packages.
+
+    Parameters
+    ----------
+    logger : Logger
+    level : int
+    """
+
+    if logger is None:
+        logger = logging.getLogger()
+
+    logger.log(level, 'Python environment:')
+    import platform
+    logger.log(level, f'  Python: {platform.python_version()}')
+
+    try:
+        import numpy
+        if version := getattr(numpy, '__version__', None):
+            logger.log(level, f'  numpy: {version}')
+    except ImportError:
+        pass
+
+    try:
+        import scipy
+        if version := getattr(scipy, '__version__', None):
+            logger.log(level, f'  scipy: {version}')
+    except ImportError:
+        pass
+
+    try:
+        import pandas
+        if version := getattr(pandas, '__version__', None):
+            logger.log(level, f'  pandas: {version}')
+    except ImportError:
+        pass
+
+    try:
+        import matplotlib
+        if version := getattr(matplotlib, '__version__', None):
+            logger.log(level, f'  matplotlib: {version}')
+    except ImportError:
+        pass
+
+    try:
+        import numba
+        if version := getattr(numba, '__version__', None):
+            logger.log(level, f'  numba: {version}')
+    except ImportError:
+        pass
+
+    try:
+        import statsmodels
+        if version := getattr(statsmodels, '__version__', None):
+            logger.log(level, f'  statsmodels: {version}')
+    except ImportError:
+        pass
+
+    try:
+        import sklearn
+        if version := getattr(sklearn, '__version__', None):
+            logger.log(level, f'  sklearn: {version}')
+    except ImportError:
+        pass
