@@ -221,6 +221,13 @@ def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) 
         pass
 
     try:
+        import patsy
+        if version := getattr(patsy, '__version__', None):
+            logger.log(level, f'  patsy: {version}')
+    except ImportError:
+        pass
+
+    try:
         import statsmodels
         if version := getattr(statsmodels, '__version__', None):
             logger.log(level, f'  statsmodels: {version}')
