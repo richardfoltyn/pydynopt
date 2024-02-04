@@ -273,7 +273,7 @@ def df_weighted_mean(
                 mean_var = data.groupby(groups)[varname_wgt].sum(min_count=na_min_count)
 
                 if nobs_column:
-                    nobs_var = data.groupby(groups)[varname_wgt].count()
+                    nobs_var = data.groupby(groups)[wgt_notna].agg(lambda x: np.sum(x > 0.0))
                 if add_weights_column:
                     sum_weights_var = data.groupby(groups)[wgt_notna].sum()
                     sum_weights_var[mean_var.isna()] = np.nan
