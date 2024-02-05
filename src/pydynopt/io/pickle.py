@@ -157,6 +157,7 @@ def get_cached_object(
     *args,
     cache_file: Optional[str] = None,
     cache_dir: Optional[str] = None,
+    compress: bool = True,
     **kwargs
 ):
     """
@@ -173,6 +174,8 @@ def get_cached_object(
         Cache file name or path.
     cache_dir : str, optional
         Cache directory
+    compress : bool
+        Use compression when storing the cache file
     kwargs
         Keyword arguments passed to `fcn`
 
@@ -202,6 +205,6 @@ def get_cached_object(
     obj = fcn(*args, **kwargs)
 
     if path:
-        dump(path, obj, compress=True, overwrite=True)
+        dump(path, obj, compress=compress, overwrite=True)
 
     return obj
