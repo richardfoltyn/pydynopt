@@ -16,7 +16,7 @@ import pandas as pd
 from .styles import DefaultStyle, AbstractStyle
 from .baseplots import plot_grid
 
-from ..utils import anything_to_list
+from ..utils import anything_to_list, anything_to_tuple
 
 __all__ = ['plot_dataframe']
 
@@ -35,33 +35,17 @@ def _text_loc_to_kwargs(loc):
     """
 
     map_vert = {
-        'upper': {
-            'y': 0.95, 'va': 'top'
-        },
-        'top': {
-            'y': 0.95, 'va': 'top'
-        },
-        'center': {
-            'y': 0.5, 'va': 'center'
-        },
-        'lower': {
-            'y': 0.05, 'va': 'bottom'
-        },
-        'bottom': {
-            'y': 0.05, 'va': 'bottom'
-        }
+        'upper': {'y': 0.95, 'va': 'top'},
+        'top': {'y': 0.95, 'va': 'top'},
+        'center': {'y': 0.5, 'va': 'center'},
+        'lower': {'y': 0.05, 'va': 'bottom'},
+        'bottom': {'y': 0.05, 'va': 'bottom'},
     }
 
     map_hor = {
-        'left': {
-            'x': 0.05, 'ha': 'left'
-        },
-        'center': {
-            'x': 0.5, 'ha': 'center'
-        },
-        'right': {
-            'x': 0.95, 'ha': 'right'
-        }
+        'left': {'x': 0.05, 'ha': 'left'},
+        'center': {'x': 0.5, 'ha': 'center'},
+        'right': {'x': 0.95, 'ha': 'right'},
     }
 
     vert, hor = loc.lower().split()
@@ -100,18 +84,15 @@ def _get_yerr(data, moment_name, yvalues=None):
     if not moment_name:
         return yerr
 
-    se_name = [n for n in columns if
-               n.lower() == f'{moment_name.lower()}_se']
+    se_name = [n for n in columns if n.lower() == f'{moment_name.lower()}_se']
     if se_name:
         se = data[se_name[0]].to_numpy()
         yerr_lb = 1.96 * se
         yerr_ub = 1.96 * se
         yerr = (yerr_lb, yerr_ub)
 
-    ci_lb_name = [n for n in columns if
-                  n.lower() == f'{moment_name.lower()}_ci_lb']
-    ci_ub_name = [n for n in columns if
-                  n.lower() == f'{moment_name.lower()}_ci_ub']
+    ci_lb_name = [n for n in columns if n.lower() == f'{moment_name.lower()}_ci_lb']
+    ci_ub_name = [n for n in columns if n.lower() == f'{moment_name.lower()}_ci_ub']
 
     if ci_lb_name and ci_ub_name:
         # Caller expects values to be centered around y-values
@@ -189,7 +170,7 @@ def _process_slice(df, varlist=None, labels=None, order=None):
         value = 0
         order = np.array([value])
         # Insert degenerate name into index
-        df = pd.concat((df, ), axis=0, names=[varname], keys=[value])
+        df = pd.concat((df,), axis=0, names=[varname], keys=[value])
 
     elif len(varlist) == 1:
         # Single variable, no need to create new one
@@ -238,7 +219,7 @@ def _process_slice(df, varlist=None, labels=None, order=None):
                 # Already in desired format
                 pass
             elif isinstance(order, collections.abc.Sequence):
-                # Needs to be an sequence of iterable items
+                # Needs to be a sequence of iterable items
                 if len(order) != len(varlist):
                     msg = 'order and variable names must be of equal length!'
                     raise ValueError(msg)
@@ -300,7 +281,7 @@ def _process_slice(df, varlist=None, labels=None, order=None):
                 # Index attribute of names tuple is called 'Index'
                 i = dct.pop('Index')
                 lbl[i] = ', '.join(labels[k][v] for k, v in dct.items())
-            labels = lbl                
+            labels = lbl
         elif labels is None:
             labels = {}
         else:
@@ -310,7 +291,6 @@ def _process_slice(df, varlist=None, labels=None, order=None):
 
 
 def _process_dep_vars(df, yvar=None, moment=None):
-
     df = df.copy()
 
     yvars = anything_to_list(yvar)
@@ -353,7 +333,9 @@ def _process_dep_vars(df, yvar=None, moment=None):
         else:
             if yvars is not None and all(yvar in varlist for yvar in yvars):
                 moment = '__mom'
-                midx = pd.MultiIndex.from_product((varlist, (moment, )), names=level_names)
+                midx = pd.MultiIndex.from_product(
+                    (varlist, (moment,)), names=level_names
+                )
                 df.columns = midx
             elif moment in varlist:
                 yvar = _find_name(df)
@@ -367,7 +349,7 @@ def _process_dep_vars(df, yvar=None, moment=None):
                 # Nothing specified, assume that columns are variables
                 yvars = varlist
                 moment = '__mom'
-                midx = pd.MultiIndex.from_product((yvars, (moment, )), names=level_names)
+                midx = pd.MultiIndex.from_product((yvars, (moment,)), names=level_names)
                 df.columns = midx
 
     elif df.columns.nlevels == 2:
@@ -419,8 +401,11 @@ def _find_moment_name(df):
     columns = df.columns.get_level_values(0).unique()
     columns_dct = {name.lower(): name for name in columns}
 
-    cand = [name for name in columns_dct.keys() if name and
-            not any(name.endswith(f'_{s}') for s in ('se', 'ci_lb', 'ci_ub'))]
+    cand = [
+        name
+        for name in columns_dct.keys()
+        if name and not any(name.endswith(f'_{s}') for s in ('se', 'ci_lb', 'ci_ub'))
+    ]
 
     if len(cand) == 1:
         mname = columns_dct[cand[0]]
@@ -469,26 +454,28 @@ def _get_scatter_size(scatter_size, yvar, data, default):
 
 
 def plot_dataframe(
-        df: pd.DataFrame,
-        xvar: str = None,
-        yvar: Optional[Union[str, Sequence[str]]] = None,
-        yvar_labels: Union[Sequence[str], Mapping[str, str]] = None,
-        moment: Optional[str] = None,
-        by: Optional[str | Sequence[str]] = None,
-        by_labels: Optional[Union[Sequence[str], Mapping, Callable]] = None,
-        by_order: Optional[Sequence] = None,
-        over: Optional[Union[str, Sequence[str]]] = None,
-        over_order: Optional[Sequence] = None,
-        over_labels: Optional[Union[Sequence[str], Mapping, Callable]] = None,
-        over_label_pos: Optional[str] = None,
-        ncol: Optional[int] = None,
-        jitter: Optional[float] = None,
-        plot_type: Optional[Union[str, Mapping[str, str], Sequence[str]]] = None,
-        callback: Optional[Callable] = None,
-        callback_args: tuple = (),
-        scatter_size: Union[str, float] = 'size',
-        style: Union[Sequence[AbstractStyle], Mapping[str, AbstractStyle], AbstractStyle] = DefaultStyle(),
-        **kwargs
+    df: pd.DataFrame,
+    xvar: str = None,
+    yvar: Optional[Union[str, Sequence[str]]] = None,
+    yvar_labels: Union[Sequence[str], Mapping[str, str]] = None,
+    moment: Optional[str] = None,
+    by: Optional[str | Sequence[str]] = None,
+    by_labels: Optional[Union[Sequence[str], Mapping, Callable]] = None,
+    by_order: Optional[Sequence] = None,
+    over: Optional[Union[str, Sequence[str]]] = None,
+    over_order: Optional[Sequence] = None,
+    over_labels: Optional[Union[Sequence[str], Mapping, Callable]] = None,
+    over_label_pos: Optional[str | Sequence[str]] = None,
+    ncol: Optional[int] = None,
+    jitter: Optional[float] = None,
+    plot_type: Optional[Union[str, Mapping[str, str], Sequence[str]]] = None,
+    callback: Optional[Callable] = None,
+    callback_args: tuple = (),
+    scatter_size: Union[str, float] = 'size',
+    style: Union[
+        Sequence[AbstractStyle], Mapping[str, AbstractStyle], AbstractStyle
+    ] = DefaultStyle(),
+    **kwargs,
 ):
     """
     Plot selected variables in DataFrame, optionally disaggregating by groups.
@@ -552,7 +539,9 @@ def plot_dataframe(
     df = df.copy()
 
     df, by_var, by_labels, by_order = _process_slice(df, by, by_labels, by_order)
-    df, over_var, over_labels, over_order = _process_slice(df, over, over_labels, over_order)
+    df, over_var, over_labels, over_order = _process_slice(
+        df, over, over_labels, over_order
+    )
 
     df, yvars, moment_name = _process_dep_vars(df, yvar, moment)
 
@@ -653,9 +642,9 @@ def plot_dataframe(
         df_panel = df.xs(over_order[ipanel], level=over_var, axis=0)
 
         xmin_jit = np.inf
-        xmax_jit = - np.inf
+        xmax_jit = -np.inf
         xmin = np.inf
-        xmax = - np.inf
+        xmax = -np.inf
 
         for ivar, yvar in enumerate(yvars):
             # Variable-specific style
@@ -673,7 +662,9 @@ def plot_dataframe(
 
             for k, by_value in enumerate(by_order):
                 yvalues = df_moment.loc[by_value].to_numpy()
-                xvalues = df_moment.loc[by_value].index.get_level_values(xvar).to_numpy()
+                xvalues = (
+                    df_moment.loc[by_value].index.get_level_values(xvar).to_numpy()
+                )
                 xmin = min(xmin, np.amin(xvalues))
                 xmax = max(xmax, np.amax(xvalues))
 
@@ -729,7 +720,6 @@ def plot_dataframe(
                     ax.bar(xvalues, yvalues, width=bw, yerr=yerr, label=leglbl, **kw)
 
                 elif plot_type[yvar] == 'area' and yerr is not None:
-
                     ylb = yvalues - yerr[0]
                     yub = yvalues + yerr[1]
                     isfin = any(np.isfinite(ylb) & np.isfinite(yub))
@@ -749,11 +739,8 @@ def plot_dataframe(
                     ax.plot(xvalues, yvalues, label=leglbl, **kw)
 
                 elif plot_type[yvar] == 'scatter':
-
                     size = _get_scatter_size(
-                        scatter_size, yvar,
-                        df_panel.loc[by_value],
-                        style.markersize[k]
+                        scatter_size, yvar, df_panel.loc[by_value], style.markersize[k]
                     )
 
                     if style.split_scatter:
@@ -798,13 +785,15 @@ def plot_dataframe(
         # --- Label over group ---
 
         lbl = over_labels.get(over_order[ipanel], None)
-        if lbl and over_label_pos:
-            style: AbstractStyle = styles[yvars[0]]
-            if over_label_pos.lower() == 'title':
-                ax.set_title(lbl, **style.title)
+        positions = anything_to_tuple(over_label_pos, force=True)
+        labels = anything_to_tuple(lbl, force=True)
+        for lbl, pos in zip(labels, positions):
+            _style: AbstractStyle = styles[yvars[0]]
+            if pos.lower() == 'title':
+                ax.set_title(lbl, **_style.title)
             else:
-                kw = style.text.copy()
-                kw.update(_text_loc_to_kwargs(over_label_pos))
+                kw = _style.text.copy()
+                kw.update(_text_loc_to_kwargs(pos))
                 kw['s'] = lbl
                 kw['transform'] = ax.transAxes
 
@@ -815,9 +804,7 @@ def plot_dataframe(
         if callable(callback):
             callback(ax, idx, df_panel, styles[yvars[0]], *callback_args)
 
-    kwargs_default = {
-        'style': styles[yvars[0]],
-    }
+    kwargs_default = {'style': styles[yvars[0]]}
 
     kwargs_default.update(kwargs)
     kwargs = kwargs_default
