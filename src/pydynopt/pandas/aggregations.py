@@ -509,8 +509,7 @@ def weighted_pmf(
         if keep.sum() < len(df):
             df = df[keep].copy()
 
-    grp = df.groupby(varlist_all)
-    df_inner = grp.agg({varname_weight: np.sum})
+    df_inner = df.groupby(varlist_all)[[varname_weight]].sum()
 
     if varlist_outer:
         df_outer = df_inner.groupby(varlist_outer)[varname_weight].sum()
