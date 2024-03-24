@@ -726,17 +726,16 @@ def plot_dataframe(
                     yub = yvalues + yerr[1]
                     isfin = any(np.isfinite(ylb) & np.isfinite(yub))
                     if isfin:
-                        kw = style.fill_between_kwargs[k]
-                        kw['lw'] = 0.0
+                        kw = style.fill_between_face_kwargs[k]
                         ax.fill_between(xvalues, ylb, yub, **kw)
 
                         # Create lower and upper boundaries manually
-                        kw = style.fill_between_edge_kwargs[k]
+                        kw = style.fill_between_edge_kwargs[k].copy()
                         kw['zorder'] += 10
                         ax.plot(xvalues, ylb, **kw)
                         ax.plot(xvalues, yub, **kw)
 
-                    kw = style.plot_kwargs[k]
+                    kw = style.plot_kwargs[k].copy()
                     kw['zorder'] += 20
                     ax.plot(xvalues, yvalues, label=leglbl, **kw)
 

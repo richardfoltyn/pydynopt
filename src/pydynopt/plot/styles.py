@@ -1024,7 +1024,13 @@ class AbstractStyle:
         -------
         StyleAttrMapping
         """
-        mapping = {'facecolor': None, 'alpha': 'facealpha', 'zorder': None}
+        mapping = {
+            'facecolor': None,
+            'alpha': 'facealpha',
+            'lw': 0,
+            'ls': '',
+            'zorder': None
+        }
 
         kwargs = StyleAttrMapping(self, mapping)
 
