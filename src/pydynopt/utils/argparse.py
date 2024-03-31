@@ -3,7 +3,7 @@ Author: Richard Foltyn
 """
 
 from argparse import ArgumentParser
-from typing import Optional, Any
+from typing import Optional, Any, Sequence
 
 import re
 
@@ -87,3 +87,57 @@ def add_toggle_arg(
     parser.set_defaults(**kwargs)
 
     return parser
+
+
+def flatten_list_args(value: Optional[str | Sequence[str]]) -> list[str]:
+    """
+    Flatten a list of string values.
+
+    Parameters
+    ----------
+    value : str or list of str, optional
+        List of (multiple) option arguments
+
+    Returns
+    -------
+    list
+    """
+    from itertools import chain
+
+    if value is None:
+        return []
+
+    if isinstance(value, str):
+        value = list(value.split(","))
+    else:
+        value = list(chain(*tuple(v.split(",") for v in value)))
+
+    # Remove any surrounding spaces
+    value = [v.strip() for v in value]
+
+    return value
+
+
+def strip_quotes(value: str | Sequence[str] | None) -> str | list[str] | None:
+    """
+    String any single or double quotes from a string or list of strings
+    option value.
+
+    Parameters
+    ----------
+    value : str or Sequence of str, optional
+
+    Returns
+    -------
+    str or list of str or None
+    """
+
+    if not value:
+        return value
+
+    if isinstance(value, list):
+        value = [v.strip('"\' ') for v in value]
+    else:
+        value = value.strip('"\' ') if value else None
+
+    return value
