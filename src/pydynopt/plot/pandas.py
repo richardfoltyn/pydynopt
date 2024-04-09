@@ -661,10 +661,12 @@ def plot_dataframe(
             barwidth = 1.0
 
             for k, by_value in enumerate(by_order):
-                yvalues = df_moment.loc[by_value].to_numpy()
-                xvalues = (
-                    df_moment.loc[by_value].index.get_level_values(xvar).to_numpy()
-                )
+                mask = df_moment.index.isin([by_value], level=by_var)
+                if not mask.any():
+                    # For this panel there are no observations for the given layer
+                    continue
+                yvalues = df_moment[mask].to_numpy()
+                xvalues = df_moment[mask].index.get_level_values(xvar).to_numpy()
                 xmin = min(xmin, np.amin(xvalues))
                 xmax = max(xmax, np.amax(xvalues))
 
