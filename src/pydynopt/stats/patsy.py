@@ -6,7 +6,7 @@ Author: Richard Foltyn
 """
 
 import re
-from typing import Iterable
+from typing import Iterable, Optional
 
 from patsy.desc import ModelDesc, Term
 
@@ -40,16 +40,16 @@ def patsy_formula_to_varnames(*formulas: str) -> list[str]:
 
         while (ifrom := s.find('(')) != -1:
             popen = 1
-            for i, char in enumerate(s[ifrom+1:]):
+            for i, char in enumerate(s[ifrom + 1 :]):
                 if char == '(':
                     popen += 1
                 elif char == ')':
                     popen -= 1
                     if popen == 0:
-                        subs = s[ifrom+1:ifrom+1+i]
+                        subs = s[ifrom + 1 : ifrom + 1 + i]
                         if subs.strip():
                             names.extend(find_names(subs))
-                        s = s[:ifrom] + s[ifrom+i+2:]
+                        s = s[:ifrom] + s[ifrom + i + 2 :]
                         break
 
         tokens = s.split()
@@ -144,7 +144,10 @@ def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
 
     Returns
     -------
-    str
+    formula_upd: str
+        Update formula with added factor levels
+    factors : list
+        Name of factors found in formula
     """
 
     if not formula:
@@ -158,7 +161,7 @@ def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
 
     # Check whether term w/o factors is in term list which corresponds to
     # intercept
-    has_intercept = (Term([]) in mdesc.rhs_termlist)
+    has_intercept = Term([]) in mdesc.rhs_termlist
 
     def add_levels(termlist) -> tuple[str, list[str]]:
 
@@ -191,14 +194,15 @@ def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
                         cache[name] = values
 
                     code = code.strip()
-                    code = code[:len(code) - 1]
+                    code = code[: len(code) - 1]
                     code += ', levels=[' + ','.join(str(v) for v in values) + '])'
 
                 factor.code = code
 
         tokens = [
             ':'.join(factor.code for factor in term.factors if factor)
-            for term in termlist if term.factors
+            for term in termlist
+            if term.factors
         ]
 
         frml = ' + '.join(tokens)
@@ -208,11 +212,13 @@ def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
 
     if not has_intercept:
         formula_upd += ' -1'
+    else:
+        formula_upd = ' + '.join(token for token in ('1', formula_upd) if token)
 
     if mdesc.lhs_termlist:
         formula_lhs, factors_lhs = add_levels(mdesc.lhs_termlist)
         formula_upd = ' ~ '.join((formula_lhs, formula_upd))
-        factors = factors_lhs.extend(factors)
+        factors.extend(factors_lhs)
 
     factors = list(dict.fromkeys(factors).keys())
 
@@ -264,3 +270,30 @@ def patsy_strip_categorical(terms: str | Iterable[str]) -> str | list[str]:
         cleaned = cleaned[0]
 
     return cleaned
+
+
+def patsy_strip_formula(formula: Optional[str]) -> str | None:
+    """
+    Strip formulas of redudant white space.
+
+    Parameters
+    ----------
+    formula : str
+
+    Returns
+    -------
+    str or None
+    """
+    if not formula:
+        return
+
+    # Get rid of multiple consecutive white space characters
+    formula = ' '.join(formula.strip().split())
+
+    # Make sure + are surrounded by spaces
+    formula = ' + '.join(s.strip() for s in formula.split('+'))
+
+    # Make sure ~ are surrounded by spaces
+    formula = ' ~ '.join(s.strip() for s in formula.split('~'))
+
+    return formula
