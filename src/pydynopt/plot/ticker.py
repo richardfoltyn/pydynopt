@@ -12,6 +12,13 @@ from matplotlib.ticker import FuncFormatter
 class SuffixFormatter(FuncFormatter):
 
     def __init__(self, default: Optional[str] = None):
+        """
+
+        Parameters
+        ----------
+        default : str, optional
+            Default format string if value does not match any suffix.
+        """
 
         def _suffix_formatter(value: float, pos: int) -> str:
             """
