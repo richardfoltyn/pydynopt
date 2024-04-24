@@ -290,10 +290,12 @@ def patsy_strip_formula(formula: Optional[str]) -> str | None:
     # Get rid of multiple consecutive white space characters
     formula = ' '.join(formula.strip().split())
 
-    # Make sure + are surrounded by spaces
-    formula = ' + '.join(s.strip() for s in formula.split('+'))
-
-    # Make sure ~ are surrounded by spaces
-    formula = ' ~ '.join(s.strip() for s in formula.split('~'))
+    # Make sure some operators are surrounded by spaces. Process only single instance
+    # of operators, not **
+    ops = ['+', '*', '~']
+    for op in ops:
+        eop = re.escape(op)
+        pattern = re.compile(rf'\s*(?<!{eop}){eop}(?!{eop})\s*')
+        formula = pattern.sub(f' {op} ', formula)
 
     return formula
