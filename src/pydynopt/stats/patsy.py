@@ -285,7 +285,7 @@ def patsy_strip_formula(formula: Optional[str]) -> str | None:
     str or None
     """
     if not formula:
-        return
+        return formula
 
     # Get rid of multiple consecutive white space characters
     formula = ' '.join(formula.strip().split())
