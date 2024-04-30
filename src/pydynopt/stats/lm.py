@@ -21,7 +21,7 @@ def demean_within(
     groups: str | list[str],
     weights: Optional[pd.Series] = None,
     rescale_weights: bool = False,
-) -> pd.Series | pd.DataFrame:
+) -> tuple[pd.Series | pd.DataFrame, pd.Series | pd.DataFrame]:
     """
     Demean given variables within groups, optionally used weighted group means.
 
@@ -40,6 +40,9 @@ def demean_within(
     Returns
     -------
     pd.Series or pd.DataFrame
+        Demeaned values
+    pd.Series or pd.DataFrame
+        Group means, one observation per group
     """
 
     # Rescale weights if normalization is requested
@@ -55,13 +58,16 @@ def demean_within(
             weights = weights[:, None]
 
         xw = x * weights
+        x_mean = xw.groupby(groups).transform('sum')
     else:
-        xw = x
+        x_mean = x.groupby(groups).transform('mean')
 
-    x_mean = xw.groupby(groups).transform('sum')
     x_demean = x - x_mean
 
-    return x_demean
+    # Keep only the first obs for each group
+    x_mean = x_mean.groupby(groups).first()
+
+    return x_demean, x_mean
 
 
 def areg(
@@ -73,7 +79,16 @@ def areg(
     weights: Optional[str | np.ndarray | pd.Series | pd.DataFrame] = None,
 ) -> RegressionResults:
     """
-    Run FE regression similar to Stata's areg, obsorbing FE.
+    Run fixed-effects regression similar to Stata's areg, obsorbing the FE.
+
+    The result contains the following additional attributes:
+        - `rsquared_within`: the R^2 within
+        - `rsquared_between`: the R^2 between, and
+        - `rsquared_overall`: the R^2 overall
+    There are computed in the same way as Stata's Pseudo-R^2 in xtreg, fe.
+
+    The `rsquared` attribute contains the R^2 as computed by Stata's -areg-, i.e.,
+    it is based on predicted values that include the (absorbed) fixed effect.
 
     Parameters
     ----------
@@ -119,11 +134,10 @@ def areg(
     else:
         raise ValueError('Either data or endog + exog arguments required')
 
-    has_const = any((v == 1.0).all() for name, v in X.items())
-
     has_weights = weights is not None
     weights_indiv = None
-    if weights is not None:
+    sw = None
+    if has_weights:
         if data is not None and weights in data.columns:
             weights_name = weights
             weights = data[weights]
@@ -149,35 +163,80 @@ def areg(
         # Normalize so that weights sum to 1.0
         weights /= weights.sum()
 
+    # Detect constant columns (std is NaN for single obs)
+    has_const = any(not (v.std() > 0) for name, v in X.items())
+
     if data is not None:
         groups = data.index.get_level_values(absorb)
     else:
         groups = exog.index.get_level_values(absorb)
 
-    ybar = float(np.average(y, axis=0, weights=weights))
+    # Convert to Series
+    if isinstance(y, pd.DataFrame):
+        y = y.iloc[:, 0].copy()
+
+    ybar = float(np.average(y, weights=weights))
     Xbar = np.average(X, axis=0, weights=weights)
 
+    # demean outcome within FE cells
+    y_dem, y_mean = demean_within(y, absorb, weights_indiv, rescale_weights=False)
+    # add back total mean
+    y_dem += ybar
+
+    # demean regressors within FE cells
+    X_dem, X_mean = demean_within(X, absorb, weights_indiv, rescale_weights=False)
+    # add back total mean
+    X_dem += Xbar
+
     if has_weights:
-        # demean outcome within FE cells
-        y = demean_within(y, absorb, weights_indiv, rescale_weights=False)
-        # add back total mean
-        y += ybar
-
-        # demean regressors within FE cells
-        X = demean_within(X, absorb, weights_indiv, rescale_weights=False)
-        # add back total mean
-        X += Xbar
-
-        reg = sm.WLS(y, X, weights=weights, hasconst=has_const)
+        reg = sm.WLS(y_dem, X_dem, weights=weights, hasconst=has_const)
     else:
-        y = y - y.groupby(absorb).transform('mean') + ybar
-        X = X - X.groupby(absorb).transform('mean') + Xbar
-
-        reg = sm.OLS(y, X, hasconst=has_const)
+        reg = sm.OLS(y_dem, X_dem, hasconst=has_const)
 
     # Account for df loss from FE transform
     reg.df_resid -= groups.nunique() - 1
 
     result = reg.fit()
+
+    result.rsquared_within = result.rsquared
+
+    # --- Between regression R^2 ---
+
+    y_mean_hat = result.predict(X_mean)
+
+    # NOTE: Stata does not seem to use weights for between R^2, so neither do we.
+    VCV = np.cov(y_mean, y_mean_hat, aweights=None)
+    corr_bw = VCV[0, 1] / np.sqrt(VCV[0, 0] * VCV[1, 1])
+    rsquared_bw = corr_bw**2.0
+
+    result.rsquared_between = rsquared_bw
+
+    # --- Overall R^2 ---
+
+    y_hat = result.predict(X)
+    # NOTE: Stata does not seem to use weights for overall R^2, so neither do we.
+    VCV = np.cov(y_hat, y, aweights=None)
+    corr_overall = VCV[0, 1] / np.sqrt(VCV[0, 0] * VCV[1, 1])
+    rsquared_overall = corr_overall**2.0
+
+    result.rsquared_overall = rsquared_overall
+
+    # --- R^2 as computed by Stata's -areg- ---
+
+    resid = y - y_hat
+    # Predicted fixed effects
+    if has_weights:
+        resid *= weights_indiv
+        fe = resid.groupby(absorb).transform('sum')
+    else:
+        fe = resid.groupby(absorb).transform('mean')
+
+    y_hat_total = y_hat + fe
+    VCV = np.cov(y_hat_total, y, aweights=weights)
+    corr_total = VCV[0, 1] / np.sqrt(VCV[0, 0] * VCV[1, 1])
+    rsquared_total = corr_total**2.0
+
+    # Replace original R^2 with the one that is the same as Stata's -areg-
+    result.rsquared = rsquared_total
 
     return result
