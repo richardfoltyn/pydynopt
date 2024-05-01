@@ -252,7 +252,7 @@ def df_weighted_mean(
 
     if not weight_varname:
         if groups:
-            df_means = data[varlist].groupby(groups).sum()
+            df_means = data[varlist].groupby(groups).mean()
 
             if nobs_column:
                 df_nobs = data[varlist].groupby(groups).count()
@@ -260,7 +260,7 @@ def df_weighted_mean(
                 # No weights provided, use N obs. as weights
                 df_sum_weights = data[varlist].groupby(groups).count()
         else:
-            df_means = data[varlist].sum()
+            df_means = data[varlist].mean()
 
             if nobs_column:
                 df_nobs = data[varlist].count()
