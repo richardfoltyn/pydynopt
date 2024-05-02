@@ -54,7 +54,7 @@ def patsy_formula_to_varnames(*formulas: str) -> list[str]:
 
         tokens = s.split()
         for token in tokens:
-            if re.match(r'[*/:+-=!]+', token):
+            if re.match(r'[*/:+-=!<>]+', token):
                 # Ignore operators
                 continue
             else:

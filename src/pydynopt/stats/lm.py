@@ -136,7 +136,6 @@ def areg(
 
     has_weights = weights is not None
     weights_indiv = None
-    sw = None
     if has_weights:
         if data is not None and weights in data.columns:
             weights_name = weights
