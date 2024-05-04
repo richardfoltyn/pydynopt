@@ -89,13 +89,13 @@ def add_toggle_arg(
     return parser
 
 
-def flatten_list_args(value: Optional[str | Sequence[str]]) -> list[str]:
+def flatten_list_args(value: str | Sequence[str] | None) -> list[str]:
     """
     Flatten a list of string values.
 
     Parameters
     ----------
-    value : str or list of str, optional
+    value : str or list of str or None
         List of (multiple) option arguments
 
     Returns
