@@ -6,7 +6,7 @@ Author: Richard Foltyn
 """
 
 import re
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Any
 
 from patsy.desc import ModelDesc, Term
 
@@ -129,6 +129,46 @@ def patsy_formula_to_categorical_varnames(*formulas: str) -> list[str]:
     varnames = list(varnames.keys())
 
     return varnames
+
+
+def patsy_formula_to_categorical_treatments(*formulas: str) -> dict[str, str]:
+    """
+    Extract unique dictionary of categorical variable names (i.e., variable
+    names surrounded by C()) and their treatment (i.e., base level) from patsy formulas.
+
+    Categorical variables which do not have a Treatment() term are ignored.
+
+    Parameters
+    ----------
+    *formulas : str
+
+    Returns
+    -------
+    dist of str
+    """
+
+    treatments = dict()
+
+    for formula in formulas:
+        if not formula:
+            continue
+        mdesc = ModelDesc.from_formula(formula)
+        terms = mdesc.lhs_termlist + mdesc.rhs_termlist
+
+        for term in terms:
+            for factor in term.factors:
+                expr = factor.name().strip()
+
+                # Categorical variable probably cannot have any additional
+                # tokens other than variable name and options.
+                if m := re.match(r'C\((?P<name>[^,)]+)(?P<rest>.*)\)', expr):
+                    var = m.group('name')
+                    # Extract treatment spec from the remainder
+                    if mt := re.match('.*Treatment\((.+)\).*', m.group('rest')):
+                        value = mt.group(1)
+                        treatments[var] = value
+
+    return treatments
 
 
 def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
