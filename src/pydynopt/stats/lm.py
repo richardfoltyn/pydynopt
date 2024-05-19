@@ -52,22 +52,18 @@ def demean_within(
 
     # Apply (the same) weights to all variables in DataFrame or Series
     if weights is not None:
-        weights = weights.to_numpy(copy=False)
-        if isinstance(x, pd.DataFrame):
-            # Additional dimension required to make element-wise * work
-            weights = weights[:, None]
-
-        xw = x * weights
-        x_mean = xw.groupby(groups).transform('sum')
+        x_mean = x.mul(weights, axis=0).groupby(groups).transform('sum')
     else:
         x_mean = x.groupby(groups).transform('mean')
 
-    x_demean = x - x_mean
-
     # Keep only the first obs for each group
-    x_mean = x_mean.groupby(groups).first()
+    x_mean_first = x_mean.groupby(groups).first()
 
-    return x_demean, x_mean
+    # Compute inplace: x_demean = x - x_mean
+    x_mean *= -1.0
+    x_mean += x
+
+    return x_mean, x_mean_first
 
 
 def areg(
