@@ -184,7 +184,7 @@ def df_weighted_mean(
     varlist: Optional[Union[str, Iterable[str]]] = None,
     *,
     weights: Optional[Union[pd.Series, np.ndarray, str]] = 'weight',
-    na_min_count: Optional[int] = 1,
+    na_min_count: int = 1,
     multi_index: bool = False,
     index_names: Optional[Union[str, Iterable[str]]] = ('Variable', 'Moment'),
     add_weights_column: bool = False,
@@ -221,27 +221,26 @@ def df_weighted_mean(
         Series containing weighted means with variable names used as index.
     """
 
-    isscalar = isinstance(varlist, str)
+    isscalar = isinstance(varlist, str) or isinstance(data, pd.Series)
     groups = anything_to_list(groups, force=True)
 
     # Force MultiIndex output if several stats are computed for each variable
     multi_index = multi_index or add_weights_column or nobs_column
 
-    data = data.copy()
+    if na_min_count < 1:
+        raise ValueError('Argument \'na_min_count\' must be positive')
 
     if isinstance(data, pd.Series):
-        data = data.to_frame('v0')
-        varlist = ['v0']
-        isscalar = True
+        name = data.name or 'v0'
+        data = data.to_frame(name)
+        varlist = [name]
 
+    weight_varname = None
     if isinstance(weights, str):
         weight_varname = weights
-    elif weights is not None:
-        weight_varname = '__weight'
-        data[weight_varname] = weights
-    else:
-        weight_varname = None
+        weights = data[weights]
 
+    # Extract default varlist
     varlist = anything_to_list(varlist)
     if varlist is None:
         varlist = [
@@ -250,71 +249,25 @@ def df_weighted_mean(
             if name != weight_varname and name not in groups
         ]
 
-    if not weight_varname:
-        if groups:
-            df_means = data[varlist].groupby(groups).mean()
+    # Check that grouping variables are in index, otherwise put them there
+    missing = any(group not in data.index.names for group in groups)
+    if missing:
+        data = data.reset_index(drop=list(data.index.names) == [None]).set_index(groups)
 
-            if nobs_column:
-                df_nobs = data[varlist].groupby(groups).count()
-            if add_weights_column:
-                # No weights provided, use N obs. as weights
-                df_sum_weights = data[varlist].groupby(groups).count()
-        else:
-            df_means = data[varlist].mean()
-
-            if nobs_column:
-                df_nobs = data[varlist].count()
-            if add_weights_column:
-                # No weights provided, use N obs. as weights
-                df_sum_weights = data[varlist].count()
+    if weights is None:
+        df_means, df_nobs, df_weights = _df_weighted_mean_no_wgt(
+            data, groups, varlist, nobs_column, add_weights_column, na_min_count
+        )
     else:
-        means = []
-        sum_weights = []
-        nobs = []
-
-        wgt_notna = f'__{weight_varname}_not_na'
-
-        for i, varname in enumerate(varlist):
-            varname_wgt = f'__{varname}_wgt'
-            data[varname_wgt] = data[varname] * data[weight_varname]
-            data[wgt_notna] = data[weight_varname] * data[varname_wgt].notna()
-            if groups:
-                data[varname_wgt] /= data.groupby(groups)[wgt_notna].transform('sum')
-                mean_var = data.groupby(groups)[varname_wgt].sum(min_count=na_min_count)
-
-                if nobs_column:
-                    nobs_var = data.groupby(groups)[wgt_notna].agg(
-                        lambda x: np.sum(x > 0.0)
-                    )
-                if add_weights_column:
-                    sum_weights_var = data.groupby(groups)[wgt_notna].sum()
-                    sum_weights_var[mean_var.isna()] = np.nan
-            else:
-                data[varname_wgt] /= data[wgt_notna].sum()
-                mean_var = pd.Series(data[varname_wgt].sum(min_count=na_min_count))
-
-                if nobs_column:
-                    nobs_var = pd.Series(data[varname_wgt].count())
-                if add_weights_column and np.isfinite(mean_var):
-                    sum_weights_var = pd.Series(data[wgt_notna].sum())
-                else:
-                    sum_weights_var = np.nan
-
-            means.append(mean_var.to_frame(varname))
-
-            if nobs_column:
-                nobs.append(nobs_var.to_frame(varname))
-            if add_weights_column:
-                sum_weights.append(sum_weights_var.to_frame(varname))
-
-        df_means = pd.concat(means, axis=1)
-
-        if nobs_column:
-            df_nobs = pd.concat(nobs, axis=1)
-            df_nobs.columns = df_means.columns
-        if add_weights_column:
-            df_sum_weights = pd.concat(sum_weights, axis=1)
-            df_sum_weights.columns = df_means.columns
+        df_means, df_nobs, df_weights = _df_weighted_mean_wgt(
+            data,
+            weights,
+            groups,
+            varlist,
+            nobs_column,
+            add_weights_column,
+            na_min_count,
+        )
 
     if isscalar and not multi_index:
         result = df_means.iloc[:, 0].copy()
@@ -328,7 +281,7 @@ def df_weighted_mean(
                 components += [df_nobs]
             if add_weights_column:
                 stats += [weight_varname]
-                components += [df_sum_weights]
+                components += [df_weights]
 
             result = pd.concat(components, axis=1, keys=stats, names=index_names[::-1])
             # Flip index order so that variables are on top, sort second level and
@@ -344,6 +297,132 @@ def df_weighted_mean(
         result = df_means
 
     return result
+
+
+def _df_weighted_mean_no_wgt(
+    data: pd.DataFrame,
+    groups: list[str],
+    varlist: list[str],
+    nobs_column: Optional[str],
+    add_weights_column: bool,
+    na_min_count: int,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Implementation of weighted mean if no weights are present.
+    """
+
+    df_nobs = None
+    df_sum_weights = None
+
+    if groups:
+        df_means = (
+            data[varlist].groupby(groups).sum(min_count=na_min_count).astype(float)
+        )
+        wsum = data[varlist].groupby(groups).count()
+        df_means /= wsum
+        if nobs_column:
+            df_nobs = wsum
+        if add_weights_column:
+            # No weights provided, use N obs. as weights
+            df_sum_weights = wsum
+    else:
+        df_means = data[varlist].sum(min_count=na_min_count).astype(float)
+        df_means /= data[varlist].count()
+        df_means = df_means.to_frame().T
+        if nobs_column:
+            df_nobs = data[varlist].count().to_frame().T
+        if add_weights_column:
+            # No weights provided, use N obs. as weights
+            df_sum_weights = data[varlist].count().to_frame().T
+
+    return df_means, df_nobs, df_sum_weights
+
+
+def _df_weighted_mean_wgt(
+    data: pd.DataFrame,
+    weights: pd.Series | np.ndarray,
+    groups: list[str],
+    varlist: list[str],
+    nobs_column: Optional[str],
+    add_weights_column: bool,
+    na_min_count: int,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Implementation of weighted mean if weights are present.
+    """
+
+    df_nobs = None
+    df_sum_weights = None
+
+    # Working DataFrame to store temporary data
+    df_work = pd.DataFrame(index=data.index, columns=['xw', 'w'], dtype=float)
+
+    w_np = weights.to_numpy(copy=False)
+
+    if groups:
+        df_means = None
+
+        for i, varname in enumerate(varlist):
+            var_np = data[varname].to_numpy(copy=False)
+            df_work.loc[:, 'xw'] = var_np * w_np
+            # Set weights for NaN obs or NaN weights to zero
+            df_work.loc[:, 'w'] = np.where(df_work['xw'].notna(), w_np, 0.0)
+
+            wsum = df_work['w'].groupby(groups).sum()
+
+            # Store number of obs. before altering weights to prevent division by 0
+            if nobs_column:
+                nobs = (df_work['w'] > 0.0).groupby(groups).sum()
+                if df_nobs is None:
+                    df_nobs = nobs.to_frame(varname)
+                else:
+                    df_nobs[varname] = nobs
+
+            mean = (
+                df_work['xw'].groupby(groups).sum(min_count=na_min_count).astype(float)
+            )
+            # Replace means where condition is false (i.e., weights sum to 0) to NaN
+            mask = wsum == 0.0
+            mean.mask(mask, other=np.nan, inplace=True)
+            mean /= wsum
+
+            if df_means is None:
+                df_means = mean.to_frame(varname)
+            else:
+                df_means[varname] = mean
+
+            if add_weights_column:
+                if df_sum_weights is None:
+                    df_sum_weights = wsum.to_frame(varname)
+                else:
+                    df_sum_weights[varname] = wsum
+    else:
+        df_means = pd.DataFrame(columns=varlist, index=[0], dtype=float)
+        df_nobs = pd.DataFrame(0, columns=varlist, index=[0], dtype=int)
+        df_sum_weights = pd.DataFrame(columns=varlist, index=[0], dtype=float)
+
+        for i, varname in enumerate(varlist):
+            var_np = data[varname].to_numpy(copy=False)
+            df_work.loc[:, 'xw'] = var_np * w_np
+            # Set weights for NaN obs or NaN weights to zero
+            df_work.loc[:, 'w'] = np.where(df_work['xw'].notna(), w_np, 0.0)
+
+            wsum = df_work['w'].sum()
+            if wsum > 0.0:
+                sxw = df_work['xw'].sum(min_count=na_min_count)
+                mean = sxw / wsum
+            else:
+                # Note: pandas mean() return NaN if all elements are NaN, but sum()
+                # returns 0.0. We want to mimic the behavior of mean()
+                mean = np.nan
+            df_means.loc[0, varname] = mean
+
+            if nobs_column:
+                df_nobs.loc[0, varname] = (df_work['w'] > 0).sum()
+            if add_weights_column:
+                df_sum_weights.loc[0, varname] = wsum
+
+    return df_means, df_nobs, df_sum_weights
 
 
 def percentile(
