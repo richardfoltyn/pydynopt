@@ -41,8 +41,8 @@ def anything_to_dataframe(
         if copy:
             df = df.copy(deep=True)
     elif isinstance(data, pd.Series):
-        name = names[0] if names else None
-        df = pd.DataFrame(data, columns=[name], copy=copy)
+        name = names[0] if names else data.name
+        df = data.to_frame(name).copy(deep=copy)
     elif isinstance(data, Mapping):
         # Initialization from dict always copies data
         dct = {k: np.atleast_1d(v) for k, v in data.items()}
