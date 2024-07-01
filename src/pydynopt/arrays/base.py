@@ -24,7 +24,7 @@ JIT_OPTIONS = {'nopython': True, 'nogil': True, 'parallel': False,
 
 
 @register_jitable(parallel=False)
-def powerspace(xmin, xmax, n, exponent):
+def powerspace(xmin: float, xmax: float, n: int, exponent: float) -> np.ndarray:
     """
     Create a "power-spaced" grid of size n.
 
