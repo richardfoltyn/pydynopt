@@ -8,10 +8,13 @@ Author: Richard Foltyn
 """
 
 import sys
+from collections.abc import Sequence
+from typing import Optional, Any
 
 import numpy as np
 
 from . import overload
+from ..utils import anything_to_tuple
 
 
 def to_array(obj, dtype=None):
@@ -52,7 +55,7 @@ def to_array_iterable(obj, dtype=None):
     else:
         ldtype = np.float64
 
-    x = np.empty((n, ), dtype=ldtype)
+    x = np.empty((n,), dtype=ldtype)
 
     for i in range(n):
         x[i] = obj[i]
@@ -95,7 +98,13 @@ def array_generic(obj, dtype=None):
     return f
 
 
-def create_numba_instance(obj, attrs=None, init=True, copy=False):
+def create_numba_instance(
+    obj,
+    attrs: Optional[str | Sequence[str]] = None,
+    exclude: Optional[str | Sequence[str]] = None,
+    init: bool = True,
+    copy: bool = False,
+):
     """
     Automatically create numba-fied instance of a given object.
     The routine attempts to automatically generate a class signature that
@@ -107,8 +116,11 @@ def create_numba_instance(obj, attrs=None, init=True, copy=False):
     Parameters
     ----------
     obj : object
-    attrs : array_like, optional
+    attrs : str or Sequence of str, optional
         List of attributes of `obj` that should be included in the Numba-fied
+        class definition.
+    exclude : str or Sequence of str, optional
+        List of attributes of `obj` that should be excluded in the Numba-fied
         class definition.
     init : bool, optional
         If true, additionally initialize the attribute values in the Numba
@@ -131,17 +143,35 @@ def create_numba_instance(obj, attrs=None, init=True, copy=False):
 
     # object is not an instance of a Numba type, we need to build
     # signature for jitclass().
-    if attrs is None:
+    attrs = anything_to_tuple(attrs)
+    if not attrs:
         # Check whether class has NUMBA_ATTRS attribute which contains
         # the attributes to be included in Numbafied instance.
-        if hasattr(obj.__class__, 'NUMBA_ATTRS'):
-            attrs = [attr for attr in obj.__class__.NUMBA_ATTRS
-                     if hasattr(obj, attr)]
+        if attrs := getattr(obj.__class__, 'NUMBA_ATTRS', None):
+            attrs = anything_to_tuple(attrs)
+            # Keep only existing attributes
+            present = dir(obj)
+            attrs = tuple(attr for attr in attrs if attr in present)
         else:
             # Assume that all object attributes should be included as long as
-            # they are not for internal use or None.
-            attrs = [attr for attr in dir(obj)
-                     if not attr.startswith('_') and getattr(obj, attr) is not None]
+            # they are not for internal use or None or callable
+            attrs = tuple(
+                attr
+                for attr in dir(obj)
+                if not attr.startswith('_')
+                and getattr(obj, attr) is not None
+                and not callable(getattr(obj, attr))
+            )
+
+    exclude = anything_to_tuple(exclude)
+    if exclude:
+        attrs = tuple(attr for attr in attrs if attr not in exclude)
+    elif exclude := getattr(obj.__class__, 'NUMBA_ATTRS_EXCLUDE', None):
+        exclude = anything_to_tuple(exclude)
+        attrs = tuple(attr for attr in attrs if attr not in exclude)
+
+    # Automatically exclude meta-attributes
+    attrs = [attr for attr in attrs if not attr.startswith('NUMBA_ATTRS')]
 
     # Empty init, expected by Numba jitclass()
     def __init__(self):
@@ -160,12 +190,12 @@ def create_numba_instance(obj, attrs=None, init=True, copy=False):
     obj_nb = cls_nb()
 
     if init:
-        copy_attributes(obj, obj_nb, copy=copy)
+        copy_attributes(obj, obj_nb, attrs=attrs, copy=copy)
 
     return obj_nb
 
 
-def _build_signature(obj, attrs):
+def _build_signature(obj, attrs: Sequence[str]):
     """
     Build a signature for numba.jitclass from the list of attributes names
     and their associated types.
@@ -186,9 +216,7 @@ def _build_signature(obj, attrs):
 
     signature = []
 
-    types_python = {int: int64,
-                    float: float64,
-                    bool: boolean}
+    types_python = {int: int64, float: float64, bool: boolean}
 
     def process_ndarray(value):
         try:
@@ -210,13 +238,13 @@ def _build_signature(obj, attrs):
                     signature.append((attr, nbtype[:]))
             else:
                 if value.flags.c_contiguous:
-                    dims = (slice(None, None),)*(value.ndim - 1)
+                    dims = (slice(None, None),) * (value.ndim - 1)
                     dims += (slice(None, None, 1),)
                     signature.append((attr, nbtype[dims]))
                 else:
                     msg = f'Array {attr} is not C-contiguous'
                     print(msg, file=sys.stderr)
-                    dims = (slice(None, None),)*value.ndim
+                    dims = (slice(None, None),) * value.ndim
                     signature.append((attr, nbtype[dims]))
         else:
             # scalar type
@@ -240,7 +268,9 @@ def _build_signature(obj, attrs):
     return signature
 
 
-def copy_attributes(src, dst, copy=True):
+def copy_attributes(
+    src: Any, dst: Any, attrs: Optional[Sequence[str]] = None, copy: bool = True
+) -> Any:
     """
     Copy attributes from src that at also present in dst into dst.
 
@@ -248,6 +278,7 @@ def copy_attributes(src, dst, copy=True):
     ----------
     src : object
     dst : object
+    attrs : Sequence of str, optional
     copy : bool
         If true, copy array-valued attributes instead of referencing the
         original array.
@@ -256,12 +287,15 @@ def copy_attributes(src, dst, copy=True):
     -------
     params : NumbaParams
     """
-    for attr in dir(dst):
-        if not attr.startswith('_') and hasattr(src, attr):
-            x = getattr(src, attr)
-            if x is not None:
-                if (copy and not np.isscalar(x)) or isinstance(x, (tuple, list)):
-                    x = np.copy(x)
-                setattr(dst, attr, x)
+
+    if attrs is None:
+        attrs = [k for k in dir(dst) if not k.startswith('_') and hasattr(src, k)]
+
+    for attr in attrs:
+        x = getattr(src, attr)
+        if x is not None:
+            if (copy and not np.isscalar(x)) or isinstance(x, (tuple, list)):
+                x = np.copy(x)
+            setattr(dst, attr, x)
 
     return dst
