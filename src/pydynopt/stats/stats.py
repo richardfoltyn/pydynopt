@@ -7,6 +7,9 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
+from collections.abc import Sequence
+from typing import Optional
+
 import numpy as np
 
 from pydynopt.interpolate import interp1d
@@ -43,20 +46,20 @@ def gini(states, pmf, assume_sorted=False):
     pmf_arr = np.atleast_1d(pmf)
 
     needs_sort = states_arr.ndim > 1 or not assume_sorted
-    states1d = states_arr.reshape((-1, ))
-    pmf1d = pmf_arr.reshape((-1, ))
+    states1d = states_arr.reshape((-1,))
+    pmf1d = pmf_arr.reshape((-1,))
 
     if needs_sort:
         iorder = np.argsort(states)
         states1d = states1d[iorder]
         pmf1d = pmf1d[iorder]
 
-    S = np.cumsum(pmf1d*states1d)
+    S = np.cumsum(pmf1d * states1d)
     # Numba does not support hstack() with scalar args
     zero = np.zeros(1, dtype=S.dtype)
     S = np.hstack((zero, S))
-    midS = (S[:-1] + S[1:])
-    gini = 1.0 - np.dot(pmf1d, midS)/S[-1]
+    midS = S[:-1] + S[1:]
+    gini = 1.0 - np.dot(pmf1d, midS) / S[-1]
 
     return gini
 
@@ -130,7 +133,7 @@ def _ppf_nearest(rank, cdf, x, qntl):
     # Skip over any potential initially flat region without mass
     imin = 0
     for imin in range(cdf.size - 1):
-        if cdf[imin+1] > 0.0:
+        if cdf[imin + 1] > 0.0:
             break
 
     for i in range(rank.size):
@@ -141,12 +144,12 @@ def _ppf_nearest(rank, cdf, x, qntl):
             qntl[i] = x[0]
         else:
             j = imin
-            for j in range(imin, cdf.size-1):
-                if cdf[j] < ri <= cdf[j+1]:
+            for j in range(imin, cdf.size - 1):
+                if cdf[j] < ri <= cdf[j + 1]:
                     break
             # Desired quantile is in the half-open interval (cdf[j], cdf[j+1]], so
             # it falls into the bin j+1
-            qntl[i] = x[j+1]
+            qntl[i] = x[j + 1]
 
 
 @jit(nopython=True, nogil=True, parallel=False)
@@ -175,8 +178,8 @@ def _ppf_interp(rank, cdf, x, qntl):
 
     # Skip over any potential initially flat region without mass
     imin = 0
-    for imin in range(cdf.size-1):
-        if cdf[imin+1] > 0.0:
+    for imin in range(cdf.size - 1):
+        if cdf[imin + 1] > 0.0:
             break
 
     for i in range(rank.size):
@@ -187,21 +190,22 @@ def _ppf_interp(rank, cdf, x, qntl):
             qntl[i] = x[0]
         else:
             ilb = imin
-            for ilb in range(imin, cdf.size-1):
-                if cdf[ilb] < ri <= cdf[ilb+1]:
+            for ilb in range(imin, cdf.size - 1):
+                if cdf[ilb] < ri <= cdf[ilb + 1]:
                     break
 
             cdf_lb = cdf[ilb]
-            cdf_ub = cdf[ilb+1]
+            cdf_ub = cdf[ilb + 1]
 
             wgt_lb = (cdf_ub - ri) / (cdf_ub - cdf_lb)
 
-            q = wgt_lb * x[ilb] + (1.0 - wgt_lb) * x[ilb+1]
+            q = wgt_lb * x[ilb] + (1.0 - wgt_lb) * x[ilb + 1]
             qntl[i] = q
 
 
-def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
-                   interpolation='nearest'):
+def quantile_array(
+    x, pmf, qrank, assume_sorted=False, assume_unique=False, interpolation='nearest'
+):
     """
     Compute quantiles of a given distribution characterized by its (finite)
     state space and PMF.
@@ -299,8 +303,9 @@ def quantile_array(x, pmf, qrank, assume_sorted=False, assume_unique=False,
     return q
 
 
-def quantile_scalar(x, pmf, qrank, assume_sorted=False, assume_unique=False,
-                    interpolation='nearest'):
+def quantile_scalar(
+    x, pmf, qrank, assume_sorted=False, assume_unique=False, interpolation='nearest'
+):
     """
     Implementation of quantile() function for scalar-valued `qrank` arguments.
 
@@ -327,8 +332,9 @@ def quantile_scalar(x, pmf, qrank, assume_sorted=False, assume_unique=False,
     return q
 
 
-def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False,
-             interpolation='nearest'):
+def quantile(
+    x, pmf, qrank, assume_sorted=False, assume_unique=False, interpolation='nearest'
+):
     """
     Compute quantiles of a given distribution characterized by its (finite)
     state space and PMF.
@@ -365,8 +371,9 @@ def quantile(x, pmf, qrank, assume_sorted=False, assume_unique=False,
 
 
 @overload(quantile, jit_options={'nogil': True, 'parallel': False})
-def quantile_generic(x, pmf, qrank, assume_sorted=False, assume_unique=False,
-                     interpolation='nearest'):
+def quantile_generic(
+    x, pmf, qrank, assume_sorted=False, assume_unique=False, interpolation='nearest'
+):
 
     from numba import types
 
@@ -379,8 +386,9 @@ def quantile_generic(x, pmf, qrank, assume_sorted=False, assume_unique=False,
     return f
 
 
-def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False,
-                     interpolation='nearest'):
+def percentile_array(
+    x, pmf, prank, assume_sorted=False, assume_unique=False, interpolation='nearest'
+):
     """
     Convenience wrapper around quantile() function that accepts percentile
     rank argument in the interval [0,100] instead of quantile ranks
@@ -412,8 +420,9 @@ def percentile_array(x, pmf, prank, assume_sorted=False, assume_unique=False,
     return pctl
 
 
-def percentile_scalar(x, pmf, prank, assume_sorted=False, assume_unique=False,
-                      interpolation='nearest'):
+def percentile_scalar(
+    x, pmf, prank, assume_sorted=False, assume_unique=False, interpolation='nearest'
+):
 
     qrank = np.asarray(prank, dtype=x.dtype) / 100.0
     pctl1d = quantile(x, pmf, qrank, assume_sorted, assume_unique, interpolation)
@@ -423,8 +432,9 @@ def percentile_scalar(x, pmf, prank, assume_sorted=False, assume_unique=False,
     return pctl
 
 
-def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False,
-               interpolation='nearest'):
+def percentile(
+    x, pmf, prank, assume_sorted=False, assume_unique=False, interpolation='nearest'
+):
     """
     Compute percentiles of a given distribution characterized by its (finite)
     state space and PMF.
@@ -461,8 +471,9 @@ def percentile(x, pmf, prank, assume_sorted=False, assume_unique=False,
 
 
 @overload(percentile, jit_options={'nogil': True, 'parallel': False})
-def percentile_generic(x, pmf, prank, assume_sorted=False, assume_unique=False,
-                       interpolation='nearest'):
+def percentile_generic(
+    x, pmf, prank, assume_sorted=False, assume_unique=False, interpolation='nearest'
+):
 
     from numba import types
 
@@ -557,7 +568,7 @@ def quantile_rank(x, pmf, qntl, interpolation='linear'):
         ii = np.digitize(qntl, x, right=True)
         # include only CDF values that bracket percentiles of interest.
         jj = np.fmin(np.fmax(0, ii), len(x) - 2)
-        jj = np.union1d(jj, jj+1)
+        jj = np.union1d(jj, jj + 1)
 
         rank = np.interp(qntl, x[jj], cdf[jj], left=np.nan, right=np.nan)
     else:
@@ -600,7 +611,14 @@ def percentile_rank(x, pmf, pctl, interpolation='linear'):
     return rank
 
 
-def discretize_rv(n=None, q=None, dist=None, **kwargs):
+def discretize_rv(
+    *,
+    n: Optional[int] = None,
+    q: Optional[Sequence | np.ndarray] = None,
+    dist=None,
+    return_edges: bool = False,
+    **kwargs
+) -> tuple[np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Discretize a continuous random variable onto a finite set of bins,
     using the expected value conditional on being in a bin as discrete
@@ -616,7 +634,9 @@ def discretize_rv(n=None, q=None, dist=None, **kwargs):
     dist : object or None
         Object implementing a continuous random variable as used in
         scipy.stats package.
-    kwargs : dict
+    return_edges : bool
+        If True, return the edges that define the bins.
+    kwargs :
         Keyword parameters passed directly to ppf() and expect() methods
         of underlying distribution
 
@@ -624,10 +644,12 @@ def discretize_rv(n=None, q=None, dist=None, **kwargs):
     -------
     grid : np.ndarray
     pmf : np.ndarray
+    edges : np.ndarray, optional
     """
 
     if dist is None:
         from scipy.stats import norm
+
         dist = norm
 
     if n is None and q is None:
@@ -638,7 +660,7 @@ def discretize_rv(n=None, q=None, dist=None, **kwargs):
         n = len(q) - 1
     else:
         # Create equidistant bins in terms of quantile ranks
-        q = np.linspace(0.0, 1.0, n+1)
+        q = np.linspace(0.0, 1.0, n + 1)
 
     edges = dist.ppf(q, **kwargs)
 
@@ -647,11 +669,14 @@ def discretize_rv(n=None, q=None, dist=None, **kwargs):
     pmf /= np.sum(pmf)
 
     for i in range(n):
-        lb, ub = edges[i], edges[i+1]
+        lb, ub = edges[i], edges[i + 1]
 
         # Compute conditional expectation
         xcond = dist.expect(lambda x: x, lb=lb, ub=ub, conditional=True, **kwargs)
 
         grid[i] = xcond.item()
 
-    return grid, pmf
+    if return_edges:
+        return grid, pmf, edges
+    else:
+        return grid, pmf
