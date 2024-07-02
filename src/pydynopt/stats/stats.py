@@ -644,6 +644,7 @@ def discretize_rv(
     -------
     grid : np.ndarray
     pmf : np.ndarray
+    edges : np.ndarray, optional
     """
 
     if dist is None:
