@@ -165,6 +165,16 @@ def add_logfile(
     logger.info(f'Log started on {timestamp.strftime("%Y-%m-%d %H:%M:%S")}')
     logger.info(f'Logging to {file}')
 
+    import platform
+    info = platform.uname()
+    tokens = []
+    if info.node:
+        tokens.append(f'host {info.node}')
+    tokens.append(
+        ' '.join(tok for tok in (info.system, info.release, info.version) if tok)
+    )
+    logger.info(f'Running on {", ".join(tok.strip() for tok in tokens)}')
+
     return fh
 
 
