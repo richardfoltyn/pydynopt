@@ -617,7 +617,9 @@ def interpolate_bin_weights(
     values: pd.DataFrame | Sequence[float],
     name_bins: str = 'ibin',
     name_values: Optional[str] = None,
-) -> pd.DataFrame:
+    values_as_edges: bool = False,
+    generate: Optional[str] = None
+) -> pd.Series:
     """
     Create weights that map bins defined on a grid of `values`
     into bins with defined by `edges`.
@@ -631,15 +633,20 @@ def interpolate_bin_weights(
         Edges defining individual bins. DataFrame with MultiIndex can be passed
         if edges differ by some index level.
     values : pd.DataFrame or Sequence of float
-        Grid of values to be binned
+        Grid of values or edges to be binned.
     name_bins : str
         Index name assigned to level representing bins.
     name_values : str, optional
         Index name assigned to level representing `values`.
+    values_as_edges : bool
+        If True, treat the elements of `values` as bin edges defining `len(values)-1`
+        bins. Resulting series will contain a weight for each bin instead.
+    generate : str, optional
+        Name of resulting Series
 
     Returns
     -------
-    pd.DataFrame
+    pd.Series
     """
 
     if isinstance(values, pd.Series):
@@ -648,7 +655,10 @@ def interpolate_bin_weights(
     elif isinstance(values, pd.DataFrame):
         if values.shape[1] > 1:
             raise ValueError('values DataFrame contains multiple columns')
-        name_values_default = values.columns[0]
+        if values.index.names != [None]:
+            name_values_default = values.index.names[0]
+        else:
+            name_values_default = values.columns[0]
         values = values.to_numpy().flatten()
     else:
         name_values_default = None
@@ -696,18 +706,28 @@ def interpolate_bin_weights(
         ibin = np.arange(len(df_bins))
 
     df_bins[name_bins] = ibin
-    df_bins = df_bins.reset_index(-1, drop=True).set_index(name_bins, append=True)
+    df_bins = df_bins.reset_index(-1, drop=True).set_index(name_bins, append=bool(by))
 
     # --- Create weights for each cell and each value ---
 
-    index_values = pd.Index(np.arange(len(values)), name=name_values)
+    n = len(values) - int(values_as_edges)
+    index_values = pd.Index(np.arange(n), name=name_values)
 
     def _create_weights(x):
         lb, ub = float(x['lb'].iloc[0]), float(x['ub'].iloc[0])
-        weights = np.zeros_like(values)
+        weights = np.zeros(n)
 
         ilb, wgt_lb = interp1d_locate(lb, values)
         iub, wgt_ub = interp1d_locate(ub, values)
+
+        # Do not allow for extrapolation.
+        #  - If wgt_lb > 1, edge lower bound lies below
+        #    any value, so all those bins should receive weight = 1.
+        #  - If wgt_ub < 0, edge upper bound lies above any values, so the weight needs
+        #    to be weight = 0 since 1-weight is assigned to the right-most point.
+        # The other two cases are not possible.
+        wgt_lb = min(1.0, wgt_lb)
+        wgt_ub = max(0.0, wgt_ub)
 
         weights[ilb : iub + 1] = 1.0
         weights[ilb] = wgt_lb
@@ -721,9 +741,14 @@ def interpolate_bin_weights(
     # Check that we are not double-counting bins. Weights can be less than 1 if CAH
     # bins are not included in any bin (e.g. if the distribution for some given age
     # tops out below the max CAH).
-    tmp = df_weights.groupby(by).sum()
-    assert np.all(np.abs((tmp - 1.0) < 1.0e-10))
+    if by:
+        tmp = df_weights.groupby(by).sum(axis=0)
+        assert np.all(np.abs((tmp - 1.0) < 1.0e-10))
+    else:
+        assert np.all(np.abs((df_weights.sum(axis=0) - 1.0) < 1.0e-10))
 
     df_weights = df_weights.stack()
+    if generate:
+        df_weights.name = generate
 
     return df_weights
