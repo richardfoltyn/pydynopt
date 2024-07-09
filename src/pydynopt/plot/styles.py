@@ -30,7 +30,7 @@ class FigureLayout(enum.Enum):
 
 _FIGURE_LAYOUT_MAP = {
     'constrained_layout': FigureLayout.CONSTRAINED_LAYOUT,
-    'tight_layout': FigureLayout.TIGHT_LAYOUT
+    'tight_layout': FigureLayout.TIGHT_LAYOUT,
 }
 
 # Mapping from keyword arguments for ticklabels() to tick_params()
@@ -40,6 +40,15 @@ _TICKLABEL_PARAMS_MAP = dict(
     color="labelcolor",
     rotation="labelrotation",
 )
+
+
+class PaletteType(enum.Enum):
+    DIVERGING = 0
+    QUALITATIVE = 1
+    SEQUENTIAL = 2
+
+    def __str__(self) -> str:
+        return self.name.lower()
 
 
 def _to_tuple(value):
@@ -1029,7 +1038,7 @@ class AbstractStyle:
             'alpha': 'facealpha',
             'lw': 0,
             'ls': '',
-            'zorder': None
+            'zorder': None,
         }
 
         kwargs = StyleAttrMapping(self, mapping)
@@ -1316,9 +1325,6 @@ class DefaultStyle(AbstractStyle):
     # Default values for facecolor: force same as color
     FACECOLORS = None
 
-    def __init__(self):
-        super(DefaultStyle, self).__init__()
-
 
 class PurpleBlue(DefaultStyle):
     COLORS = ['#810f7c', '#737373', '#045a8d', '#807dba', '#f768a1', '#3690c0']
@@ -1407,6 +1413,47 @@ class QualitativeStyle(DefaultStyle):
         self.linestyle = ['-']
         self.linewidth = 1.0
         self.alpha = [0.8, 0.7, 0.8, 0.8, 0.9, 0.8]
+
+
+class ColorBrewerStyle(DefaultStyle):
+    """
+    Style using a selected color palette from colorbrewer2.org.
+    Requires the palettable package to be installed from conda or PyPI.
+    """
+
+    def __init__(
+        self,
+        name: str = 'Set1',
+        ptype: PaletteType = PaletteType.QUALITATIVE,
+        ncolors: int = 5,
+    ):
+        """
+
+        Parameters
+        ----------
+        name : str
+            Palette name
+        ptype : PaletteType
+            Palette type (diverging, etc.)
+        ncolors: int
+            Number of colors. This cannot be arbitrary but has to correspong to the
+            available number of colors for a given palette.
+
+        """
+        super().__init__()
+
+        import pkgutil
+        try:
+            import palettable
+        except ImportError:
+            raise ImportError('Required package \'palettable\' is missing')
+
+        obj = pkgutil.resolve_name(f'palettable.colorbrewer.{ptype}.{name}_{ncolors}')
+
+        self.color = list(obj.hex_colors)
+        self.linestyle = '-'
+        self.linewidth = 1.0
+
 
 
 MPL_VERSION = matplotlib.__version__.split('.')
