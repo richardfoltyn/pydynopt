@@ -12,12 +12,8 @@ import numpy as np
 import pandas as pd
 
 import pydynopt.stats
-from pydynopt.interpolate import interp1d_locate
-from pydynopt.utils import anything_to_list
-
-
 from pydynopt.numba import jit, has_numba
-
+from pydynopt.utils import anything_to_list
 
 __all__ = [
     "weighted_mean",
@@ -717,8 +713,29 @@ def interpolate_bin_weights(
         lb, ub = float(x['lb'].iloc[0]), float(x['ub'].iloc[0])
         weights = np.zeros(n)
 
-        ilb, wgt_lb = interp1d_locate(lb, values)
-        iub, wgt_ub = interp1d_locate(ub, values)
+        # Do not use interp_locate() as bsearch cannot deal with flat CDFs. Instead
+        # manually compute number of bins below given percentile.
+
+        ilb = max(0, np.sum(values < lb) - 1)
+        ilb += int(values[ilb + 1] <= lb)
+        dx = values[ilb + 1] - values[ilb]
+        if dx > 0:
+            # Weight on lower bracket boundary
+            wgt_lb = 1.0 - (lb - values[ilb]) / dx
+        else:
+            # Flat region, cannot interpolate.
+            wgt_lb = 1.0
+
+        iub = max(0, np.sum(values < ub) - 1)
+        iub += int(values[iub+1] <= ub)
+        iub = min(iub, len(values) - 2)
+        dx = values[iub + 1] - values[iub]
+        if dx > 0:
+            # Weight on upper bracket boundary
+            wgt_ub = (ub - values[iub]) / dx
+        else:
+            # Flat region, cannot interpolate.
+            wgt_ub = 1.0
 
         # Do not allow for extrapolation.
         #  - If wgt_lb > 1, edge lower bound lies below
@@ -731,21 +748,20 @@ def interpolate_bin_weights(
 
         weights[ilb : iub + 1] = 1.0
         weights[ilb] = wgt_lb
-        weights[iub] = 1.0 - wgt_ub
+        weights[iub] = wgt_ub
 
         s = pd.Series(weights, index=index_values, name='weight')
         return s
 
     df_weights = df_bins.groupby(by + [name_bins]).apply(_create_weights)
 
-    # Check that we are not double-counting bins. Weights can be less than 1 if CAH
-    # bins are not included in any bin (e.g. if the distribution for some given age
-    # tops out below the max CAH).
+    # Check that we are not double-counting bins. Weights can be less than 1 if they
+    # are outside any bin interval.
     if by:
         tmp = df_weights.groupby(by).sum(axis=0)
-        assert np.all(np.abs((tmp - 1.0) < 1.0e-10))
+        assert np.all((tmp - 1.0) < 1.0e-10)
     else:
-        assert np.all(np.abs((df_weights.sum(axis=0) - 1.0) < 1.0e-10))
+        assert np.all((df_weights.sum(axis=0) - 1.0) < 1.0e-10)
 
     df_weights = df_weights.stack()
     if generate:
