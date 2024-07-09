@@ -10,4 +10,4 @@ from .ndarraylattice import NDArrayLattice
 from .plotmap import PlotMap, plot_pm
 from .styles import AbstractStyle
 from .styles import DefaultStyle, Presentation, PurpleBlue, AlternatingStyle
-from .styles import QualitativeStyle
+from .styles import QualitativeStyle, ColorBrewerStyle
