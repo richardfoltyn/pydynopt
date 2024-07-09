@@ -118,9 +118,12 @@ def load(path: str, directory: Optional[str] = None):
 
     logger = logging.getLogger("IO")
 
-    if not os.path.isfile(path):
-        if directory:
-            path = join(directory, path)
+    try:
+        if not os.path.isfile(path):
+            if directory:
+                path = join(directory, path)
+    except:
+        raise ValueError(f'Invalid path \'{path}\'')
 
     path = os.path.normpath(path)
 
