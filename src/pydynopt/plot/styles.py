@@ -51,7 +51,7 @@ class PaletteType(enum.Enum):
         return self.name.lower()
 
 
-def _to_tuple(value):
+def _to_tuple(value) -> tuple:
     """
     Return a tuple created from the given value. If `value` is None,
     return a tuple containing only None.
@@ -64,75 +64,62 @@ def _to_tuple(value):
     -------
     builtins.tuple
     """
-    value = anything_to_tuple(value)
-    if value is None:
-        value = (None,)
+
+    if isinstance(value, tuple):
+        value = copy.copy(value)
+    elif value is None:
+        value = (None, )
+    else:
+        value = anything_to_tuple(value)
 
     return value
 
 
-class Colors(object):
-    def __init__(self, colors=None):
-        self.colors = copy.copy(colors)
-        self.cache = None
+class Cycler:
+    def __init__(self, items=None):
+        self.items: tuple = _to_tuple(items)
+        self.cache: tuple | None = None
 
     def __getitem__(self, item):
-        if not self.cache or item >= len(self.cache):
-            col = it.cycle(self.colors)
-            self.cache = tuple(next(col) for x in range(item + 1))
+        if isinstance(item, slice):
+            end = item.stop
+            if end is None and self.cache:
+                end = len(self.items)
+        else:
+            end = item
+        if not self.cache or end >= len(self.cache):
+            col = it.cycle(self.items)
+            self.cache = tuple(next(col) for _ in range(end + 1))
         return self.cache[item]
 
     def __deepcopy__(self, memodict={}):
-        obj = Colors(self.colors)
+        obj = type(self)(self.items)
         return obj
 
-
-class LineStyle(object):
-    def __init__(self, linestyles=None):
-        self.linestyles = copy.copy(linestyles)
-        self.cache = None
-
-    def __getitem__(self, item):
-        if not self.cache or item >= len(self.cache):
-            ls = it.cycle(self.linestyles)
-            self.cache = tuple(next(ls) for x in range(item + 1))
-        return self.cache[item]
-
-    def __deepcopy__(self, memodict={}):
-        obj = LineStyle(self.linestyles)
-        return obj
+    def __repr__(self) -> str:
+        s = f'{self.items}'.strip('()[]')
+        s = f'{type(self).__name__}({s})'
+        return s
 
 
-class LineWidth(object):
-    def __init__(self, linewidths):
-        self.linewidths = copy.copy(linewidths)
-        self.cache = None
-
-    def __getitem__(self, item):
-        if not self.cache or item >= len(self.cache):
-            lw = it.cycle(self.linewidths)
-            self.cache = tuple(next(lw) for x in range(item + 1))
-        return self.cache[item]
-
-    def __deepcopy__(self, memodict={}):
-        obj = LineWidth(self.linewidths)
-        return obj
+class Colors(Cycler):
+    pass
 
 
-class Marker(object):
-    def __init__(self, markers):
-        self.markers = copy.copy(markers)
-        self.cache = None
+class LineStyle(Cycler):
+    pass
 
-    def __getitem__(self, item):
-        if not self.cache or item >= len(self.cache):
-            ms = it.cycle(self.markers)
-            self.cache = tuple(next(ms) for x in range(item + 1))
-        return self.cache[item]
 
-    def __deepcopy__(self, memodict={}):
-        obj = Marker(self.markers)
-        return obj
+class LineWidth(Cycler):
+    pass
+
+
+class Marker(Cycler):
+    pass
+
+
+class Transparency(Cycler):
+    pass
 
 
 class ConstFillProperty:
@@ -148,22 +135,6 @@ class ConstFillProperty:
 
     def __deepcopy__(self, memodict={}):
         obj = ConstFillProperty(self.const, self.values)
-        return obj
-
-
-class Transparency(object):
-    def __init__(self, alphas):
-        self.alphas = copy.copy(alphas)
-        self.cache = None
-
-    def __getitem__(self, item):
-        if not self.cache or item >= len(self.cache):
-            alph = it.cycle(self.alphas)
-            self.cache = tuple(next(alph) for x in range(item + 1))
-        return self.cache[item]
-
-    def __deepcopy__(self, memodict={}):
-        obj = Transparency(self.alphas)
         return obj
 
 
@@ -607,8 +578,7 @@ class AbstractStyle:
         if isinstance(value, Colors):
             self._color = deepcopy(value)
         else:
-            value = _to_tuple(value)
-            self._color = Colors(colors=value)
+            self._color = Colors(value)
 
     @property
     def edgecolor(self):
@@ -622,8 +592,7 @@ class AbstractStyle:
         if isinstance(value, Colors):
             self._edgecolor = deepcopy(value)
         else:
-            value = _to_tuple(value)
-            self._edgecolor = Colors(colors=value)
+            self._edgecolor = Colors(value)
 
     @property
     def facecolor(self):
@@ -640,8 +609,7 @@ class AbstractStyle:
         if isinstance(value, Colors):
             self._facecolor = deepcopy(value)
         else:
-            value = _to_tuple(value)
-            self._facecolor = Colors(colors=value)
+            self._facecolor = Colors(value)
 
     @property
     def facealpha(self):
@@ -654,8 +622,7 @@ class AbstractStyle:
         if isinstance(value, Transparency):
             self._facealpha = deepcopy(value)
         else:
-            value = _to_tuple(value)
-            self._facealpha = Colors(colors=value)
+            self._facealpha = Colors(value)
 
     @property
     def linewidth(self):
@@ -762,8 +729,7 @@ class AbstractStyle:
         if isinstance(value, Colors):
             self._ecolor = deepcopy(value)
         else:
-            value = _to_tuple(value)
-            self._ecolor = Colors(colors=value)
+            self._ecolor = Colors(value)
 
     @property
     def elinewidth(self):
@@ -836,8 +802,7 @@ class AbstractStyle:
         if isinstance(value, Colors):
             self._mec = deepcopy(value)
         else:
-            value = _to_tuple(value)
-            self._mec = Colors(colors=value)
+            self._mec = Colors(value)
 
     @property
     def mfc(self):
@@ -850,8 +815,7 @@ class AbstractStyle:
         if isinstance(value, Colors):
             self._mfc = deepcopy(value)
         else:
-            value = _to_tuple(value)
-            self._mfc = Colors(colors=value)
+            self._mfc = Colors(value)
 
     @property
     def mew(self):
@@ -1451,6 +1415,7 @@ class ColorBrewerStyle(DefaultStyle):
         obj = pkgutil.resolve_name(f'palettable.colorbrewer.{ptype}.{name}_{ncolors}')
 
         self.color = list(obj.hex_colors)
+        self.facecolor = self.color
         self.linestyle = '-'
         self.linewidth = 1.0
 
