@@ -596,6 +596,8 @@ def plot_dataframe(
     elif isinstance(yvar_labels, collections.abc.Iterable):
         # Convert from list to dict
         yvar_labels = {v: lbl for v, lbl in zip(yvars, yvar_labels)}
+    elif yvar_labels is None and not by_labels:
+        yvar_labels = {v: v for v in yvars}
     elif yvar_labels is None:
         pass
     else:
