@@ -51,6 +51,37 @@ class PaletteType(enum.Enum):
         return self.name.lower()
 
 
+_DEFAULT_MPL_MAP = dict(
+    linestyle='ls',
+    linewidth='lw',
+    markeredgecolor='mec',
+    markeredgewidth='mew',
+    markerfacecolor='mfc',
+    markersize='ms',
+    color='c'
+)
+
+class UniqueDict(dict):
+    """
+    Sub-class of dict which maps long forms of MPL arguments to plot() and other
+    functions into the abbreviated forms, so that ever argument has one unique value
+    ("lw" instead of possibly "lw" and "linewidth", etc.)
+    """
+
+    def __init__(self, mapping: Optional[Mapping] = None, **kwargs):
+        self.mapping = mapping
+        super().__init__(**kwargs)
+
+    def __setitem__(self, key: str, value) -> None:
+        key = self.mapping.get(key, key)
+        super().__setitem__(key, value)
+
+    def __getitem__(self, key):
+        key = self.mapping.get(key, key)
+        return super().__getitem__(key)
+
+
+
 def _to_tuple(value) -> tuple:
     """
     Return a tuple created from the given value. If `value` is None,
@@ -300,7 +331,7 @@ class AbstractStyle:
         self._legend = None
         self._text = None
         self.split_scatter = False
-        self._guideline = dict(cls.GUIDELINE_KWARGS)
+        self._guideline = UniqueDict(mapping=_DEFAULT_MPL_MAP, **cls.GUIDELINE_KWARGS)
 
         self._plot_all = PlotStyleDict(self)
 
@@ -883,9 +914,9 @@ class AbstractStyle:
     @guideline.setter
     def guideline(self, value: Optional[Mapping] = None):
         if value is not None:
-            self._guideline = dict(value)
+            self._guideline = UniqueDict(mapping=_DEFAULT_MPL_MAP, **value)
         else:
-            self._guideline = dict()
+            self._guideline = UniqueDict(mapping=_DEFAULT_MPL_MAP)
 
     @property
     def margins(self):
