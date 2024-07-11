@@ -1449,15 +1449,3 @@ class ColorBrewerStyle(DefaultStyle):
         self.facecolor = self.color
         self.linestyle = '-'
         self.linewidth = 1.0
-
-
-
-MPL_VERSION = matplotlib.__version__.split('.')
-try:
-    major = int(MPL_VERSION[0])
-    if major < 2:
-        val = DefaultStyle.SUBPLOT_KWARGS['facecolor']
-        del DefaultStyle.SUBPLOT_KWARGS['facecolor']
-        DefaultStyle.SUBPLOT_KWARGS['axisbg'] = val
-except:
-    pass
