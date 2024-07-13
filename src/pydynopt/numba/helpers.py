@@ -8,6 +8,7 @@ Author: Richard Foltyn
 """
 
 import sys
+import copy
 from collections.abc import Sequence
 from typing import Optional, Any
 
@@ -213,6 +214,7 @@ def _build_signature(obj, attrs: Sequence[str]):
 
     from pydynopt.numba import boolean, int64, float64
     from pydynopt.numba import from_dtype
+    from numba.types import UniTuple
 
     signature = []
 
@@ -257,13 +259,23 @@ def _build_signature(obj, attrs: Sequence[str]):
 
         if hasattr(value, 'dtype'):
             process_ndarray(value)
-        elif isinstance(value, (list, tuple)):
+        elif isinstance(value, list):
             # Convert to Numpy array in numba instance
             value = np.asarray(value)
             process_ndarray(value)
         elif t in types_python:
             nbtype = types_python[t]
             signature.append((attr, nbtype))
+        elif isinstance(value, tuple):
+            # Check for uniform types
+            is_unif = all(type(i) == type(value[0]) for i in value)
+            if is_unif:
+                value = np.asarray(value)
+                t = UniTuple(from_dtype(value.dtype), len(value))
+            else:
+                # Store as numpy array instead
+                process_ndarray(np.asarray(value))
+            signature.append((attr, t))
 
     return signature
 
@@ -293,9 +305,19 @@ def copy_attributes(
 
     for attr in attrs:
         x = getattr(src, attr)
-        if x is not None:
-            if (copy and not np.isscalar(x)) or isinstance(x, (tuple, list)):
-                x = np.copy(x)
-            setattr(dst, attr, x)
+        if x is None:
+            continue
+
+        if isinstance(x, np.ndarray) and copy:
+            x = np.copy(x)
+        elif np.isscalar(x):
+            # Assign as is
+            pass
+        elif isinstance(x, list):
+            # Always creates a copy
+            x = np.asarray(x)
+        elif isinstance(x, tuple) and copy:
+            x = copy.copy(x)
+        setattr(dst, attr, x)
 
     return dst
