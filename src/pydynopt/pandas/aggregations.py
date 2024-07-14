@@ -613,8 +613,7 @@ def interpolate_bin_weights(
     values: pd.DataFrame | Sequence[float],
     name_bins: str = 'ibin',
     name_values: Optional[str] = None,
-    values_as_edges: bool = False,
-    generate: Optional[str] = None
+    generate: str = 'weight'
 ) -> pd.Series:
     """
     Create weights that map bins defined on a grid of `values`
@@ -634,9 +633,6 @@ def interpolate_bin_weights(
         Index name assigned to level representing bins.
     name_values : str, optional
         Index name assigned to level representing `values`.
-    values_as_edges : bool
-        If True, treat the elements of `values` as bin edges defining `len(values)-1`
-        bins. Resulting series will contain a weight for each bin instead.
     generate : str, optional
         Name of resulting Series
 
@@ -647,21 +643,27 @@ def interpolate_bin_weights(
 
     if isinstance(values, pd.Series):
         name_values_default = values.name
-        values = values.to_numpy()
+        if values.index.nlevels > 1:
+            raise ValueError('Series \'values\' contans multiple index levels')
     elif isinstance(values, pd.DataFrame):
         if values.shape[1] > 1:
-            raise ValueError('values DataFrame contains multiple columns')
+            raise ValueError('DataFrame \'values\' contains multiple columns')
+        if values.index.nlevels > 1:
+            raise ValueError('DataFrame \'values\' contans multiple index levels')
         if values.index.names != [None]:
             name_values_default = values.index.names[0]
         else:
             name_values_default = values.columns[0]
-        values = values.to_numpy().flatten()
+        values = values.iloc[:, 0]
     else:
         name_values_default = None
         values = np.atleast_1d(values)
 
-    if not name_values:
-        name_values = name_values_default
+    name_values = name_values or name_values_default
+
+    if not isinstance(values, pd.Series):
+        values = pd.Series(values)
+        values.index.name = name_values
 
     # --- Prepare edges ---
 
@@ -706,12 +708,8 @@ def interpolate_bin_weights(
 
     # --- Create weights for each cell and each value ---
 
-    n = len(values) - int(values_as_edges)
-    index_values = pd.Index(np.arange(n), name=name_values)
-
     def _create_weights(x):
         lb, ub = float(x['lb'].iloc[0]), float(x['ub'].iloc[0])
-        weights = np.zeros(n)
 
         # Do not use interp_locate() as bsearch cannot deal with flat CDFs. Instead
         # manually compute number of bins below given percentile.
@@ -746,25 +744,29 @@ def interpolate_bin_weights(
         wgt_lb = min(1.0, wgt_lb)
         wgt_ub = max(0.0, wgt_ub)
 
-        weights[ilb : iub + 1] = 1.0
-        weights[ilb] = wgt_lb
-        weights[iub] = wgt_ub
+        # Directly copy the input Series since this ensures the correct index
+        weights = values.iloc[ilb:iub+1].copy(deep=True)
+        weights.iloc[:] = 1.0
+        weights.iloc[0] = wgt_lb
+        weights.iloc[-1] = wgt_ub
+        weights.name = generate
+        # Convert to DataFrame to ensure correct vertical stacking of results even if
+        # there is only one bin.
+        weights = weights.to_frame()
 
-        s = pd.Series(weights, index=index_values, name='weight')
-        return s
+        return weights
 
     df_weights = df_bins.groupby(by + [name_bins]).apply(_create_weights)
+
+    # Convert back to Series
+    df_weights = df_weights[generate]
 
     # Check that we are not double-counting bins. Weights can be less than 1 if they
     # are outside any bin interval.
     if by:
-        tmp = df_weights.groupby(by).sum(axis=0)
+        tmp = df_weights.groupby(by + [name_values]).sum(axis=0)
         assert np.all((tmp - 1.0) < 1.0e-10)
     else:
-        assert np.all((df_weights.sum(axis=0) - 1.0) < 1.0e-10)
-
-    df_weights = df_weights.stack()
-    if generate:
-        df_weights.name = generate
+        assert np.all((df_weights.groupby(name_values).sum() - 1.0) < 1.0e-10)
 
     return df_weights
