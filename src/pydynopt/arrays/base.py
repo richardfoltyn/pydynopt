@@ -17,7 +17,7 @@ from .numba.arrays import ind2sub_array_impl, ind2sub_scalar_impl
 from .numba.arrays import ind2sub_axis_array, ind2sub_axis_scalar
 from .numba.arrays import ind2sub_axis_array_impl, ind2sub_axis_scalar_impl
 from .numba.arrays import sub2ind_array, sub2ind_scalar
-
+from .numba.arrays import clip_prob_array, clip_prob_scalar
 
 JIT_OPTIONS = {'nopython': True, 'nogil': True, 'parallel': False,
                'cache': True}
@@ -242,3 +242,27 @@ def logspace(start, stop, num, log_shift=0.0, x0=None, frac_at_x0=None,
     grid[-1] = stop
 
     return grid
+
+
+def clip_prob(value, tol, out=None):
+    """
+    Clip probabilities close to 0 or 1 (array implementation when `out` is None).
+
+    Parameters
+    ----------
+    value : float or np.ndarray
+    tol : float
+        Clip value < `tol` to 0, and value > (1.0 - `tol`) to 1.
+    out : np.ndarray, optional
+        Output array (ignored for scalars)
+
+    Returns
+    -------
+    float or np.ndarray
+    """
+
+    if np.isscalar(value):
+        return clip_prob_scalar(value, tol)
+    else:
+        return clip_prob_array(value, tol, out)
+
