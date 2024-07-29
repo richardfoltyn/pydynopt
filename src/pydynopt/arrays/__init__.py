@@ -12,9 +12,10 @@ from .numba import _insert
 from .base import powerspace, logspace
 
 from .base import ind2sub, sub2ind
+from .base import clip_prob
 
 __all__ = ['insert', 'unravel_index', 'ravel_multi_index',
-           'powerspace', 'logspace', 'ind2sub', 'sub2ind']
+           'powerspace', 'logspace', 'ind2sub', 'sub2ind', 'clip_prob']
 
 JIT_OPTIONS = {'parallel': False, 'nogil': True, 'cache': True}
 
@@ -161,6 +162,40 @@ def sub2ind_impl_generic(coords, shape, out):
     if isinstance(coords, types.Array) and out is not None:
         if coords.ndim >= 2:
             f = sub2ind_array_impl
+
+    return f
+
+
+@overload(clip_prob, jit_options=JIT_OPTIONS)
+def clip_prob_generic(value, tol, out=None):
+    """
+    Generic for scalar arguments and array arguments without a return array `out`.
+    """
+
+    from numba import types
+    from .numba.arrays import clip_prob_scalar, clip_prob_array, clip_prob_array_impl
+
+    f = None
+    if isinstance(value, types.Float):
+        f = clip_prob_scalar
+    elif isinstance(value, types.Array) and out is None:
+        f = clip_prob_array
+
+    return f
+
+
+@overload(clip_prob, jit_options=JIT_OPTIONS)
+def clip_prob_generic(value, tol, out):
+    """
+    Generic fo array arguments with an `out` argument that is not None.
+    """
+
+    from numba import types
+    from .numba.arrays import clip_prob_scalar, clip_prob_array, clip_prob_array_impl
+
+    f = None
+    if isinstance(value, types.Array) and out is not None:
+        f = clip_prob_array_impl
 
     return f
 
