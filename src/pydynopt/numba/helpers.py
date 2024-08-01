@@ -105,6 +105,8 @@ def create_numba_instance(
     exclude: Optional[str | Sequence[str]] = None,
     init: bool = True,
     copy: bool = False,
+    cache: Optional[type] = None,
+    return_type: bool = False
 ):
     """
     Automatically create numba-fied instance of a given object.
@@ -129,6 +131,11 @@ def create_numba_instance(
     copy : bool, optional
         If true, create copies of container objects such as tuples or Numpy
         arrays when initializing attributes of Numba instance.
+    cache: type, optional
+        If not None, use given object as Numba-fied instance and optionally update
+        its attributes. Avoids building a signature and creating a new type.
+    return_type : bool
+        If True, return the dynamically constructed type.
 
     Returns
     -------
@@ -178,22 +185,29 @@ def create_numba_instance(
     def __init__(self):
         pass
 
-    __dict__ = {'__init__': __init__, '__module__': obj.__class__.__module__}
+    if cache is not None:
+        cls_nb = cache
+        obj_nb = cls_nb()
+    else:
+        __dict__ = {'__init__': __init__, '__module__': obj.__class__.__module__}
 
-    # Create class name with Numba suffix
-    name = obj.__class__.__name__ + 'Numba'
-    cls = type(name, (), __dict__)
+        # Create class name with Numba suffix
+        name = obj.__class__.__name__ + 'Numba'
+        cls = type(name, (), __dict__)
 
-    signature = _build_signature(obj, attrs)
+        signature = _build_signature(obj, attrs)
 
-    cls_nb = jitclass(signature)(cls)
+        cls_nb = jitclass(signature)(cls)
 
-    obj_nb = cls_nb()
+        obj_nb = cls_nb()
 
     if init:
         copy_attributes(obj, obj_nb, attrs=attrs, copy=copy)
 
-    return obj_nb
+    if return_type:
+        return obj_nb, cls_nb
+    else:
+        return obj_nb
 
 
 def _build_signature(obj, attrs: Sequence[str]):
