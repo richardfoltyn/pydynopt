@@ -750,10 +750,16 @@ def interpolate_bin_weights(
         weights.iloc[0] = wgt_lb
         weights.iloc[-1] = wgt_ub
         weights.name = generate
+        # Convert to DataFrame to ensure correct vertical stacking of results even if
+        # there is only one bin.
+        weights = weights.to_frame()
 
         return weights
 
     df_weights = df_bins.groupby(by + [name_bins]).apply(_create_weights)
+
+    # Convert back to Series
+    df_weights = df_weights[generate]
 
     # Check that we are not double-counting bins. Weights can be less than 1 if they
     # are outside any bin interval.
