@@ -12,7 +12,7 @@ import numpy as np
 
 __all__ = ['jit', 'jitclass', 'overload', 'register_jitable',
            'float32', 'float64', 'int8', 'int16', 'int32', 'int64',
-           'boolean', 'string', 'prange', 'from_dtype']
+           'boolean', 'string', 'prange', 'from_dtype', 'has_numba']
 
 
 def jit_dummy(signature_or_function=None, *jit_args, **jit_kwargs):
@@ -113,6 +113,7 @@ jitclass = jitclass_dummy
 overload = overload_dummy
 register_jitable = register_jitable_dummy
 prange = range
+has_numba = False
 
 if use_numba:
     try:
