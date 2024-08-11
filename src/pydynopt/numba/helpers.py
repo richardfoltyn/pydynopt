@@ -144,9 +144,10 @@ def create_numba_instance(
     """
 
     from pydynopt.numba import jitclass
+    from pydynopt.numba import has_numba
 
     # if this already is a compiled instance, return it immediately
-    if hasattr(obj, '_numba_type_'):
+    if not has_numba or hasattr(obj, '_numba_type_'):
         return obj
 
     # object is not an instance of a Numba type, we need to build
