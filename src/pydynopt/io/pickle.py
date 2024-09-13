@@ -13,7 +13,7 @@ import re
 from os.path import join
 from typing import Any, Optional
 
-__all__ = ["dump", "load", "get_cached_object"]
+__all__ = ["dump", "load", "get_cached_object", "get_hash_value"]
 
 
 def dump(
@@ -211,3 +211,25 @@ def get_cached_object(
         dump(path, obj, compress=compress, overwrite=True)
 
     return obj
+
+def get_hash_value(*args, **kwargs) -> str:
+    """
+    Convert sequence of objets to a hash value that can be used as a filename component.
+
+    Parameters
+    ----------
+    args
+
+    Returns
+    -------
+    str
+    """
+
+    import hashlib
+
+    s = '_'.join(f'{v}' for v in args)
+    s += '_'.join(f'{k}_{v}' for k, v in kwargs.items())
+
+    h = hashlib.sha256(s.encode())
+
+    return h.hexdigest()
