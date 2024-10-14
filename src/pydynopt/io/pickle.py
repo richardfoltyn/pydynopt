@@ -227,9 +227,23 @@ def get_hash_value(*args, **kwargs) -> str:
 
     import hashlib
 
-    s = '_'.join(f'{v}' for v in args)
-    s += '_'.join(f'{k}_{v}' for k, v in kwargs.items())
+    hashes = []
+    for obj in args:
+        try:
+            h = hashlib.sha256(obj).hexdigest()
+        except TypeError:
+            h = hashlib.sha3_256(f'{obj}'.encode()).hexdigest()
+        hashes.append(h)
 
+    for key, value in kwargs.items():
+        for obj in (key, value):
+            try:
+                h = hashlib.sha256(obj).hexdigest()
+            except TypeError:
+                h = hashlib.sha3_256(f'{obj}'.encode()).hexdigest()
+            hashes.append(h)
+
+    s = '_'.join(hashes)
     h = hashlib.sha256(s.encode())
 
     return h.hexdigest()
