@@ -164,7 +164,7 @@ def patsy_formula_to_categorical_treatments(*formulas: str) -> dict[str, str]:
                 if m := re.match(r'C\((?P<name>[^,)]+)(?P<rest>.*)\)', expr):
                     var = m.group('name')
                     # Extract treatment spec from the remainder
-                    if mt := re.match('.*Treatment\((.+)\).*', m.group('rest')):
+                    if mt := re.match(r'.*Treatment\((.+)\).*', m.group('rest')):
                         value = mt.group(1)
                         treatments[var] = value
 
