@@ -12,6 +12,7 @@ from typing import Union, Optional
 
 import numpy as np
 import pandas as pd
+from matplotlib.axes import Axes
 
 from .styles import DefaultStyle, AbstractStyle
 from .baseplots import plot_grid
@@ -476,7 +477,7 @@ def plot_dataframe(
         Sequence[AbstractStyle], Mapping[str, AbstractStyle], AbstractStyle
     ] = DefaultStyle(),
     **kwargs,
-):
+) -> np.ndarray[Axes]:
     """
     Plot selected variables in DataFrame, optionally disaggregating by groups.
 
@@ -812,4 +813,4 @@ def plot_dataframe(
     kwargs_default.update(kwargs)
     kwargs = kwargs_default
 
-    plot_grid(fplot, nrow, ncol, **kwargs)
+    return plot_grid(fplot, nrow, ncol, **kwargs)

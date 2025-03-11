@@ -52,8 +52,9 @@ def plot_grid(
     identity: bool = None,
     hline: Optional[Sequence[float] | np.ndarray] = None,
     vline: Optional[Sequence[float] | np.ndarray] = None,
+    show: bool = True,
     **kwargs,
-) -> None:
+) -> np.ndarray[Axes]:
     """
     Creates a rectangular grid of subplots and calls a user-provided function
     for each subplot to render user-supplied content.
@@ -142,6 +143,8 @@ def plot_grid(
         List of y-values for horizontal rules that should be added to each panel.
     vline : array_like, optional
         List of x-values for vertical rules that should be added to each panel.
+    show: bool
+        If true, display figure.
     kwargs :
         Keyword arguments passed directly to `fun`
     """
@@ -386,16 +389,14 @@ def plot_grid(
                 for j in range(1, ncol):
                     axes[i, j].set_yticklabels([])
 
-    render(fig, outfile, close_fig, metadata)
-
-
-def render(fig, outfile=None, close_fig=True, metadata=None):
-    if not outfile:
-        fig.show()
-    else:
+    if outfile:
         fig.savefig(outfile, metadata=metadata)
         if close_fig:
             plt.close(fig)
+    elif show:
+        fig.show()
+
+    return axes
 
 
 def broadcast_ylim(nrow, ncol, ylim):
