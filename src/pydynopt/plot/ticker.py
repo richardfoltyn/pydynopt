@@ -38,16 +38,16 @@ class SuffixFormatter(FuncFormatter):
                 Formatted tick label
             """
             suffix = ''
-            if value >= 1.0e12:
+            if abs(value) >= 1.0e12:
                 value /= int(1.0e12)
                 suffix = 'tr'
-            elif value >= 1.0e9:
+            elif abs(value) >= 1.0e9:
                 value /= int(1.0e9)
                 suffix = 'bn'
-            elif value >= 1.0e6:
+            elif abs(value) >= 1.0e6:
                 value /= int(1.0e6)
                 suffix = 'm'
-            elif value >= 1000:
+            elif abs(value) >= 1000:
                 value /= 1000
                 suffix = 'k'
 
@@ -58,9 +58,9 @@ class SuffixFormatter(FuncFormatter):
             else:
                 fmt = ''
 
-            fmt = f'{{v:{fmt}}}{suffix}'
+            fmt = f'{{sgn}}{{v:{fmt}}}{suffix}'
 
-            return fmt.format(v=value)
+            return fmt.format(v=abs(value), sgn='$-$' if value < 0 else '')
 
         super().__init__(_suffix_formatter)
 
