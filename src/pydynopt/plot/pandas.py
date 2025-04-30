@@ -644,11 +644,6 @@ def plot_dataframe(
         # Restrict to data plotted in particular panel
         df_panel = df.xs(over_order[ipanel], level=over_var, axis=0)
 
-        xmin_jit = np.inf
-        xmax_jit = -np.inf
-        xmin = np.inf
-        xmax = -np.inf
-
         for ivar, yvar in enumerate(yvars):
             # Variable-specific style
             style = styles[yvar]
@@ -670,8 +665,6 @@ def plot_dataframe(
                     continue
                 yvalues = df_moment[mask].to_numpy()
                 xvalues = df_moment[mask].index.get_level_values(xvar).to_numpy()
-                xmin = min(xmin, np.amin(xvalues))
-                xmax = max(xmax, np.amax(xvalues))
 
                 # Legend labels. by-labels take precedence due to backwards
                 # compatibility!
@@ -711,9 +704,6 @@ def plot_dataframe(
 
                     offset = dx * jitter * k
                     xvalues = xvalues - left + offset
-
-                xmin_jit = min(xmin_jit, np.amin(xvalues))
-                xmax_jit = max(xmax_jit, np.amax(xvalues))
 
                 yerr = _get_yerr(data.loc[by_value], mname, yvalues)
 
