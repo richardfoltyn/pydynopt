@@ -360,9 +360,9 @@ def _df_weighted_mean_wgt(
 
         for i, varname in enumerate(varlist):
             var_np = data[varname].to_numpy(copy=False)
-            df_work.loc[:, 'xw'] = var_np * w_np
+            df_work['xw'] = var_np * w_np
             # Set weights for NaN obs or NaN weights to zero
-            df_work.loc[:, 'w'] = np.where(df_work['xw'].notna(), w_np, 0.0)
+            df_work['w'] = np.where(df_work['xw'].notna(), w_np, 0.0)
 
             wsum = df_work['w'].groupby(groups).sum()
 
