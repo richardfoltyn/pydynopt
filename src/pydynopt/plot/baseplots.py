@@ -6,6 +6,7 @@ Author: Richard Foltyn
 """
 
 import collections.abc
+import copy
 from collections.abc import Mapping, Sequence
 from typing import Optional, Union
 
@@ -275,7 +276,10 @@ def plot_grid(
                 ax.xaxis.set_major_formatter(xtickformatter)
 
             if isinstance(xticks, Locator):
-                ax.xaxis.set_major_locator(xticks)
+                # Create a copy of the locator instance as assigning the same locator
+                # to multiple Axes seems to harmonize their ticks, which is not what
+                # we want if sharex=False.
+                ax.xaxis.set_major_locator(copy.deepcopy(xticks))
             elif xticks is not None:
                 xticks = np.atleast_1d(xticks)
                 if (i == (nrow - 1) or not has_sharex) and xticklabels is not None:
@@ -287,7 +291,10 @@ def plot_grid(
                 ax.yaxis.set_major_formatter(ytickformatter)
 
             if isinstance(yticks, Locator):
-                ax.yaxis.set_major_locator(yticks)
+                # Create a copy of the locator instance as assigning the same locator
+                # to multiple Axes seems to harmonize their ticks, which is not what
+                # we want if sharey=False.
+                ax.yaxis.set_major_locator(copy.deepcopy(yticks))
             elif yticks is not None:
                 yticks = np.atleast_1d(yticks)
                 if (j == 0 or not has_sharey) and yticklabels is not None:
