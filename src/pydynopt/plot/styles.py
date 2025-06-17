@@ -58,8 +58,9 @@ _DEFAULT_MPL_MAP = dict(
     markeredgewidth='mew',
     markerfacecolor='mfc',
     markersize='ms',
-    color='c'
+    color='c',
 )
+
 
 class UniqueDict(dict):
     """
@@ -81,7 +82,6 @@ class UniqueDict(dict):
         return super().__getitem__(key)
 
 
-
 def _to_tuple(value) -> tuple:
     """
     Return a tuple created from the given value. If `value` is None,
@@ -99,7 +99,7 @@ def _to_tuple(value) -> tuple:
     if isinstance(value, tuple):
         value = copy.copy(value)
     elif value is None:
-        value = (None, )
+        value = (None,)
     else:
         value = anything_to_tuple(value)
 
@@ -255,6 +255,7 @@ class StyleAttrMapping:
 
 class AbstractStyle:
     LEG_FONTPROP_KWARGS = {}
+    LEG_TITLE_FONTPROP_KWARGS = {}
     LBL_FONTPROP_KWARGS = {}
     TITLE_FONTPROP_KWARGS = {}
     SUBTITLE_FONTPROP_KWARGS = {}
@@ -380,10 +381,13 @@ class AbstractStyle:
     def legend(self):
         if self._legend is None:
             cls = self.__class__
-            fp = FontProperties(**cls.LEG_FONTPROP_KWARGS)
             self._legend = cls.LEG_KWARGS.copy()
             # Add font properties
+            fp = FontProperties(**cls.LEG_FONTPROP_KWARGS)
             self._legend.update({'prop': fp})
+            if cls.LEG_TITLE_FONTPROP_KWARGS:
+                fp = FontProperties(**cls.LEG_TITLE_FONTPROP_KWARGS)
+                self._legend.update(title_fontproperties=fp)
         return self._legend
 
     @legend.setter
@@ -1263,6 +1267,7 @@ class AbstractStyle:
 
 class DefaultStyle(AbstractStyle):
     LEG_FONTPROP_KWARGS = {'family': 'serif', 'size': 'small'}
+    LEG_TITLE_FONTPROP_KWARGS = {'family': 'serif', 'size': 'small', 'weight': 'bold'}
 
     LBL_FONTPROP_KWARGS = {'family': 'serif', 'size': 'medium'}
 
@@ -1438,6 +1443,7 @@ class ColorBrewerStyle(DefaultStyle):
         super().__init__()
 
         import pkgutil
+
         try:
             import palettable
         except ImportError:

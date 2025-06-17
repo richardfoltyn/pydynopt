@@ -43,6 +43,7 @@ def plot_grid(
     legend_at: tuple[int, int] = (0, 0),
     legend_loc: str = 'best',
     legend: bool = False,
+    legend_title: Optional[str] = None,
     bbox_to_anchor=None,
     outfile: Optional[str] = None,
     style: Optional[AbstractStyle] = None,
@@ -119,6 +120,8 @@ def plot_grid(
         within a subplot
     legend : bool
         If true, legend is displayed in the subplot identified by `legend_at`
+    legend_title : str, optional
+        Title used for the legend.
     bbox_to_anchor : 2-tuple or 4-tuple of floats, optional
         Passed to legend() call.
     outfile : str or None
@@ -357,6 +360,7 @@ def plot_grid(
             kw['bbox_to_anchor'] = bbox_to_anchor
         if legend_loc:
             kw['loc'] = legend_loc
+        kw['title'] = legend_title
 
         if isinstance(legend_at, str) and legend_at.lower() == 'figure':
             # Legend should be placed relative to whole figure. This will only
