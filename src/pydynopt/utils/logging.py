@@ -14,17 +14,18 @@ from typing import Optional
 
 old_factory = logging.getLogRecordFactory()
 
+
 def record_factory(*args, **kwargs):
     record = old_factory(*args, **kwargs)
 
     # Created timestamp in seconds
     created = record.relativeCreated / 1000.0
 
-    rdays = int(created/60/60/24)
+    rdays = int(created / 60 / 60 / 24)
     rem = created % (60 * 60 * 24)
-    rhours = int(rem/60/60)
+    rhours = int(rem / 60 / 60)
     rem = rem % (60 * 60)
-    rminutes = int(rem/60)
+    rminutes = int(rem / 60)
     rseconds = rem % 60
 
     record.rday = rdays
@@ -57,8 +58,10 @@ def configure_logging(reltime: bool = True):
     if reltime:
         # Set custom RecordFactory to attach relative time attributes
         logging.setLogRecordFactory(record_factory)
-        fmt = ('[{rday:d}d {rhrs:02d}:{rmin:02d}:{rsec:04.1f}] {name} {levelname}: '
-               '{message}')
+        fmt = (
+            '[{rday:d}d {rhrs:02d}:{rmin:02d}:{rsec:04.1f}] {name} {levelname}: '
+            '{message}'
+        )
         formatter = logging.Formatter(fmt=fmt, style='{')
     else:
         fmt = '[%(asctime)s] %(name)s %(levelname)s: %(message)s'
@@ -87,14 +90,14 @@ def configure_logging(reltime: bool = True):
 
 
 def add_logfile(
-        file: str,
-        *,
-        logdir: Optional[str] = None,
-        file_timestamp: bool = False,
-        date: bool = False,
-        time: bool = False,
-        reltime: bool = False,
-        append: bool = False
+    file: str,
+    *,
+    logdir: Optional[str] = None,
+    file_timestamp: bool = False,
+    date: bool = False,
+    time: bool = False,
+    reltime: bool = False,
+    append: bool = False,
 ) -> FileHandler:
     """
     Add file handler to current logger.
@@ -150,8 +153,10 @@ def add_logfile(
     elif reltime:
         # Set custom RecordFactory to attach relative time attributes
         logging.setLogRecordFactory(record_factory)
-        fmt = ('[{rday:d}d {rhrs:02d}:{rmin:02d}:{rsec:04.1f}] {name} {levelname}: '
-               '{message}')
+        fmt = (
+            '[{rday:d}d {rhrs:02d}:{rmin:02d}:{rsec:04.1f}] {name} {levelname}: '
+            '{message}'
+        )
         style = '{'
         formatter = logging.Formatter(fmt=fmt, style='{')
     else:
@@ -166,6 +171,7 @@ def add_logfile(
     logger.info(f'Logging to {file}')
 
     import platform
+
     info = platform.uname()
     tokens = []
     if info.node:
@@ -176,6 +182,30 @@ def add_logfile(
     logger.info(f'Running on {", ".join(tok.strip() for tok in tokens)}')
 
     return fh
+
+
+def log_cmd_args(logger: Optional[Logger] = None, level: int = logging.DEBUG) -> None:
+    """
+    Log command line arguments.
+
+    Parameters
+    ----------
+    logger
+    level
+    """
+
+    if logger is None:
+        logger = logging.getLogger()
+
+    import sys
+
+    logger.log(level, 'Script:')
+    logger.log(level, f'  {sys.argv[0]}')
+
+    args = ' '.join(arg.strip() for arg in sys.argv[1:])
+    if args:
+        logger.log(level, 'Command line arguments:')
+        logger.log(level, f'  {args}')
 
 
 def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) -> None:
@@ -193,10 +223,12 @@ def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) 
 
     logger.log(level, 'Python environment:')
     import platform
+
     logger.log(level, f'  Python: {platform.python_version()}')
 
     try:
         import numpy
+
         if version := getattr(numpy, '__version__', None):
             logger.log(level, f'  numpy: {version}')
     except ImportError:
@@ -204,6 +236,7 @@ def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) 
 
     try:
         import scipy
+
         if version := getattr(scipy, '__version__', None):
             logger.log(level, f'  scipy: {version}')
     except ImportError:
@@ -211,6 +244,7 @@ def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) 
 
     try:
         import pandas
+
         if version := getattr(pandas, '__version__', None):
             logger.log(level, f'  pandas: {version}')
     except ImportError:
@@ -218,6 +252,7 @@ def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) 
 
     try:
         import matplotlib
+
         if version := getattr(matplotlib, '__version__', None):
             logger.log(level, f'  matplotlib: {version}')
     except ImportError:
@@ -225,6 +260,7 @@ def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) 
 
     try:
         import numba
+
         if version := getattr(numba, '__version__', None):
             logger.log(level, f'  numba: {version}')
     except ImportError:
@@ -232,6 +268,7 @@ def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) 
 
     try:
         import patsy
+
         if version := getattr(patsy, '__version__', None):
             logger.log(level, f'  patsy: {version}')
     except ImportError:
@@ -239,6 +276,7 @@ def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) 
 
     try:
         import statsmodels
+
         if version := getattr(statsmodels, '__version__', None):
             logger.log(level, f'  statsmodels: {version}')
     except ImportError:
@@ -246,7 +284,16 @@ def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) 
 
     try:
         import sklearn
+
         if version := getattr(sklearn, '__version__', None):
             logger.log(level, f'  sklearn: {version}')
+    except ImportError:
+        pass
+
+    try:
+        import jax
+
+        if version := getattr(jax, '__version__', None):
+            logger.log(level, f'  JAX: {version}')
     except ImportError:
         pass
