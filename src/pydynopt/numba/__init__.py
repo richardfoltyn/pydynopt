@@ -5,12 +5,22 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-from .wrapper import jit, jitclass, overload, register_jitable
-from .wrapper import int8, int16, int32, int64
-from .wrapper import float32, float64
-from .wrapper import boolean, string
-from .wrapper import prange
-from .wrapper import from_dtype
-from .wrapper import has_numba
-
 from .helpers import to_array
+from .wrapper import (
+    JIT_OPTIONS,
+    boolean,
+    float32,
+    float64,
+    from_dtype,
+    has_numba,
+    int16,
+    int32,
+    int64,
+    int8,
+    jit,
+    jitclass,
+    overload,
+    prange,
+    register_jitable,
+    string,
+)

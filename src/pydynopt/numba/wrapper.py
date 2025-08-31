@@ -5,14 +5,28 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-from functools import wraps
 from pydynopt import use_numba
 
 import numpy as np
 
-__all__ = ['jit', 'jitclass', 'overload', 'register_jitable',
-           'float32', 'float64', 'int8', 'int16', 'int32', 'int64',
-           'boolean', 'string', 'prange', 'from_dtype', 'has_numba']
+__all__ = [
+    'jit',
+    'jitclass',
+    'overload',
+    'register_jitable',
+    'float32',
+    'float64',
+    'int8',
+    'int16',
+    'int32',
+    'int64',
+    'boolean',
+    'string',
+    'prange',
+    'from_dtype',
+    'has_numba',
+    'JIT_OPTIONS',
+]
 
 
 def jit_dummy(signature_or_function=None, *jit_args, **jit_kwargs):
@@ -30,6 +44,7 @@ def jit_dummy(signature_or_function=None, *jit_args, **jit_kwargs):
     if pyfunc is not None:
         return pyfunc
     else:
+
         def decorate(func):
             return func
 
@@ -41,6 +56,7 @@ def jitclass_dummy(spec):
     Default implementation of Numba's @jitclass decorator when Numba is
     not available or not desired.
     """
+
     def decorate(func):
         return func
 
@@ -52,6 +68,7 @@ def overload_dummy(func, jit_options={}, strict=True):
     Default implementation of Numba's @overload decorator when Numba is
     not available or not desired.
     """
+
     def decorate(func):
         return func
 
@@ -89,12 +106,14 @@ def register_jitable_dummy(*args, **kwargs):
 def from_dtype(obj):
     return obj
 
+
 class SubscriptableType(np.int64):
     """
     Dummy type that servers as default drop-in for Numba's data types.
     Note: Needs __getitem__ method so that statements such as float64[::1]
     are valid.
     """
+
     def __getitem__(self, item):
         return self
 
@@ -118,6 +137,7 @@ has_numba = False
 if use_numba:
     try:
         from numba import jit
+
         try:
             # Move to numba.experimental in newer Numba releases, try this first
             # to avoid warnings
@@ -133,7 +153,10 @@ if use_numba:
 
         has_numba = True
 
+        # Default options for jit() suitable for most functions
+        JIT_OPTIONS = {'nopython': True, 'nogil': True, 'parallel': False}
+
     except ImportError:
         # Nothing to do, use the default decorators defined above
         has_numba = False
-
+        JIT_OPTIONS = {}
