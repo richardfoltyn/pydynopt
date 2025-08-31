@@ -31,10 +31,17 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-
 import numpy as np
 
-from pydynopt.numba import jitclass, float64, int64, boolean
+from pydynopt.numba import (
+    JIT_OPTIONS,
+    overload,
+    jitclass,
+    register_jitable,
+    float64,
+    int64,
+    boolean,
+)
 
 __all__ = ['brentq', 'RootResult']
 
@@ -56,16 +63,25 @@ VALUEERR = 'value error'
 MAXITER = 'maximum iterations exceeded'
 INPROGRESS = 'No error'
 
-flag_map = {_ECONVERGED: CONVERGED, _ESIGNERR: SIGNERR, _ECONVERR: CONVERR,
-            _EVALUEERR: VALUEERR, _EINPROGRESS: INPROGRESS}
+flag_map = {
+    _ECONVERGED: CONVERGED,
+    _ESIGNERR: SIGNERR,
+    _ECONVERR: CONVERR,
+    _EVALUEERR: VALUEERR,
+    _EINPROGRESS: INPROGRESS,
+}
 
 
-@jitclass([('root', float64),
-           ('fx', float64),
-           ('iterations', int64),
-           ('function_calls', int64),
-           ('converged', boolean),
-           ('flag', int64)])
+@jitclass(
+    [
+        ('root', float64),
+        ('fx', float64),
+        ('iterations', int64),
+        ('function_calls', int64),
+        ('converged', boolean),
+        ('flag', int64),
+    ]
+)
 class RootResult(object):
     """
     Represents the root finding result.
@@ -95,8 +111,16 @@ class RootResult(object):
         self.flag = 0
 
 
-def _brentq(f, a, b, args=(), xtol=2.0e-12, rtol=_rtol, maxiter=_iter,
-           full_output=False, disp=False):
+@register_jitable(**JIT_OPTIONS)
+def _brentq_impl(
+    f,
+    a,
+    b,
+    args=(),
+    xtol=2.0e-12,
+    rtol=_rtol,
+    maxiter=_iter
+):
     """
 
     Find a root of a function in a bracketing interval using Brent's method.
@@ -139,17 +163,21 @@ def _brentq(f, a, b, args=(), xtol=2.0e-12, rtol=_rtol, maxiter=_iter,
     args : tuple, optional
         containing extra arguments for the function `f`.
         `f` is called by ``apply(f, (x)+args)``.
-    full_output : bool, optional
-        Ignored, only present for compatibility with Scipy.
-    disp : bool, optional
-        Ignored, only present for compatibility with Scipy.
 
     Returns
     -------
     x0 : float
         Zero of `f` between `a` and `b`.
-    r : `RootResults` (present if ``full_output = True``)
-        Object containing information about the convergence.
+    fx : float
+        Function value at the found root.
+    converged : bool
+        True if the routine converged.
+    flag : int
+        Integer flag indicating the status of the computation. See flag_map for meanings.
+    it : int
+        Number of iterations needed to find the root.
+    nfev : int
+        Number of function evaluations made.
 
     """
 
@@ -160,34 +188,31 @@ def _brentq(f, a, b, args=(), xtol=2.0e-12, rtol=_rtol, maxiter=_iter,
     spre = 0.0
     scur = 0.0
 
-    res = RootResult()
-    res.flag = _EINPROGRESS
-    res.converged = False
-
     fpre = f(xpre, *args)
     fcur = f(xcur, *args)
 
-    res.function_calls = 2
+    nfev = 2
+    it = 0
 
-    if fpre*fcur > 0:
-        res.flag = _ESIGNERR
-        return 0.0, res
+    if fpre * fcur > 0:
+        flag = _ESIGNERR
+        converged = False
+        root = np.nan
+        return root, np.nan, converged, flag, it, nfev
 
     if fpre == 0.0:
-        res.flag = _ECONVERGED
-        res.converged = True
-        return xpre, res
+        flag = _ECONVERGED
+        converged = True
+        return xpre, fpre, converged, flag, it, nfev
 
     if fcur == 0.0:
-        res.flag = _ECONVERGED
-        res.converged = True
-        return xcur, res
+        flag = _ECONVERGED
+        converged = True
+        return xcur, fcur, converged, flag, it, nfev
 
-    res.iterations = 0
-    for i in range(maxiter):
-        res.iterations += 1
+    for it in range(1, maxiter+1):
 
-        if fpre*fcur < 0.0:
+        if fpre * fcur < 0.0:
             xblk = xpre
             fblk = fpre
             spre = scur = xcur - xpre
@@ -201,24 +226,26 @@ def _brentq(f, a, b, args=(), xtol=2.0e-12, rtol=_rtol, maxiter=_iter,
             fcur = fblk
             fblk = fpre
 
-        delta = (xtol + rtol*abs(xcur)) / 2.0
+        delta = (xtol + rtol * abs(xcur)) / 2.0
         sbis = (xblk - xcur) / 2.0
         if fcur == 0 or (abs(sbis) < delta):
-            res.flag = _ECONVERGED
-            res.converged = True
-            return xcur, res
+            flag = _ECONVERGED
+            converged = True
+            return xcur, fcur, converged, flag, it, nfev
 
         if (abs(spre) > delta) and (abs(fcur) < abs(fpre)):
             if xpre == xblk:
                 # interpolate
-                stry = -fcur*(xcur - xpre)/(fcur - fpre)
+                stry = -fcur * (xcur - xpre) / (fcur - fpre)
             else:
                 # extrapolate
-                dpre = (fpre - fcur)/(xpre - xcur)
-                dblk = (fblk - fcur)/(xblk - xcur)
-                stry = -fcur*(fblk*dblk - fpre*dpre)/(dblk*dpre*(fblk - fpre))
+                dpre = (fpre - fcur) / (xpre - xcur)
+                dblk = (fblk - fcur) / (xblk - xcur)
+                stry = (
+                    -fcur * (fblk * dblk - fpre * dpre) / (dblk * dpre * (fblk - fpre))
+                )
 
-            if 2.0*abs(stry) < min(abs(spre), 3.0*abs(sbis) - delta):
+            if 2.0 * abs(stry) < min(abs(spre), 3.0 * abs(sbis) - delta):
                 # good short step
                 spre = scur
                 scur = stry
@@ -239,31 +266,90 @@ def _brentq(f, a, b, args=(), xtol=2.0e-12, rtol=_rtol, maxiter=_iter,
             xcur += delta if sbis > 0 else -delta
 
         fcur = f(xcur, *args)
-        res.function_calls += 1
+        nfev += 1
 
-    res.flag = _ECONVERGED
-    res.converged = True
+    flag = _ECONVERGED
+    converged = True
 
-    return xcur, res
+    return xcur, fcur, converged, flag, it, nfev
+
+
+@register_jitable(**JIT_OPTIONS)
+def _brentq_simple(
+    f,
+    a,
+    b,
+    args=(),
+    xtol=2.0e-12,
+    rtol=_rtol,
+    maxiter=_iter,
+):
+
+    root, fx, converged, flag, it, nfev = _brentq_impl(f, a, b, args, xtol, rtol, maxiter)
+
+    return root
+
+
+@register_jitable(**JIT_OPTIONS)
+def _brentq_full(
+    f,
+    a,
+    b,
+    args=(),
+    xtol=2.0e-12,
+    rtol=_rtol,
+    maxiter=_iter,
+    full_output=True
+):
+
+    res = RootResult()
+
+    root, fx, converged, flag, it, nfev = _brentq_impl(f, a, b, args, xtol, rtol, maxiter)
+
+    res.root = root
+    res.fx = fx
+    res.converged = converged
+    res.flag = flag
+    res.iterations = it
+    res.function_calls = nfev
+
+    return res
+
 
 
 try:
     from scipy.optimize import brentq
-    from pydynopt.numba import overload
 
-    @overload(brentq)
-    def brentq_generic(f, a, b, args=(), xtol=2.0e-12, rtol=_rtol,
-                       maxiter=_iter, full_output=False, disp=False):
+    @overload(brentq, jit_options=JIT_OPTIONS)
+    def brentq_generic(
+        f, a, b, args=(), xtol=2.0e-12, rtol=_rtol, maxiter=_iter
+    ):
         """
         Returns a Numba-compatible implementation of Brent's method that
         can be used to override Scipy's implementation.
-
-        Returns
-        -------
-        f : callable
         """
-        f = _brentq
+        f = _brentq_simple
         return f
+
+
+    @overload(brentq, jit_options=JIT_OPTIONS)
+    def brentq_generic(
+        f,
+        a,
+        b,
+        args=(),
+        xtol=2.0e-12,
+        rtol=_rtol,
+        maxiter=_iter,
+        full_output=True,
+    ):
+        """
+        Returns a Numba-compatible implementation of Brent's method that
+        can be used to override Scipy's implementation.
+        """
+        f = _brentq_full
+        return f
+
 
 except ImportError:
     brentq = None

@@ -5,11 +5,11 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-from pydynopt.numba import register_jitable
+from pydynopt.numba import register_jitable, JIT_OPTIONS
 import numpy as np
 
 
-@register_jitable
+@register_jitable(**JIT_OPTIONS)
 def chunk_sizes(nthreads, ntasks):
     """
     Split a given number of tasks (almost) uniformly across the given number

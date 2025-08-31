@@ -7,16 +7,15 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-from pydynopt.numba import jit, jitclass, int64
+import numpy as np
+
+from pydynopt.numba import jit, JIT_OPTIONS
 
 __all__ = ['bsearch', 'bsearch_impl']
 
 
-JIT_OPTIONS = {'nopython': True, 'nogil': True, 'parallel': False}
-
-
 @jit(**JIT_OPTIONS)
-def bsearch(needle, haystack, ilb=0):
+def bsearch(needle: np.number, haystack: np.ndarray, ilb: int = 0) -> int:
     """
     Return the index of the lower bound of a bracketing interval which contains
     needle, ie
@@ -31,15 +30,15 @@ def bsearch(needle, haystack, ilb=0):
 
     Parameters
     ----------
-    needle : float or int
-    haystack : np.ndarray
-    ilb : int
+    needle :
+    haystack :
+    ilb :
         Optional (cached) index of lower bound of bracketing interval to be
         used as initial value.
 
     Returns
     -------
-    ilb : int
+    ilb :
         Index of lower bound of bracketing interval.
     """
 
@@ -49,26 +48,26 @@ def bsearch(needle, haystack, ilb=0):
         ilb = -1
         return ilb
 
-    ilb = max(0, min(ilb, n-2))
+    ilb = max(0, min(ilb, n - 2))
     ilb = bsearch_impl(needle, haystack, ilb)
 
     return ilb
 
 
 @jit(inline='always', **JIT_OPTIONS)
-def bsearch_impl(needle, haystack, ilb=0):
+def bsearch_impl(needle: np.number, haystack: np.ndarray, ilb: int = 0) -> int:
     """
 
     Parameters
     ----------
     needle :
-    haystack : np.ndarray
-    ilb : int
+    haystack :
+    ilb :
         Cached value of index of lower bound of bracketing interval.
 
     Returns
     -------
-    ilb : int
+    ilb :
         Index of lower bound of bracketing interval.
     """
 
@@ -76,7 +75,7 @@ def bsearch_impl(needle, haystack, ilb=0):
     iub = n - 1
 
     if haystack[ilb] <= needle:
-        if haystack[ilb+1] > needle:
+        if haystack[ilb + 1] > needle:
             return ilb
         elif ilb == (n - 2):
             return ilb
@@ -84,7 +83,7 @@ def bsearch_impl(needle, haystack, ilb=0):
         ilb, iub = 0, ilb
 
     while iub > (ilb + 1):
-        imid = (iub + ilb)//2
+        imid = (iub + ilb) // 2
         if haystack[imid] > needle:
             iub = imid
         else:
