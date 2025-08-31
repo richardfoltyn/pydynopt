@@ -6,24 +6,16 @@ https://creativecommons.org/licenses/by/4.0/
 
 Author: Richard Foltyn
 """
+
 from math import log
 
 import numpy as np
-from scipy.optimize import brentq
 
-from pydynopt.numba import register_jitable, jit
-from .numba.arrays import ind2sub_array, ind2sub_scalar
-from .numba.arrays import ind2sub_array_impl, ind2sub_scalar_impl
-from .numba.arrays import ind2sub_axis_array, ind2sub_axis_scalar
-from .numba.arrays import ind2sub_axis_array_impl, ind2sub_axis_scalar_impl
-from .numba.arrays import sub2ind_array, sub2ind_scalar
+from pydynopt.numba import register_jitable, overload, JIT_OPTIONS
 from .numba.arrays import clip_prob_array, clip_prob_scalar
 
-JIT_OPTIONS = {'nopython': True, 'nogil': True, 'parallel': False,
-               'cache': True}
 
-
-@register_jitable(parallel=False)
+@register_jitable(**JIT_OPTIONS)
 def powerspace(xmin: float, xmax: float, n: int, exponent: float) -> np.ndarray:
     """
     Create a "power-spaced" grid of size n.
@@ -62,114 +54,9 @@ def powerspace(xmin: float, xmax: float, n: int, exponent: float) -> np.ndarray:
     return xx
 
 
-ind2sub_scalar_jit = jit(ind2sub_scalar, **JIT_OPTIONS)
-ind2sub_array_jit = jit(ind2sub_array, **JIT_OPTIONS)
-
-ind2sub_scalar_impl_jit = jit(ind2sub_scalar_impl, **JIT_OPTIONS)
-ind2sub_array_impl_jit = jit(ind2sub_array_impl, **JIT_OPTIONS)
-
-ind2sub_axis_scalar_jit = jit(ind2sub_axis_scalar, **JIT_OPTIONS)
-ind2sub_axis_array_jit = jit(ind2sub_axis_array, **JIT_OPTIONS)
-
-ind2sub_axis_scalar_impl_jit = jit(ind2sub_axis_scalar_impl, **JIT_OPTIONS)
-ind2sub_axis_array_impl_jit = jit(ind2sub_axis_array_impl, **JIT_OPTIONS)
-
-
-def ind2sub(indices, shape, axis=None, out=None):
-    """
-    Converts a flat index or array of flat indices into a tuple of coordinate
-    arrays.
-
-    Equivalent to Numpy's unravel_index(), but with fewer features and thus
-    hopefully faster.
-
-    Parameters
-    ----------
-    indices : int or array_like
-        An integer or integer array whose elements are indices into the
-        flattened version of an array of dimensions `shape`.
-    axis : int, optional
-        If not None, restricts the return array to contain only the coordinates
-        along `axis`.
-    shape : array_like
-        The shape of the array to use for unraveling indices.
-    out : np.ndarray or None
-        Optional output array (only Numpy arrays supported in Numba mode)
-
-    Returns
-    -------
-    coords : int or np.ndarray
-        Array of coordinates
-    """
-
-    if np.isscalar(indices):
-        if axis is None:
-            if out is None:
-                # Pre-allocate array here so we don't have array dtype
-                # conflicts in the JIT-able code.
-                out = np.empty(len(shape), dtype=np.asarray(indices).dtype)
-
-            out = ind2sub_scalar_impl_jit(indices, shape, axis, out)
-        else:
-            if out is not None:
-                # Implementation routine ignores out argument and only returns
-                # a scalar.
-                out = ind2sub_axis_scalar_impl_jit(indices, shape, axis)
-            else:
-                # JIT-able routine writes index into first element of out!
-                out = ind2sub_axis_scalar_jit(indices, shape, axis, out)
-    else:
-        if out is None:
-            shp = (len(indices), )
-            if axis is None:
-                # With axis=None, output will be a 2d-array.
-                shp += (len(shape), )
-
-        if axis is None:
-            out = ind2sub_array_impl_jit(indices, shape, axis, out)
-        else:
-            out = ind2sub_axis_array_impl_jit(indices, shape, axis, out)
-
-    return out
-
-
-sub2ind_scalar_jit = jit(sub2ind_scalar, **JIT_OPTIONS)
-sub2ind_array_jit = jit(sub2ind_array, **JIT_OPTIONS)
-
-
-def sub2ind(coords, shape, out=None):
-    """
-    Converts an array of indices (coordinates) into a multi-dimensional array
-    into an array of flat indices.
-
-    Parameters
-    ----------
-    coords : array_like
-        Integer array of coordinates. Coordinates for each dimension are
-        arranged along the first axis.
-    shape : array_like
-        Shape of array into which indices from `coords` apply.
-    out : np.ndarray or None
-        Optional output array of flat indices.
-
-    Returns
-    -------
-    out : np.ndarray
-        Array of indices into flatted array.
-    """
-
-    coords = np.atleast_1d(coords)
-
-    if coords.ndim == 1:
-        out = sub2ind_scalar_jit(coords, shape, out)
-    elif coords.ndim == 2:
-        out = sub2ind_array_jit(coords, shape, out)
-
-    return out
-
-
-def logspace(start, stop, num, log_shift=0.0, x0=None, frac_at_x0=None,
-             insert_vals=None):
+def logspace(
+    start, stop, num, log_shift=0.0, x0=None, frac_at_x0=None, insert_vals=None
+):
     """
     Create grid that is by default uniformly spaced in logs. Alternatively,
     additional arguments can be specified to alter the grid point density,
@@ -190,6 +77,8 @@ def logspace(start, stop, num, log_shift=0.0, x0=None, frac_at_x0=None,
     grid : np.ndarray
     """
 
+    from scipy.optimize import brentq
+
     if insert_vals:
         insert_vals = np.atleast_1d(insert_vals)
 
@@ -200,7 +89,7 @@ def logspace(start, stop, num, log_shift=0.0, x0=None, frac_at_x0=None,
             raise ValueError(msg)
 
         if x0 is None:
-            x0 = (stop+start)/2.0
+            x0 = (stop + start) / 2.0
         elif x0 <= start:
             msg = 'Invalid argument: x0 > start required!'
             raise ValueError(msg)
@@ -217,8 +106,10 @@ def logspace(start, stop, num, log_shift=0.0, x0=None, frac_at_x0=None,
             else:
                 ub *= 10
         else:
-            msg = f'Cannot find grid spacing for parameters x0={x0:g} and ' \
-                  f'frac_at_x0={frac_at_x0:g}'
+            msg = (
+                f'Cannot find grid spacing for parameters x0={x0:g} and '
+                f'frac_at_x0={frac_at_x0:g}'
+            )
             raise ValueError(msg)
 
         x = brentq(fobj, -start + 1.0e-12, ub)
@@ -266,3 +157,36 @@ def clip_prob(value, tol, out=None):
     else:
         return clip_prob_array(value, tol, out)
 
+
+@overload(clip_prob, jit_options=JIT_OPTIONS)
+def clip_prob_generic(value, tol, out=None):
+    """
+    Generic for scalar arguments and array arguments without a return array `out`.
+    """
+
+    from numba import types
+    from .numba.arrays import clip_prob_scalar, clip_prob_array
+
+    f = None
+    if isinstance(value, types.Float):
+        f = clip_prob_scalar
+    elif isinstance(value, types.Array) and out is None:
+        f = clip_prob_array
+
+    return f
+
+
+@overload(clip_prob, jit_options=JIT_OPTIONS)
+def clip_prob_generic(value, tol, out):
+    """
+    Generic fo array arguments with an `out` argument that is not None.
+    """
+
+    from numba import types
+    from .numba.arrays import clip_prob_array_impl
+
+    f = None
+    if isinstance(value, types.Array) and out is not None:
+        f = clip_prob_array_impl
+
+    return f
