@@ -8,13 +8,12 @@ Author: Richard Foltyn
 """
 
 import sys
-import copy
 from collections.abc import Sequence
 from typing import Optional, Any
 
 import numpy as np
 
-from . import overload
+from . import overload, JIT_OPTIONS
 from ..utils import anything_to_tuple
 
 
@@ -87,7 +86,7 @@ def to_array_default(obj, dtype=None):
     return x
 
 
-@overload(to_array, jit_options={'nogil': True, 'parallel': False})
+@overload(to_array, jit_options=JIT_OPTIONS)
 def array_generic(obj, dtype=None):
 
     from numba import types
@@ -148,7 +147,10 @@ def create_numba_instance(
 
     # if this already is a compiled instance, return it immediately
     if not has_numba or hasattr(obj, '_numba_type_'):
-        return obj
+        if return_type:
+            return obj, obj.__class__
+        else:
+            return obj
 
     # object is not an instance of a Numba type, we need to build
     # signature for jitclass().

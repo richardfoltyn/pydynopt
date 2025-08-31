@@ -7,32 +7,66 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
+from typing import Optional
+
 import numpy as np
+from numpy.typing import ArrayLike
 
-from pydynopt.numba import jit
-from .numba.linear import _interp1d_eval_array, _interp1d_locate_array
-from .numba.linear import interp1d_array
+from pydynopt.numba import jit, JIT_OPTIONS, overload
+from .numba.linear import (
+    interp1d_array,
+    interp1d_eval_array,
+    interp1d_eval_scalar,
+    interp1d_locate_array,
+    interp1d_locate_scalar,
+    interp1d_scalar,
+    interp2d_array,
+    interp2d_eval_array,
+    interp2d_eval_scalar,
+    interp2d_locate_array,
+    interp2d_locate_scalar,
+    interp2d_scalar,
+    interp1d_locate_array_alloc,
+    interp1d_eval_array_alloc,
+)
 
-from .numba.linear import interp2d_locate_array, interp2d_eval_array
-from .numba.linear import interp2d_array
+__all__ = [
+    'interp1d_locate',
+    'interp1d_eval',
+    'interp1d',
+    'interp2d_locate',
+    'interp2d_eval',
+    'interp2d',
+]
 
 # Add @jit wrappers around Numba implementations of interpolation routines
-interp1d_locate_jit = jit(_interp1d_locate_array, nopython=True)
-interp1d_eval_jit = jit(_interp1d_eval_array, nopython=True)
-interp1d_jit = jit(interp1d_array, nopython=True)
+interp1d_locate_jit = jit(interp1d_locate_array, **JIT_OPTIONS)
+interp1d_eval_jit = jit(interp1d_eval_array, **JIT_OPTIONS)
+interp1d_jit = jit(interp1d_array, **JIT_OPTIONS)
 
-interp2d_locate_jit = jit(interp2d_locate_array, nopython=True)
-interp2d_eval_jit = jit(interp2d_eval_array, nopython=True)
-interp2d_jit = jit(interp2d_array, nopython=True)
+interp2d_locate_jit = jit(interp2d_locate_array, **JIT_OPTIONS)
+interp2d_eval_jit = jit(interp2d_eval_array, **JIT_OPTIONS)
+interp2d_jit = jit(interp2d_array, **JIT_OPTIONS)
 
 
-def interp1d_locate(x, xp, ilb=0, index_out=None, weight_out=None):
+def interp1d_locate(
+    x: ArrayLike,
+    xp: np.ndarray,
+    ilb: int = 0,
+    index_out: Optional[np.ndarray] = None,
+    weight_out: Optional[np.ndarray] = None,
+):
     """
+    Python wrapper around Numba implementation of 1d interpolation search.
+
+    Note: This function cannot be made directly available as a Numba function
+    via @register_jitable() since the dimensions of inputs and outputs vary.
 
     Parameters
     ----------
     x
     xp
+    ilb
     index_out
     weight_out
 
@@ -64,9 +98,37 @@ def interp1d_locate(x, xp, ilb=0, index_out=None, weight_out=None):
     return index_out, weight_out
 
 
-def interp1d_eval(index, weight, fp, extrapolate=True,
-                  left=np.nan, right=np.nan, out=None):
+@overload(interp1d_locate, jit_options=JIT_OPTIONS)
+def _ov_interp1d_locate(x, xp, ilb=0, index_out=None, weight_out=None):
     """
+    Overload for inter1d_locate with a scalar argument.
+    """
+    from numba import types
+
+    f = None
+
+    if isinstance(x, types.Number):
+        f = interp1d_locate_scalar
+    elif isinstance(x, types.Array):
+        f = interp1d_locate_array_alloc
+
+    return f
+
+
+def interp1d_eval(
+    index: np.ndarray | np.number,
+    weight: ArrayLike | np.number,
+    fp: ArrayLike,
+    extrapolate: bool = True,
+    left: np.floating = np.nan,
+    right: np.floating = np.nan,
+    out: Optional[np.ndarray] = None,
+):
+    """
+    Python wrapper around Numba implementation of 1d interpolation.
+
+    Note: This function cannot be made directly available as a Numba function
+    via @register_jitable() since the dimensions of inputs and outputs vary.
 
     Parameters
     ----------
@@ -102,9 +164,37 @@ def interp1d_eval(index, weight, fp, extrapolate=True,
     return out
 
 
-def interp1d(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan,
-             out=None, axis=-1):
+@overload(interp1d_eval, jit_options=JIT_OPTIONS)
+def _ov_interp1d_eval_array(
+    index, weight, fp, extrapolate=True, left=np.nan, right=np.nan, out=None
+):
+    from numba import types
+
+    f = None
+    if isinstance(index, types.Number):
+        f = interp1d_eval_scalar
+    elif isinstance(index, types.Array):
+        f = interp1d_eval_array_alloc
+
+    return f
+
+
+def interp1d(
+    x: ArrayLike | np.number,
+    xp: ArrayLike,
+    fp: ArrayLike,
+    ilb: int = 0,
+    extrapolate: bool = True,
+    left: np.floating = np.nan,
+    right: np.floating = np.nan,
+    out: Optional[np.ndarray[np.floating]] = None,
+    axis: int = -1,
+):
     """
+    Python wrapper around Numba implementation of 1d interpolation.
+
+    Note: This function cannot be made directly available as a Numba function
+    via @register_jitable() since the dimensions of inputs and outputs vary.
 
     Parameters
     ----------
@@ -132,7 +222,7 @@ def interp1d(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan,
     if axis < 0:
         axis += fp.ndim
 
-    out_shp = list(fp.shape[:axis]) + list(fp.shape[axis+1:]) + list(x1d.shape)
+    out_shp = list(fp.shape[:axis]) + list(fp.shape[axis + 1 :]) + list(x1d.shape)
     out_shp = tuple(out_shp)
 
     # Move interpolation axis to the very end, reshape into two dimensions
@@ -184,8 +274,41 @@ def interp1d(x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan,
     return out
 
 
-def interp2d_locate(x0, x1, xp0, xp1, ilb=None, index_out=None,
-                    weight_out=None):
+@overload(interp1d, jit_options=JIT_OPTIONS)
+def _interp1d_generic(
+    x, xp, fp, ilb=0, extrapolate=True, left=np.nan, right=np.nan, out=None
+):
+    from numba import types
+
+    f = None
+
+    if isinstance(x, types.Number):
+        f = interp1d_scalar
+    elif isinstance(x, types.Array):
+        f = interp1d_array
+
+    return f
+
+
+@overload(interp1d, jit_options=JIT_OPTIONS)
+def _interp1d_impl_generic(
+    x, xp, fp, out, ilb=0, extrapolate=True, left=np.nan, right=np.nan
+):
+    from numba import types
+
+    f = None
+
+    from .numba.linear import interp1d_array_impl
+
+    if isinstance(x, types.Number):
+        pass
+    elif isinstance(x, types.Array):
+        f = interp1d_array_impl
+
+    return f
+
+
+def interp2d_locate(x0, x1, xp0, xp1, ilb=None, index_out=None, weight_out=None):
 
     xx0 = np.atleast_1d(x0)
     xx1 = np.atleast_1d(x1)
@@ -213,8 +336,8 @@ def interp2d_locate(x0, x1, xp0, xp1, ilb=None, index_out=None,
     interp2d_locate_jit(xx0, xx1, xp0, xp1, ilb, index_out, weight_out)
 
     if np.isscalar(x0) and np.isscalar(x1):
-        index_out = index_out.reshape((-1, ))
-        weight_out = weight_out.reshape((-1, ))
+        index_out = index_out.reshape((-1,))
+        weight_out = weight_out.reshape((-1,))
 
     return index_out, weight_out
 
@@ -297,3 +420,68 @@ def interp2d(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
         out = out.item()
 
     return out
+
+
+@overload(interp2d, jit_options=JIT_OPTIONS)
+def _interp2d_generic(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
+    from numba import types
+
+    f = None
+
+    if isinstance(x0, types.Number):
+        f = interp2d_scalar
+    elif isinstance(x0, types.Array):
+        f = interp2d_array
+
+    return f
+
+
+@overload(interp2d_locate, jit_options=JIT_OPTIONS)
+def _interp2d_locate_generic(
+    x0, x1, xp0, xp1, ilb=None, index_out=None, weight_out=None
+):
+    from numba import types
+
+    f = None
+
+    if isinstance(x0, types.Number):
+        if ilb is None or index_out is None or weight_out is None:
+            f = interp2d_locate_scalar
+    elif isinstance(x0, types.Array):
+        f = interp2d_locate_array
+
+    return f
+
+
+@overload(interp2d_locate, jit_options=JIT_OPTIONS)
+def _interp2d_locate_impl_generic(x0, x1, xp0, xp1, ilb, index_out, weight_out):
+    from numba import types
+
+    from .numba.linear import interp2d_locate_scalar_impl
+
+    f = None
+
+    if isinstance(x0, types.Number):
+        f = interp2d_locate_scalar_impl
+
+    return f
+
+
+@overload(interp2d_eval, jit_options=JIT_OPTIONS)
+def _interp2d_eval_generic(index, weight, fp, extrapolate=True, out=None):
+
+    from numba import types
+
+    f = None
+
+    # For whatever reason, index might be inferred as optional type, so
+    # first recover underlying type if necessary.
+    if isinstance(index, types.Optional):
+        index = index.type
+
+    if isinstance(index, types.Array) and index.ndim == 1:
+        f = interp2d_eval_scalar
+    elif isinstance(index, types.Array):
+        f = interp2d_eval_array
+
+    return f
