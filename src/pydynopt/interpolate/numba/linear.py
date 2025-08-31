@@ -23,7 +23,7 @@ def interp1d_locate_scalar(x, xp, ilb: int = 0, index_out=None, weight_out=None)
 
     Parameters
     ----------
-    x : float
+    x : np.floating or float
         Sample point at which to interpolate.
     xp : np.ndarray
         Grid points representing domain over which to interpolate.
@@ -50,8 +50,7 @@ def interp1d_locate_scalar(x, xp, ilb: int = 0, index_out=None, weight_out=None)
     return ilb, weight
 
 
-@register_jitable(**JIT_OPTIONS)
-def interp1d_locate_array(x, xp, ilb: int = 0, index_out=None, weight_out=None):
+def interp1d_locate_array_alloc(x, xp, ilb: int = 0, index_out=None, weight_out=None):
     """
     Numba implementation for computing the interpolation bracketing intervals
     and weights for array-valued arguments.
@@ -81,15 +80,46 @@ def interp1d_locate_array(x, xp, ilb: int = 0, index_out=None, weight_out=None):
     lind_out = np.empty_like(x, dtype=np.int64) if index_out is None else index_out
     lwgt_out = np.empty_like(x, dtype=x.dtype) if weight_out is None else weight_out
 
-    lind_out_flat = lind_out.reshape((-1,))
-    lwgt_out_flat = lwgt_out.reshape((-1,))
+    return interp1d_locate_array(x, xp, ilb, lind_out, lwgt_out)
+
+
+@register_jitable(**JIT_OPTIONS)
+def interp1d_locate_array(x, xp, ilb, index_out, weight_out):
+    """
+    Numba implementation for computing the interpolation bracketing intervals
+    and weights for array-valued arguments and pre-allocated output arrays.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Sample points at which to interpolate.
+    xp : np.ndarray
+        Grid points representing domain over which to interpolate.
+    ilb : int
+        Initial guess for index of lower bound of bracketing interval of
+        the first element.
+        NOTE: No error-checking is performed on its value!
+    index_out : np.ndarray or None
+        Optional pre-allocated output array for indices of lower bounds
+        of bracketing interval.
+    weight_out : np.ndarray or None
+        Optional pre-allocated output array for lower bound weights.
+
+    Returns
+    -------
+    index_out : np.ndarray
+    weight_out : np.ndarray
+    """
+
+    lind_out_flat = index_out.reshape((-1,))
+    lwgt_out_flat = weight_out.reshape((-1,))
 
     for i, xi in enumerate(x.flat):
         ilb, wgt_lb = interp1d_locate_scalar(xi, xp, ilb)
         lind_out_flat[i] = ilb
         lwgt_out_flat[i] = wgt_lb
 
-    return lind_out, lwgt_out
+    return index_out, weight_out
 
 
 @register_jitable(**JIT_OPTIONS)
@@ -101,9 +131,9 @@ def interp1d_eval_scalar(
 
     Parameters
     ----------
-    index : int
+    index : np.integer or int
         Index of lower bound of bracketing interval.
-    weight : float
+    weight : np.floating or float
         Weight on lower bound of bracketing interval.
     fp : np.ndarray
         Function values defined on original grid points.
@@ -113,8 +143,6 @@ def interp1d_eval_scalar(
         Value to return if sample point is below the domain lower bound.
     right : float
         Value to return if sample point is above the domain upper bound.
-    out : None
-        Ignored for scalar sample points.
 
     Returns
     -------
@@ -133,8 +161,7 @@ def interp1d_eval_scalar(
     return fx
 
 
-@register_jitable(**JIT_OPTIONS)
-def interp1d_eval_array(
+def interp1d_eval_array_alloc(
     index, weight, fp, extrapolate=True, left=np.nan, right=np.nan, out=None
 ):
     """
@@ -165,16 +192,47 @@ def interp1d_eval_array(
 
     lout = np.empty_like(weight) if out is None else out
 
+    return interp1d_eval_array(index, weight, fp, extrapolate, left, right, lout)
+
+
+@register_jitable(**JIT_OPTIONS)
+def interp1d_eval_array(index, weight, fp, extrapolate, left, right, out):
+    """
+    Numba implementation to evaluate an intepolant and multiple sample points.
+
+    Parameters
+    ----------
+    index : np.ndarray
+        Indices of lower bounds of bracketing intervals.
+    weight : np.ndarray
+        Weights on lower bounds of bracketing intervals.
+    fp : np.ndarray
+        Function values defined on original grid points.
+    extrapolate : bool
+        If true, extrapolate values outside of domain.
+    left : float
+        Value to return if sample point is below the domain lower bound.
+    right : float
+        Value to return if sample point is above the domain upper bound.
+    out : np.ndarray or None
+        Optional pre-allocated output array.
+
+    Returns
+    -------
+    out : np.ndarray
+        Interpolant evaluated at sample points.
+    """
+
     index_flat = index.reshape((-1,))
     weight_flat = weight.reshape((-1,))
-    out_flat = lout.reshape((-1,))
+    out_flat = out.reshape((-1,))
 
     for i in range(out_flat.size):
         out_flat[i] = interp1d_eval_scalar(
             index_flat[i], weight_flat[i], fp, extrapolate, left, right
         )
 
-    return lout
+    return out
 
 
 def interp1d_scalar(

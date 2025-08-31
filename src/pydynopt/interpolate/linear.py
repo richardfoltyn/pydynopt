@@ -26,6 +26,8 @@ from .numba.linear import (
     interp2d_locate_array,
     interp2d_locate_scalar,
     interp2d_scalar,
+    interp1d_locate_array_alloc,
+    interp1d_eval_array_alloc,
 )
 
 __all__ = [
@@ -49,10 +51,10 @@ interp2d_jit = jit(interp2d_array, **JIT_OPTIONS)
 
 def interp1d_locate(
     x: ArrayLike,
-    xp: ArrayLike,
+    xp: np.ndarray,
     ilb: int = 0,
-    index_out: Optional[np.ndarray[np.integer]] = None,
-    weight_out: Optional[np.ndarray[np.floating]] = None,
+    index_out: Optional[np.ndarray] = None,
+    weight_out: Optional[np.ndarray] = None,
 ):
     """
     Python wrapper around Numba implementation of 1d interpolation search.
@@ -97,7 +99,10 @@ def interp1d_locate(
 
 
 @overload(interp1d_locate, jit_options=JIT_OPTIONS)
-def _interp1d_locate_generic(x, xp, ilb=0, index_out=None, weight_out=None):
+def _ov_interp1d_locate(x, xp, ilb=0, index_out=None, weight_out=None):
+    """
+    Overload for inter1d_locate with a scalar argument.
+    """
     from numba import types
 
     f = None
@@ -105,19 +110,19 @@ def _interp1d_locate_generic(x, xp, ilb=0, index_out=None, weight_out=None):
     if isinstance(x, types.Number):
         f = interp1d_locate_scalar
     elif isinstance(x, types.Array):
-        f = interp1d_locate_array
+        f = interp1d_locate_array_alloc
 
     return f
 
 
 def interp1d_eval(
-    index: ArrayLike | np.number,
+    index: np.ndarray | np.number,
     weight: ArrayLike | np.number,
     fp: ArrayLike,
     extrapolate: bool = True,
     left: np.floating = np.nan,
     right: np.floating = np.nan,
-    out: Optional[np.ndarray[np.floating]] = None,
+    out: Optional[np.ndarray] = None,
 ):
     """
     Python wrapper around Numba implementation of 1d interpolation.
@@ -160,7 +165,7 @@ def interp1d_eval(
 
 
 @overload(interp1d_eval, jit_options=JIT_OPTIONS)
-def _interp1d_eval_generic(
+def _ov_interp1d_eval_array(
     index, weight, fp, extrapolate=True, left=np.nan, right=np.nan, out=None
 ):
     from numba import types
@@ -169,7 +174,7 @@ def _interp1d_eval_generic(
     if isinstance(index, types.Number):
         f = interp1d_eval_scalar
     elif isinstance(index, types.Array):
-        f = interp1d_eval_array
+        f = interp1d_eval_array_alloc
 
     return f
 
@@ -415,7 +420,6 @@ def interp2d(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
         out = out.item()
 
     return out
-
 
 
 @overload(interp2d, jit_options=JIT_OPTIONS)

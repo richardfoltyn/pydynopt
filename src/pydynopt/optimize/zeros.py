@@ -15,7 +15,7 @@ __all__ = ['newton_bisect']
 
 
 @register_jitable(**JIT_OPTIONS)
-def _newton_bisect(
+def _newton_bisect_impl(
     func,
     x0,
     a=None,
@@ -285,7 +285,6 @@ def _newton_bisect(
         return x, fx, converged, flag, it, nfev
 
 
-@register_jitable(**JIT_OPTIONS)
 def _newton_bisect_full(
     func,
     x0,
@@ -301,30 +300,11 @@ def _newton_bisect_full(
 ):
     """
     Wrapper function to for newton_bisect that additiopnally returns a RootResult object.
-
-    Parameters
-    ----------
-    func
-    x0
-    a
-    b
-    args
-    jac
-    eps
-    xtol
-    tol
-    maxiter
-    full_output
-
-    Returns
-    -------
-    root : float
-    result : RootResult
     """
 
     result = RootResult()
 
-    root, fx, converged, flag, it, nfev = _newton_bisect(
+    root, fx, converged, flag, it, nfev = _newton_bisect_impl(
         func, x0, a, b, args, jac, eps, xtol, tol, maxiter
     )
 
@@ -337,6 +317,25 @@ def _newton_bisect_full(
 
     return root, result
 
+
+def _newton_bisect_simple(
+    func,
+    x0,
+    a=None,
+    b=None,
+    args=(),
+    jac=False,
+    eps=1.0e-8,
+    xtol=1.0e-8,
+    tol=1.0e-8,
+    maxiter=50
+):
+
+    root, fx, converged, flag, it, nfev = _newton_bisect_impl(
+        func, x0, a, b, args, jac, eps, xtol, tol, maxiter
+    )
+
+    return root, fx
 
 def newton_bisect(
     func,
@@ -364,7 +363,7 @@ def newton_bisect(
     if full_output:
         return root, res
     else:
-        return root
+        return root, res.fx
 
 
 @overload(newton_bisect, jit_options=JIT_OPTIONS)
@@ -383,7 +382,7 @@ def newton_bisect_generic(
     """
     Overload for tuple of scalar return values.
     """
-    f = _newton_bisect
+    f = _newton_bisect_simple
 
     return f
 
@@ -409,4 +408,3 @@ def newton_bisect_generic(
     f = _newton_bisect_full
 
     return f
-
