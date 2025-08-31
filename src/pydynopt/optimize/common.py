@@ -7,8 +7,7 @@ Author: Richard Foltyn
 
 import numpy as np
 
-from pydynopt.numba import overload, jitclass, register_jitable
-from pydynopt.numba import int64, float64
+from pydynopt.numba import overload, register_jitable, JIT_OPTIONS
 
 
 class OptimResult:
@@ -78,7 +77,7 @@ def _extract_arg(arg, index=0):
         return arg
 
 
-@overload(_extract_arg, jit_options={'nogil': True})
+@overload(_extract_arg, jit_options=JIT_OPTIONS)
 def _extract_arg_generic(arg, index=0):
 
     from numba import types
@@ -93,10 +92,11 @@ def _extract_arg_generic(arg, index=0):
     return f
 
 
-@register_jitable(parallel=False, nogil=True)
+@register_jitable(**JIT_OPTIONS)
 def _nderiv_array(func, x, fx=np.nan, eps=1.0e-8, *args):
     """
-    Numerically forward-differentiate function and given point.
+    Numerically forward-differentiate a function which takes an array argument at
+    a given point.
 
     Parameters
     ----------
@@ -130,6 +130,7 @@ def _nderiv_array(func, x, fx=np.nan, eps=1.0e-8, *args):
     return fpx
 
 
+@register_jitable(**JIT_OPTIONS)
 def _nderiv_scalar(func, x, fx=np.nan, eps=1.0e-8, *args):
     """
 
@@ -157,38 +158,6 @@ def _nderiv_scalar(func, x, fx=np.nan, eps=1.0e-8, *args):
     dfx = fx_all[0] - fx
     dx = eps
     fpx = dfx / dx
-
-    return fpx
-
-
-@register_jitable(nogil=True, parallel=False)
-def nderiv_multi(func, x, fx=None, eps=1.0e-8, *args):
-    """
-    Compute derivative of scalar function on scalar domain at multiple values
-    at once.
-
-    Parameters
-    ----------
-    func : callable
-    x : np.ndarray
-    fx : np.ndarray
-    eps : float
-    args
-
-    Returns
-    -------
-    fpx : np.ndarray
-    """
-
-    if fx is None:
-        obj = func(x, *args)
-        fx0 = _extract_arg(obj)
-    else:
-        fx0 = fx
-
-    obj = func(x + eps, *args)
-    fx_eps = _extract_arg(obj)
-    fpx = (fx_eps - fx0) / eps
 
     return fpx
 
@@ -223,7 +192,7 @@ def nderiv(func, x, fx=np.nan, eps=1.0e-8, *args):
     return fpx
 
 
-@overload(nderiv, jit_options={'parallel': False, 'nogil': True})
+@overload(nderiv, jit_options=JIT_OPTIONS)
 def nderiv_generic(func, x, fx=np.nan, eps=1.0e-8, *args):
 
     from numba import types
