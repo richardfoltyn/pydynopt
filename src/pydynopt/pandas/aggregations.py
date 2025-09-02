@@ -616,10 +616,10 @@ def interpolate_bin_weights(
     generate: str = 'weight'
 ) -> pd.Series:
     """
-    Create weights that map bins defined on a grid of `values`
+    Create weights that map (increasing!) values of a CDF defined on a grid of `values`
     into bins with defined by `edges`.
 
-    Weights are 0 if the grid point is outside a bin, 1 if it is fully
+    Weights are 0 if the grid point is outside a bracket, 1 if it is fully
     contained, and in (0,1) if it is partially contained.
 
     Parameters
@@ -628,7 +628,7 @@ def interpolate_bin_weights(
         Edges defining individual bins. DataFrame with MultiIndex can be passed
         if edges differ by some index level.
     values : pd.DataFrame or Sequence of float
-        Grid of values or edges to be binned.
+        Grid of increasing CDF values or edges to be mapped into brackets.
     name_bins : str
         Index name assigned to level representing bins.
     name_values : str, optional
@@ -709,46 +709,57 @@ def interpolate_bin_weights(
     # --- Create weights for each cell and each value ---
 
     def _create_weights(x):
+        # Bin lower and upper bounds
         lb, ub = float(x['lb'].iloc[0]), float(x['ub'].iloc[0])
 
-        # Do not use interp_locate() as bsearch cannot deal with flat CDFs. Instead
+        # Do not use interp_locate() as bsearch cannot deal with flat CDFs. Instead,
         # manually compute number of bins below given percentile.
 
-        ilb = max(0, np.sum(values < lb) - 1)
-        ilb += int(values[ilb + 1] <= lb)
-        dx = values[ilb + 1] - values[ilb]
+        # 1. Find the first grid point with at least partial overlap (overlap could be
+        # only the edge):
+        # Number of values strictly below lb
+        ifirst = max(0, np.sum(values < lb) - 1)
+        # Correct for edge case
+        ifirst += int(values[ifirst + 1] <= lb)
+        # Interval spanned by first grid point (= mass contained in that interval)
+        dx = values[ifirst + 1] - values[ifirst]
         if dx > 0:
-            # Weight on lower bracket boundary
-            wgt_lb = 1.0 - (lb - values[ilb]) / dx
+            # Weight on the first point
+            wgt_first = 1.0 - (lb - values[ifirst]) / dx
         else:
             # Flat region, cannot interpolate.
-            wgt_lb = 1.0
+            wgt_first = 1.0
 
-        iub = max(0, np.sum(values < ub) - 1)
-        iub += int(values[iub+1] <= ub)
-        iub = min(iub, len(values) - 2)
-        dx = values[iub + 1] - values[iub]
+        # Identify last grid point with at least partial overlap (could be the same as
+        # the first point if the bin is larger than the bin).
+        ilast = max(0, np.sum(values < ub) - 1)
+        ilast += int(values[ilast+1] <= ub)
+        ilast = min(ilast, len(values) - 2)
+        # Interval spanned by last point (= mass contained in that interval)
+        dx = values[ilast + 1] - values[ilast]
         if dx > 0:
-            # Weight on upper bracket boundary
-            wgt_ub = (ub - values[iub]) / dx
+            # Weight on last point. Take into account bin could be
+            # fully contained in last interval (which in turn might be the same as
+            # the first interval).
+            wgt_last = (min(values[ilast+1], ub) - max(values[ilast], lb)) / dx
         else:
             # Flat region, cannot interpolate.
-            wgt_ub = 1.0
+            wgt_last = 1.0
 
         # Do not allow for extrapolation.
-        #  - If wgt_lb > 1, edge lower bound lies below
-        #    any value, so all those bins should receive weight = 1.
-        #  - If wgt_ub < 0, edge upper bound lies above any values, so the weight needs
-        #    to be weight = 0 since 1-weight is assigned to the right-most point.
+        #  - If wgt_first > 1, the lower bound lies below
+        #    any value, so all those grid points should receive weight = 1.
+        #  - If wgt_last < 0, the upper bound lies above any values, so the weight
+        #    needs to be weight = 0 since 1-weight is assigned to the right-most point.
         # The other two cases are not possible.
-        wgt_lb = min(1.0, wgt_lb)
-        wgt_ub = max(0.0, wgt_ub)
+        wgt_first = min(1.0, wgt_first)
+        wgt_last = max(0.0, wgt_last)
 
         # Directly copy the input Series since this ensures the correct index
-        weights = values.iloc[ilb:iub+1].copy(deep=True)
+        weights = values.iloc[ifirst:ilast+1].copy(deep=True)
         weights.iloc[:] = 1.0
-        weights.iloc[0] = wgt_lb
-        weights.iloc[-1] = wgt_ub
+        weights.iloc[0] = wgt_first
+        weights.iloc[-1] = wgt_last
         weights.name = generate
         # Convert to DataFrame to ensure correct vertical stacking of results even if
         # there is only one bin.
