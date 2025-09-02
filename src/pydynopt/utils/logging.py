@@ -36,41 +36,44 @@ def record_factory(*args, **kwargs):
     return record
 
 
-def configure_logging(reltime: bool = True):
+def configure_logging(reltime: bool = True, stdout: bool = True):
     """
-    Configure logging framework with default console handler.
+    Configure a logging framework with the default console handler.
 
     Parameters
     ----------
     reltime : bool
         Print time stamp as relative time since logging start.
+    stdout : bool
+        Print log messages to stdout.
     """
 
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
 
     # Console
-    ch = logging.StreamHandler(sys.stdout)
-    # Set default log level to INFO, otherwise we'll be flooded by MPL, Numba,
-    # etc. log messages
-    ch.setLevel(logging.INFO)
+    if stdout:
+        ch = logging.StreamHandler(sys.stdout)
+        # Set the default log level to INFO, otherwise we'll be flooded by MPL, Numba,
+        # etc. log messages
+        ch.setLevel(logging.INFO)
 
-    if reltime:
-        # Set custom RecordFactory to attach relative time attributes
-        logging.setLogRecordFactory(record_factory)
-        fmt = (
-            '[{rday:d}d {rhrs:02d}:{rmin:02d}:{rsec:04.1f}] {name} {levelname}: '
-            '{message}'
-        )
-        formatter = logging.Formatter(fmt=fmt, style='{')
-    else:
-        fmt = '[%(asctime)s] %(name)s %(levelname)s: %(message)s'
-        # Format used the (asctime) field
-        datefmt = '%H:%M:%S'
-        formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
-    ch.setFormatter(formatter)
+        if reltime:
+            # Set custom RecordFactory to attach relative time attributes
+            logging.setLogRecordFactory(record_factory)
+            fmt = (
+                '[{rday:d}d {rhrs:02d}:{rmin:02d}:{rsec:04.1f}] {name} {levelname}: '
+                '{message}'
+            )
+            formatter = logging.Formatter(fmt=fmt, style='{')
+        else:
+            fmt = '[%(asctime)s] %(name)s %(levelname)s: %(message)s'
+            # Format used the (asctime) field
+            datefmt = '%H:%M:%S'
+            formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
+        ch.setFormatter(formatter)
 
-    logger.addHandler(ch)
+        logger.addHandler(ch)
 
     # Turn of DEBUG messages for Numba
     logger = logging.getLogger('numba')
