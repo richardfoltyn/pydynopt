@@ -720,7 +720,7 @@ def interpolate_bin_weights(
         # Number of values strictly below lb
         ifirst = max(0, np.sum(values < lb) - 1)
         # Correct for edge case
-        ifirst += int(values[ifirst + 1] <= lb)
+        ifirst += int(values[ifirst + 1] <= lb and values[ifirst] < lb)
         # Interval spanned by first grid point (= mass contained in that interval)
         dx = values[ifirst + 1] - values[ifirst]
         if dx > 0:
@@ -732,8 +732,7 @@ def interpolate_bin_weights(
 
         # Identify last grid point with at least partial overlap (could be the same as
         # the first point if the bin is larger than the bin).
-        ilast = max(0, np.sum(values < ub) - 1)
-        ilast += int(values[ilast+1] <= ub)
+        ilast = max(0, np.sum(values <= ub) - 1)
         ilast = min(ilast, len(values) - 2)
         # Interval spanned by last point (= mass contained in that interval)
         dx = values[ilast + 1] - values[ilast]
