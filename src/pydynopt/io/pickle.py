@@ -21,10 +21,12 @@ def dump(
     obj: Any,
     directory: Optional[str] = None,
     compress: bool = True,
-    overwrite: bool = True
+    overwrite: bool = True,
+    nthreads: Optional[int] = -1,
+    **kwargs,
 ):
     """
-    Pickle object and dump it to a file, optionally using GZIP or LZ4
+    Pickle an object and dump it to a file, optionally using GZIP or LZ4
     compression.
 
     Parameters
@@ -37,8 +39,14 @@ def dump(
     compress : bool
         If true, apply gzip or lz4 compression to pickled objects.
     overwrite : bool
-        If true, overwrite existing file. Otherwise, append a unique number
+        If true, overwrite an existing file. Otherwise, append a unique number
         before the extension to create a unique file name.
+    nthreads : int or None, optional
+        Number of threads to use for decompression (if applicable). A value of -1 uses
+        all available logical cores.
+    kwargs :
+        Keyword arguments passed to respective open() function of the chosen
+        compression library.
     """
 
     logger = logging.getLogger("IO")
@@ -49,6 +57,13 @@ def dump(
 
     path = os.path.normpath(path)
 
+    if nthreads is None:
+        nthreads = int(os.cpu_count() / 2)
+    elif nthreads == -1:
+        nthreads = os.cpu_count()
+
+    kw = {}
+
     if compress:
         has_lz4 = False
         try:
@@ -58,16 +73,33 @@ def dump(
         except ImportError:
             pass
 
-        if not re.match(".*((gz)|(lz4)|(xz))$", path, re.IGNORECASE):
+        if not re.match(".*((gz)|(lz4)|(xz)|(zstd))$", path, re.IGNORECASE):
             path += ".xz"
 
         if re.match(r".*\.gz$", path, re.IGNORECASE):
             lopen = gzip.open
         elif re.match(r".*\.xz$", path, re.IGNORECASE):
             import lzma
+
             lopen = lzma.open
         elif re.match(r".*\.lz4$", path, re.IGNORECASE) and has_lz4:
             lopen = lz4.frame.open
+        elif re.match(r".*\.zstd", path, re.IGNORECASE):
+            try:
+                import pyzstd
+                from pyzstd import CParameter
+
+                lopen = pyzstd.open
+                kw = {
+                    "level_or_option": {
+                        CParameter.nbWorkers: nthreads,
+                        CParameter.compressionLevel: 19,
+                    }
+                }
+            except ImportError:
+                raise ValueError(
+                    "Cannot use zstd compression, pyzstd library not installed"
+                )
         else:
             raise RuntimeError("Unsupported compression format")
     else:
@@ -93,22 +125,29 @@ def dump(
             else:
                 i += 1
 
-    with lopen(path, "wb") as f:
+    kw.update(kwargs)
+
+    with lopen(path, "wb", **kw) as f:
         pickle.dump(obj, f)
 
     msg = "Saved to {:s}".format(path)
     logger.info(msg)
 
 
-def load(path: str, directory: Optional[str] = None):
+def load(
+    path: str, directory: Optional[str] = None, **kwargs
+):
     """
-    Load pickled object from a given file, optionally decompressing it if
+    Load a pickled object from a given file, optionally decompressing it if
     required.
 
     Parameters
     ----------
     path : str
     directory : str or None
+    kwargs : dict
+        Keyword arguments passed to respective open() function of the chosen
+        compression library.
 
     Returns
     -------
@@ -129,14 +168,17 @@ def load(path: str, directory: Optional[str] = None):
 
     logger.info("Loading from {:s}".format(path))
 
+    kw = {}
+
     if m := re.match(r".*\.(?P<ext>[^.]+)$", path):
         ext = m.group("ext").lower()
 
         if ext in ("gz", "gzip"):
             lopen = gzip.open
-        elif ext in ("lz4", ):
+        elif ext in ("lz4",):
             try:
                 import lz4.frame
+
                 lopen = lz4.frame.open
             except ImportError:
                 raise IOError("LZ4 library not installed")
@@ -144,12 +186,22 @@ def load(path: str, directory: Optional[str] = None):
             import lzma
 
             lopen = lzma.open
+        elif ext in ("zstd",):
+            try:
+                import pyzstd
+                from pyzstd import CParameter
+
+                lopen = pyzstd.open
+            except ImportError:
+                raise ImportError("pyzstd library not installed")
         else:
             lopen = open
     else:
         lopen = open
 
-    with lopen(path, "rb") as f:
+    kw.update(kwargs)
+
+    with lopen(path, "rb", **kw) as f:
         obj = pickle.load(f)
 
     return obj
@@ -161,7 +213,7 @@ def get_cached_object(
     cache_file: Optional[str] = None,
     cache_dir: Optional[str] = None,
     compress: bool = True,
-    **kwargs
+    **kwargs,
 ):
     """
     Load object from cache file, if present. Otherwise, call given function
@@ -211,6 +263,7 @@ def get_cached_object(
         dump(path, obj, compress=compress, overwrite=True)
 
     return obj
+
 
 def get_hash_value(*args, **kwargs) -> str:
     """
