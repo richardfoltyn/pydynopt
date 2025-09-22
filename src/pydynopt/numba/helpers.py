@@ -147,7 +147,10 @@ def create_numba_instance(
 
     # if this already is a compiled instance, return it immediately
     if not has_numba or hasattr(obj, '_numba_type_'):
-        return obj
+        if return_type:
+            return obj, obj.__class__
+        else:
+            return obj
 
     # object is not an instance of a Numba type, we need to build
     # signature for jitclass().

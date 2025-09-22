@@ -93,17 +93,14 @@ def register_jitable_dummy(*args, **kwargs):
 
         return fn
 
-    if kwargs:
-        return wrap
-    else:
-        return wrap(*args)
+    return wrap
 
 
 def from_dtype(obj):
     return obj
 
 
-class SubscriptableType(np.int64):
+class SubscriptableType:
     """
     Dummy type that serves as the default drop-in for Numba's data types.
     Note: Needs __getitem__ method so that statements such as float64[::1]
