@@ -23,6 +23,8 @@ from .dummy import (
 )
 
 has_numba = False
+JIT_OPTIONS = {}
+JIT_OPTIONS_INLINE = {}
 
 from pydynopt import use_numba
 
@@ -55,7 +57,5 @@ if use_numba:
 
     except ImportError:
         # Nothing to do, use the default decorators defined above
-        has_numba = False
+        pass
 
-        JIT_OPTIONS = {}
-        JIT_OPTIONS_INLINE = {}
