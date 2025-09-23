@@ -313,7 +313,7 @@ def _brentq_full(
     res.iterations = it
     res.function_calls = nfev
 
-    return res
+    return root, res
 
 
 
