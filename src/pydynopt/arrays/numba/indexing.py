@@ -180,20 +180,16 @@ def ind2sub_scalar_impl(indices, shape, axis, out):
     """
 
     unravel_ndim = len(shape)
-    unravel_size = 1
-    for i in range(unravel_ndim):
-        unravel_size *= shape[i]
-
     val = indices
-
-    if val < 0 or val >= unravel_size:
-        raise ValueError('Invalid flat index')
 
     for j in range(unravel_ndim - 1, -1, -1):
         k = shape[j]
-        tmp = val / k
+        tmp = val // k
         out[j] = val % k
         val = tmp
+
+    if val >= shape[0]:
+        raise ValueError('Invalid flat index')
 
     return out
 
@@ -372,18 +368,11 @@ def sub2ind_scalar(coords, shape, out=None):
     ndim = len(shape)
     if len(coords) != ndim:
         raise ValueError('Incompatible coordinate array size')
-    stride = np.empty(ndim, dtype=np.int64)
-    stride[-1] = 1
-
-    for j in range(1, ndim):
-        stride[ndim - j - 1] = shape[ndim - j] * stride[ndim - j]
 
     lidx = 0
-
-    for j in range(ndim):
-        k = coords[j]
-        if k < 0 or k >= shape[j]:
-            raise ValueError('Invalid coordinates')
-        lidx += coords[j] * stride[j]
+    stride_ = 1
+    for j in range(ndim - 1, -1, -1):
+        lidx += coords[j] * stride_
+        stride_ *= shape[j]
 
     return lidx
