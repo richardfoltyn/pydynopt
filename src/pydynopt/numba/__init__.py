@@ -11,9 +11,13 @@ from .dummy import (
     float64,
     from_dtype,
     int16,
+    uint16,
     int32,
+    uint32,
     int64,
+    uint64,
     int8,
+    uint8,
     jit,
     jitclass,
     overload,
@@ -39,7 +43,7 @@ if use_numba:
         except ImportError:
             from numba import jitclass
         from numba.extending import overload, register_jitable
-        from numba.types import int8, int16, int32, int64
+        from numba.types import int8, uint8, int16, uint16, int32, uint32, int64, uint64
         from numba.types import float32, float64
         from numba.types import boolean, string
         from numba import prange

@@ -15,9 +15,13 @@ __all__ = [
     'float32',
     'float64',
     'int8',
+    'uint8',
     'int16',
+    'uint16',
     'int32',
+    'uint32',
     'int64',
+    'uint64',
     'boolean',
     'string',
     'prange',
@@ -112,9 +116,13 @@ class SubscriptableType:
 
 
 int8 = SubscriptableType()
+uint8 = SubscriptableType()
 int16 = SubscriptableType()
+uint16 = SubscriptableType()
 int32 = SubscriptableType()
+uint32 = SubscriptableType()
 int64 = SubscriptableType()
+uint64 = SubscriptableType()
 float32 = SubscriptableType()
 float64 = SubscriptableType()
 boolean = SubscriptableType()
