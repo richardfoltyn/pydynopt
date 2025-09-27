@@ -613,7 +613,8 @@ def interpolate_bin_weights(
     values: pd.DataFrame | Sequence[float],
     name_bins: str = 'ibin',
     name_values: Optional[str] = None,
-    generate: str = 'weight'
+    generate: str = 'weight',
+    validate: bool = True
 ) -> pd.Series:
     """
     Create weights that map (increasing!) values of a CDF defined on a grid of `values`
@@ -635,6 +636,8 @@ def interpolate_bin_weights(
         Index name assigned to level representing `values`.
     generate : str, optional
         Name of resulting Series
+    validate: bool
+        If true, validate that the resulting bin weights sum to 1.0.
 
     Returns
     -------
@@ -771,12 +774,13 @@ def interpolate_bin_weights(
     # Convert back to Series
     df_weights = df_weights[generate]
 
-    # Check that we are not double-counting bins. Weights can be less than 1 if they
-    # are outside any bin interval.
-    if by:
-        tmp = df_weights.groupby(by + [name_values]).sum(axis=0)
-        assert np.all((tmp - 1.0) < 1.0e-10)
-    else:
-        assert np.all((df_weights.groupby(name_values).sum() - 1.0) < 1.0e-10)
+    if validate:
+        # Check that we are not double-counting bins. Weights can be less than 1 if they
+        # are outside any bin interval.
+        if by:
+            tmp = df_weights.groupby(by + [name_values]).sum(axis=0)
+            assert np.all((tmp - 1.0) < 1.0e-10)
+        else:
+            assert np.all((df_weights.groupby(name_values).sum() - 1.0) < 1.0e-10)
 
     return df_weights
