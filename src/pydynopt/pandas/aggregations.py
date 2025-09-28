@@ -234,7 +234,6 @@ def df_weighted_mean(
     weight_varname = None
     if isinstance(weights, str):
         weight_varname = weights
-        weights = data[weights]
 
     # Extract default varlist
     varlist = anything_to_list(varlist)
@@ -246,9 +245,12 @@ def df_weighted_mean(
         ]
 
     # Check that grouping variables are in index, otherwise put them there
-    missing = any(group not in data.index.names for group in groups)
+    missing = [group for group in groups if group not in data.index.names ]
     if missing:
-        data = data.reset_index(drop=list(data.index.names) == [None]).set_index(groups)
+        data = data.set_index(missing, append=True)
+
+    if isinstance(weights, str):
+        weights = data[weight_varname]
 
     if weights is None:
         df_means, df_nobs, df_weights = _df_weighted_mean_no_wgt(
@@ -360,9 +362,9 @@ def _df_weighted_mean_wgt(
 
         for i, varname in enumerate(varlist):
             var_np = data[varname].to_numpy(copy=False)
-            df_work['xw'] = var_np * w_np
+            df_work.loc[:, 'xw'] = var_np * w_np
             # Set weights for NaN obs or NaN weights to zero
-            df_work['w'] = np.where(df_work['xw'].notna(), w_np, 0.0)
+            df_work.loc[:, 'w'] = np.where(df_work['xw'].notna(), w_np, 0.0)
 
             wsum = df_work['w'].groupby(groups).sum()
 
