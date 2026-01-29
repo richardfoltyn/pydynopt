@@ -704,7 +704,7 @@ def interpolate_bin_weights(
 
     # Create linear bin index
     if by:
-        ibin = df_bins.groupby(by)['lb'].transform(lambda x: np.arange(len(x)))
+        ibin = df_bins.groupby(by)['lb'].cumcount()
     else:
         ibin = np.arange(len(df_bins))
 
