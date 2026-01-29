@@ -642,7 +642,7 @@ def plot_dataframe(
             return
 
         # Restrict to data plotted in particular panel
-        df_panel = df.xs(over_order[ipanel], level=over_var, axis=0)
+        df_panel = df.xs(over_order[ipanel], level=over_var, axis=0, drop_level=False)
 
         for ivar, yvar in enumerate(yvars):
             # Variable-specific style
@@ -705,7 +705,7 @@ def plot_dataframe(
                     offset = dx * jitter * k
                     xvalues = xvalues - left + offset
 
-                yerr = _get_yerr(data.loc[by_value], mname, yvalues)
+                yerr = _get_yerr(data.xs(by_value, level=by_var), mname, yvalues)
 
                 if plot_type[yvar] == 'bar':
                     kw = style.bar_kwargs[k]
