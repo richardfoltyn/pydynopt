@@ -201,15 +201,16 @@ def plot_grid(
     fig_kw.update(style.figure)
 
     if figure_kw is not None:
-        style.figure.update(figure_kw)
+        fig_kw.update(figure_kw)
 
+    subplot_kw_ = style.subplot.copy()
     if subplot_kw is not None:
-        style.subplot.update(subplot_kw)
+        subplot_kw_.update(subplot_kw)
 
     fig, axes = plt.subplots(
         nrow,
         ncol,
-        subplot_kw=style.subplot,
+        subplot_kw=subplot_kw_,
         sharex=sharex,
         sharey=sharey,
         squeeze=False,
