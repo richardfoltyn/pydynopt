@@ -323,7 +323,10 @@ def plot_grid(
             fun(ax, (i, j), **kwargs)
 
             # Apply axis aspect
-            if ax_aspect is not None:
+            if style.ax_box_aspect is not None:
+                # Prioritize ax_box_aspect over ax_aspect, if both are set.
+                ax.set_box_aspect(style.ax_box_aspect)
+            elif ax_aspect is not None:
                 ax.set_aspect(ax_aspect)
 
             # Plot identity line
