@@ -293,7 +293,10 @@ class AbstractStyle:
         self.cell_size = 6
         self.dpi = 96
         self.aspect = 1.0
+        # Note: MPL defines aspect as height / width
         self.ax_aspect = None  # Aspect ratio to set via ax.set_aspect()
+        # Note: MPL defines aspect as height / width
+        self.ax_box_aspect = None # Aspect ratio to set via ax.set_box_aspect()
         self._margins = 0.02
         self._grid = cls.GRID_KWARGS.copy()
         self._color = None
