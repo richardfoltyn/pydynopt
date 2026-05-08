@@ -25,6 +25,7 @@ def plot_grid(
     ncol: int = 1,
     *,
     column_title: Optional[Union[Sequence[str], str]] = None,
+    title: str | Sequence[str] | np.ndarray | None = None,
     suptitle: Optional[str] = None,
     figure_kw: Optional[Mapping] = None,
     subplot_kw: Optional[Mapping] = None,
@@ -75,9 +76,12 @@ def plot_grid(
     ncol : int
         Number of columns
     column_title : str or array_like
-        List of column titles
+        List of column titles. Will be ignored if `title` is given.
+    title: str or array_like
+        Titles to each for each subplot. Will be broadcast to match
+        the dimensions of the subplot grid.
     suptitle : str
-        Subtitle, currently not properly implemented
+        Suptitle, currently not properly implemented
     figure_kw : dict
         Dictionary of keyword arguments passed to MPL's subplots() function
         via **kwargs.
@@ -157,9 +161,17 @@ def plot_grid(
     vline = anything_to_dict(vline, force=True)
 
     if column_title is None:
-        column_title = np.ndarray((nrow,), dtype=object)
+        column_title = np.zeros((nrow,), dtype=object)
 
     column_title = np.atleast_1d(column_title)
+
+    if title is None:
+        title = np.zeros((nrow, ncol), dtype=object)
+    else:
+        # Disable column titles, axes titles take precedence
+        column_title = np.zeros(nrow, dtype=object)
+        title = np.atleast_2d(title)
+        title = np.broadcast_to(title, (nrow, ncol))
 
     if legend_at is not None:
         if isinstance(legend_at, str):
@@ -256,6 +268,9 @@ def plot_grid(
             if i == 0:
                 if j < column_title.shape[0] and column_title[j]:
                     ax.set_title(column_title[j], **style.title)
+
+            if ttl := title[i, j]:
+                ax.set_title(ttl, **style.title)
 
             if xlim is not None:
                 dx = xlim[1] - xlim[0]
