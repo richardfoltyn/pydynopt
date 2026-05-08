@@ -1,41 +1,45 @@
 """
+Helpers for compact axis tick labels with magnitude suffixes.
+
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
 
 Author: Richard Foltyn
 """
-from typing import Optional
 
 from matplotlib.ticker import FuncFormatter
 
 
 class SuffixFormatter(FuncFormatter):
+    """Format tick values using compact suffixes (`k`, `m`, `bn`, `tr`)."""
 
-    def __init__(self, default: Optional[str] = None):
+    def __init__(self, default: str | None = None) -> None:
         """
+        Create a formatter that shortens large magnitudes.
 
         Parameters
         ----------
         default : str, optional
-            Default format string if value does not match any suffix.
+            Format specifier used for values without suffix (for example,
+            `.2f`). If omitted, matplotlib's default formatting is used.
         """
+        self.default = default
 
         def _suffix_formatter(value: float, pos: int) -> str:
             """
-            Format numbers with suffixes k, m, or bn depending
-            on their magnitue.
+            Format numbers with suffixes based on their magnitude.
 
             Parameters
             ----------
             value : float
-                Tick value to format
+                Tick value to format.
             pos : int
-                Tick position within list of tick labels
+                Tick position in matplotlib's sequence.
 
             Returns
             -------
             str
-                Formatted tick label
+                Formatted tick label.
             """
             suffix = ''
             if abs(value) >= 1.0e12:
@@ -64,3 +68,13 @@ class SuffixFormatter(FuncFormatter):
 
         super().__init__(_suffix_formatter)
 
+    def __repr__(self) -> str:
+        """
+        Return a string representation of the formatter.
+
+        Returns
+        -------
+        str
+            Developer-friendly representation of the SuffixFormatter.
+        """
+        return f'{type(self).__name__}(default={self.default!r})'

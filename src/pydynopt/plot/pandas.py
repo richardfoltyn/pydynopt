@@ -1,4 +1,6 @@
 """
+Utilities to plot pandas objects with grouped panels and shared style logic.
+
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
 
@@ -6,35 +8,44 @@ Author: Richard Foltyn
 """
 
 import collections.abc
-from collections.abc import Sequence, Mapping, Iterable, Callable
+from collections.abc import Callable, Iterable, Mapping, Sequence
+import contextlib
+import logging
 import math
-from typing import Union, Optional
+from typing import Any
 
+from matplotlib.axes import Axes
 import numpy as np
 import pandas as pd
-from matplotlib.axes import Axes
-
-from .styles import DefaultStyle, AbstractStyle
-from .baseplots import plot_grid
 
 from ..utils import anything_to_list, anything_to_tuple
+from .baseplots import plot_grid
+from .styles import AbstractStyle, DefaultStyle
 
 __all__ = ['plot_dataframe']
 
+type LabelMap = Mapping[object, Any]
+type LabelFormatter = Callable[..., Any]
+type LabelSpec = str | Sequence[str] | LabelMap | LabelFormatter | None
+type OrderSpec = Sequence[object] | Mapping[str, Sequence[object]] | None
+type StyleSpec = (
+    AbstractStyle | Sequence[AbstractStyle] | Mapping[str, AbstractStyle] | None
+)
 
-def _text_loc_to_kwargs(loc):
+
+def _text_loc_to_kwargs(loc: str) -> dict[str, float | str]:
     """
     Map location text to corresponding arguments to MPL's text() method.
 
     Parameters
     ----------
-    loc : str
+    loc
+        Location string.
 
     Returns
     -------
-    dict
+    Arguments to MPL's text() method.
     """
-
     map_vert = {
         'upper': {'y': 0.95, 'va': 'top'},
         'top': {'y': 0.95, 'va': 'top'},
@@ -51,34 +62,30 @@ def _text_loc_to_kwargs(loc):
 
     vert, hor = loc.lower().split()
 
-    kwargs = map_hor[hor]
-    kwargs.update(map_vert[vert])
-
-    return kwargs
+    return map_hor[hor] | map_vert[vert]
 
 
-def _get_yerr(data, moment_name, yvalues=None):
+def _get_yerr(
+    data: pd.DataFrame, moment_name: str, yvalues: np.ndarray | None = None
+) -> np.ndarray | None:
     """
-    Return y-data for errors bars in a form that can be passed as yerr
-    argument to MPL's errorbar().
+    Return y-data for error bars in a form that can be passed to MPL's errorbar().
 
     Parameters
     ----------
-    data : pd.DataFrame
-    moment_name : str
-        Name of point estimate (moment) for which SEs/CIs
-        should be returned.
-    yvalues : array_like, optional
+    data
+        Input DataFrame.
+    moment_name
+        Name of point estimate (moment) for which SEs/CIs should be returned.
+    yvalues
         Optional actual y-values. This is needed to compute the correct
         values for yerr if sampling variance is stored as CI in `data`
         as opposed to standard errors.
 
     Returns
     -------
-    tuple of np.ndarray
-
+    Error bar values with shape ``(2, n)`` or ``None`` if no uncertainty data are available.
     """
-
     columns = data.columns.get_level_values(0)
     yerr = None
 
@@ -90,12 +97,12 @@ def _get_yerr(data, moment_name, yvalues=None):
         se = data[se_name[0]].to_numpy()
         yerr_lb = 1.96 * se
         yerr_ub = 1.96 * se
-        yerr = (yerr_lb, yerr_ub)
+        yerr = np.stack((yerr_lb, yerr_ub))
 
     ci_lb_name = [n for n in columns if n.lower() == f'{moment_name.lower()}_ci_lb']
     ci_ub_name = [n for n in columns if n.lower() == f'{moment_name.lower()}_ci_ub']
 
-    if ci_lb_name and ci_ub_name:
+    if ci_lb_name and ci_ub_name and yvalues is not None:
         # Caller expects values to be centered around y-values
         # Lower bound: drawn as yvalues - yerr_lb, so we need to return
         # CI_lb = yvalues - yerr_lb => yerr_lb = yvalues - CI_lb
@@ -106,27 +113,33 @@ def _get_yerr(data, moment_name, yvalues=None):
         if np.any(np.isfinite(yerr_lb)) and np.any(np.isfinite(yerr_ub)):
             yerr = np.stack((yerr_lb, yerr_ub))
 
+            if np.any(yerr < 0.0):
+                logger = logging.getLogger('pydynopt.plot')
+                logger.warning('Clipping negative yerr values to 0.0')
+                yerr = np.clip(yerr, 0.0, np.inf)
+
     return yerr
 
 
-def _find_name(df, fmt='__{:06d}'):
+def _find_name(df: pd.DataFrame | pd.Series, fmt: str = '__{:06d}') -> str:
     """
-    Return a variable name that can be used as a column or index name
-    for the given DataFrame without clashing with any of the existing
+    Return a variable name that can be used as a column or index name.
+
+    The name is guaranteed not to clash with any of the existing
     index or top-level column names.
 
     Parameters
     ----------
-    df : pd.DataFrame or pd.Series
-    fmt : str, optional
+    df
+        Input DataFrame or Series.
+    fmt
         Format used to generate a new name. Must accept a single integer
         argument.
 
     Returns
     -------
-    str
+    Generated unique variable name.
     """
-
     names_present = list(df.index.names)
 
     if isinstance(df, pd.DataFrame):
@@ -141,35 +154,52 @@ def _find_name(df, fmt='__{:06d}'):
         counter += 1
 
 
-def _process_slice(df, varlist=None, labels=None, order=None):
+def _process_slice(
+    df: pd.DataFrame,
+    varlist: str | Iterable[str] | None = None,
+    labels: LabelSpec = None,
+    order: OrderSpec = None,
+) -> tuple[pd.DataFrame, str, Mapping[object, object], np.ndarray]:
     """
+    Process and normalize slice variables, labels, and ordering.
 
     Parameters
     ----------
-    varlist : str or Iterable of str, optional
+    df
+        Input DataFrame.
+    varlist
+        Slice variables.
     labels
+        Label specification for resulting grouped values.
     order
+        Ordering specification for grouped values.
 
     Returns
     -------
-    df : pd.DataFrame
-    varname : str
-    labels : dict
-    order : np.ndarray
+    df
+        Processed DataFrame.
+    varname
+        Name of the grouped/slice variable.
+    labels
+        Mapping of grouped values to pretty labels.
+    order
+        Ordering of grouped values.
     """
-
     varlist = anything_to_list(varlist, force=True)
 
     # Original index names
     index_orig = list(df.index.names)
 
+    labels_val: Any = labels
+    order_val: Any = order
+
     if len(varlist) == 0:
         # No variable given, just create a degenerate variable and add it to
         # the index
         varname = _find_name(df)
-        labels = dict()
+        labels_val = {}
         value = 0
-        order = np.array([value])
+        order_val = np.array([value])
         # Insert degenerate name into index
         df = pd.concat((df,), axis=0, names=[varname], keys=[value])
 
@@ -180,20 +210,22 @@ def _process_slice(df, varlist=None, labels=None, order=None):
         if varname not in index_orig:
             df = df.set_index(varname, append=True)
 
-        if order is None:
+        if order_val is None:
             values = df.index.get_level_values(varname)
-            order = values.drop_duplicates(keep='first').to_numpy()
+            order_val = values.drop_duplicates(keep='first').to_numpy()
 
-        if labels is None:
-            labels = dict()
-        elif isinstance(labels, str):
-            labels = {v: labels.format(v) for v in order}
-        elif isinstance(labels, collections.abc.Mapping):
+        if labels_val is None:
+            labels_val = {}
+        elif isinstance(labels_val, str):
+            labels_val = {v: labels_val.format(v) for v in order_val}
+        elif isinstance(labels_val, Mapping):
             pass
-        elif isinstance(labels, Sequence):
-            labels = {k: labels[i] for i, k in enumerate(order)}
-        elif callable(labels):
-            labels = {v: labels(**{varname: v}) for v in order}
+        elif isinstance(labels_val, Sequence):
+            labels_val = {k: labels_val[i] for i, k in enumerate(order_val)}
+        elif callable(labels_val):
+            labels_val = {v: labels_val(**{varname: v}) for v in order_val}
+        else:
+            raise ValueError('Unsupported labels format')
     else:
         # Multiple variables given, we need to consolidate them into a single
         # one respecting any sort order, etc.
@@ -207,34 +239,34 @@ def _process_slice(df, varlist=None, labels=None, order=None):
         # Sort in given variable order
         df_values_uniq = df_values_uniq.sort_values(varlist)
 
-        if order is None:
+        if order_val is None:
             df_values_uniq[varname] = np.arange(df_values_uniq.shape[0])
             df_values = df_values.merge(df_values_uniq, on=varlist, how='left')
 
             df[varname] = df_values[varname].to_numpy()
 
-            order = np.arange(df_values_uniq.shape[0])
+            order_val = np.arange(df_values_uniq.shape[0])
         else:
             # Caller imposed an order on (some) of the variables in varlist
-            if isinstance(order, collections.abc.Mapping):
+            if isinstance(order_val, collections.abc.Mapping):
                 # Already in desired format
                 pass
-            elif isinstance(order, collections.abc.Sequence):
+            elif isinstance(order_val, collections.abc.Sequence):
                 # Needs to be a sequence of iterable items
-                if len(order) != len(varlist):
+                if len(order_val) != len(varlist):
                     msg = 'order and variable names must be of equal length!'
                     raise ValueError(msg)
-                order = {name: v for name, v in zip(varlist, order)}
+                order_val = dict(zip(varlist, order_val, strict=False))
             else:
                 raise ValueError('order format not understood!')
 
-            df_tmp = None
+            df_tmp: Any = None
             for var in varlist:
-                if var in order:
-                    df_new = pd.DataFrame({var: np.atleast_1d(order[var])})
+                if var in order_val:
+                    val: Any = order_val[var]
+                    df_new = pd.DataFrame({var: np.atleast_1d(val)})
                 else:
-                    values = df_values[[var]].drop_duplicates(keep='first')
-                    df_new = pd.DataFrame({var: values})
+                    df_new = df_values[[var]].drop_duplicates(keep='first')
 
                 if df_tmp is None:
                     df_tmp = df_new
@@ -251,7 +283,7 @@ def _process_slice(df, varlist=None, labels=None, order=None):
             df = df.loc[df[varname].notna()].copy()
             df[varname] = df[varname].astype(int)
 
-            order = ivalues
+            order_val = ivalues
 
         df = df.set_index(varname, append=True)
 
@@ -259,39 +291,70 @@ def _process_slice(df, varlist=None, labels=None, order=None):
         if varname in df_values_uniq.columns:
             df_values_uniq = df_values_uniq.set_index(varname)
 
-        if isinstance(labels, str):
+        if isinstance(labels_val, str):
             lbl = {}
             for row in df_values_uniq.itertuples():
-                dct = row._asdict()
+                row_any: Any = row
+                dct = row_any._asdict()
                 # Index attribute of names tuple is called 'Index'
                 i = dct.pop('Index')
-                lbl[i] = labels.format(**dct)
-            labels = lbl
-        elif callable(labels):
+                lbl[i] = labels_val.format(**dct)
+            labels_val = lbl
+        elif callable(labels_val):
+            lbl = {}
+            labels_func: Any = labels_val
+            for row in df_values_uniq.itertuples():
+                row_any: Any = row
+                dct = row_any._asdict()
+                # Index attribute of names tuple is called 'Index'
+                i = dct.pop('Index')
+                lbl[i] = labels_func(**dct)
+            labels_val = lbl
+        elif isinstance(labels_val, Mapping):
             lbl = {}
             for row in df_values_uniq.itertuples():
-                dct = row._asdict()
+                row_any: Any = row
+                dct = row_any._asdict()
                 # Index attribute of names tuple is called 'Index'
                 i = dct.pop('Index')
-                lbl[i] = labels(**dct)
-            labels = lbl
-        elif isinstance(labels, Mapping):
-            lbl = {}
-            for row in df_values_uniq.itertuples():
-                dct = row._asdict()
-                # Index attribute of names tuple is called 'Index'
-                i = dct.pop('Index')
-                lbl[i] = ', '.join(labels[k][v] for k, v in dct.items())
-            labels = lbl
-        elif labels is None:
-            labels = {}
+                lbl[i] = ', '.join(labels_val[k][v] for k, v in dct.items())
+            labels_val = lbl
+        elif labels_val is None:
+            labels_val = {}
         else:
             raise ValueError('Unsupported labels format')
 
-    return df, varname, labels, order
+    ret_labels: Mapping[object, object] = labels_val
+    ret_order: np.ndarray = order_val
+    return df, varname, ret_labels, ret_order
 
 
-def _process_dep_vars(df, yvar=None, moment=None):
+def _process_dep_vars(
+    df: pd.DataFrame | pd.Series,
+    yvar: str | Sequence[str] | None = None,
+    moment: str | None = None,
+) -> tuple[pd.DataFrame, list[str], str | None]:
+    """
+    Normalize dependent-variable columns to a two-level MultiIndex.
+
+    Parameters
+    ----------
+    df
+        Input data with variables and moments either in columns or index.
+    yvar
+        Variables to select.
+    moment
+        Moment name to select.
+
+    Returns
+    -------
+    df
+        Normalized DataFrame.
+    yvars
+        Selected variable names.
+    moment
+        Selected moment name.
+    """
     df = df.copy()
 
     yvars = anything_to_list(yvar)
@@ -312,7 +375,8 @@ def _process_dep_vars(df, yvar=None, moment=None):
 
         lname = None
         if df.columns.name:
-            lname = anything_to_list(df.columns.name)[0]
+            lname_list = anything_to_list(df.columns.name)
+            lname = lname_list[0] if lname_list else None
 
         if lname and lname.lower().startswith('variable'):
             if yvars:
@@ -356,6 +420,7 @@ def _process_dep_vars(df, yvar=None, moment=None):
     elif df.columns.nlevels == 2:
         names = {}
         for name in df.columns.names:
+            name = str(name)
             if name and name.lower().startswith('variable'):
                 names[name] = level_names[0]
             elif name and name.lower().startswith('moment'):
@@ -365,10 +430,10 @@ def _process_dep_vars(df, yvar=None, moment=None):
             # Note of the names match, force rename
             df.columns.names = level_names
         else:
-            names_upd = [names.get(x, x) for x in df.columns.names]
+            names_upd = [names.get(str(x), str(x)) for x in df.columns.names]
             df.columns.names = names_upd
 
-        for i, name in enumerate(level_names):
+        for i, _ in enumerate(level_names):
             if df.columns.names[i] != level_names[i]:
                 raise ValueError('DataFrame column index not understood')
     else:
@@ -383,56 +448,62 @@ def _process_dep_vars(df, yvar=None, moment=None):
     else:
         yvars = columns
 
-    return df, yvars, moment
+    yvars_list: list[str] = list(yvars)
+    return df, yvars_list, moment
 
 
-def _find_moment_name(df):
+def _find_moment_name(df: pd.DataFrame) -> str:
     """
     Guess the name of the moment to be plotted for the given DataFrame.
 
     Parameters
     ----------
-    df : pd.DataFrame
+    df
+        Input DataFrame.
 
     Returns
     -------
-    str
+    Guessed name of the moment.
     """
-
     columns = df.columns.get_level_values(0).unique()
     columns_dct = {name.lower(): name for name in columns}
 
     cand = [
         name
-        for name in columns_dct.keys()
+        for name in columns_dct
         if name and not any(name.endswith(f'_{s}') for s in ('se', 'ci_lb', 'ci_ub'))
     ]
 
-    if len(cand) == 1:
-        mname = columns_dct[cand[0]]
-    else:
-        # Just take the first column
-        mname = columns[0]
-
-    return mname
+    return columns_dct[cand[0]] if len(cand) == 1 else columns[0]
 
 
-def _get_scatter_size(scatter_size, yvar, data, default):
+def _get_scatter_size(
+    scatter_size: str | float | None,
+    yvar: str,
+    data: pd.DataFrame,
+    default: float,
+) -> float | np.ndarray:
     """
-    Return the marker size for scatter plots, either as a uniform constant,
-    or as values of a given column from a DataFrame.
+    Return the marker size for scatter plots.
+
+    The size can be either a uniform constant, or values of a given column
+    from a DataFrame.
 
     Parameters
     ----------
-    scatter_size : str, optional
-    data : pd.DataFrame
-    default : float
+    scatter_size
+        Name of the column containing marker sizes, or a uniform size.
+    yvar
+        Name of the dependent variable.
+    data
+        Input DataFrame.
+    default
+        Default marker size.
 
     Returns
     -------
-    float or np.ndarray
+    Marker size as a uniform float or an array of sizes.
     """
-
     size = default
     if scatter_size is None:
         return size
@@ -446,101 +517,103 @@ def _get_scatter_size(scatter_size, yvar, data, default):
         # Prevent non-finite sizes due to NaN data as this will break legend
         size[~np.isfinite(size)] = 0.0
     else:
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             size = float(scatter_size)
-        except:
-            pass
 
     return size
 
 
 def plot_dataframe(
     df: pd.DataFrame,
-    xvar: str = None,
-    yvar: Optional[Union[str, Sequence[str]]] = None,
-    yvar_labels: Union[Sequence[str], Mapping[str, str]] = None,
-    moment: Optional[str] = None,
-    by: Optional[str | Sequence[str]] = None,
-    by_labels: Optional[Union[Sequence[str], Mapping, Callable]] = None,
-    by_order: Optional[Sequence] = None,
-    over: Optional[Union[str, Sequence[str]]] = None,
-    over_order: Optional[Sequence] = None,
-    over_labels: Optional[Union[Sequence[str], Mapping, Callable]] = None,
-    over_label_pos: Optional[str | Sequence[str]] = None,
-    ncol: Optional[int] = None,
-    jitter: Optional[float] = None,
-    plot_type: Optional[Union[str, Mapping[str, str], Sequence[str]]] = None,
-    callback: Optional[Callable] = None,
-    callback_args: tuple = (),
-    scatter_size: Union[str, float] = 'size',
-    style: Union[
-        Sequence[AbstractStyle], Mapping[str, AbstractStyle], AbstractStyle
-    ] = DefaultStyle(),
-    **kwargs,
-) -> np.ndarray[Axes]:
+    xvar: str | None = None,
+    yvar: str | Sequence[str] | None = None,
+    yvar_labels: str | Sequence[str] | Mapping[str, str] | None = None,
+    moment: str | None = None,
+    by: str | Sequence[str] | None = None,
+    by_labels: LabelSpec = None,
+    by_order: OrderSpec = None,
+    over: str | Sequence[str] | None = None,
+    over_order: OrderSpec = None,
+    over_labels: LabelSpec = None,
+    over_label_pos: str | Sequence[str] | None = None,
+    ncol: int | None = None,
+    jitter: float | None = None,
+    plot_type: str | Mapping[str, str] | Sequence[str] | None = None,
+    callback: Callable[..., None] | None = None,
+    callback_args: tuple[Any, ...] = (),
+    scatter_size: str | float | None = 'size',
+    style: StyleSpec = None,
+    **kwargs: Any,
+) -> np.ndarray:
     """
     Plot selected variables in DataFrame, optionally disaggregating by groups.
 
     Parameters
     ----------
-    df : pd.DataFrame
-    xvar : str, optional
+    df
+        Input DataFrame.
+    xvar
         Variable or index name storing x-values.
-    yvar : str or Iterable of str, optional
+    yvar
         Column names storing y-values to be plotted.
-    yvar_labels : str or Iterable of str or Mapping, optional
-        Variable labels
-    moment : str, optional
-        Name of moment to be plotted
-    by : str or Iterable of str, optional
+    yvar_labels
+        Variable labels.
+    moment
+        Name of moment to be plotted.
+    by
         Variable or index name by which to disaggregate within individual
         plot panels.
-    by_labels : Mapping or Sequence or str or callable, optional
+    by_labels
         Pretty labels to be used in legend.
-    by_order : Sequence or str, optional
-        Values of categorical variable `by` which specify
-        plotting order (useful to harmonize legend and plot order)
-    over : str or Iterable or str, optional
+    by_order
+        Values of categorical variable `by` which specify plotting order
+        (useful to harmonize legend and plot order).
+    over
         Variable or index name by which to disaggregate data into separate
-        panels
-    over_order : Sequence or dict, optional
-        Values of categorical variable `over` which specify
-        plotting order.
-    over_labels : Mapping or Sequence or str or callable, optional
+        panels.
+    over_order
+        Values of categorical variable `over` which specify plotting order.
+    over_labels
         Mapping of values of `over` variable to pretty labels.
-    over_label_pos : str, optional
+    over_label_pos
         Position of annotation text containing the `over` value for current
         panel.
-    ncol : int, optional
+    ncol
         Number of columns used to arrange plot panels (ignored unless `over`
-        is given)
-    jitter : float, optional
+        is given).
+    jitter
         Perturb x-location by given fraction of x-range (ignored unless `by`
-        is given)
-    plot_type : str or Mapping or Iterable of str, optional
-        Plot type ('bar', 'area' or None, the default)
-    callback : callable, optional
+        is given).
+    plot_type
+        Plot type ('bar', 'area', 'scatter', 'errorbar', etc.).
+    callback
         If not None, will be called at the end of plotting code executed
-        for each panel with arguments callback(ax, idx).
-    callback_args : tuple, optional
-        If not None, tuple will be expanded and passed as additional positional
-        arguments to `callback()`
-    scatter_size : str or float, optional
+        for each panel with arguments callback(ax, idx, df_panel, style, *callback_args).
+    callback_args
+        Tuple that will be expanded and passed as additional positional
+        arguments to `callback()`.
+    scatter_size
         If string, it is interpreted as a column name in `df`
         with values to be interpreted as marker sizes. If float,
         the value is used as a uniform marker size.
-    style : pydynopt.plot.styles.AbstractStyle or Iterable or Mapping, optional
-    kwargs :
-        Keyword arguments passed to plot_grid()
+    style
+        Plot style specification.
+    **kwargs
+        Keyword arguments passed to plot_grid().
 
+    Returns
+    -------
+    Array of matplotlib axes objects.
     """
-
     jitter = float(jitter) if jitter is not None else None
+    style = DefaultStyle() if style is None else style
 
     df = df.copy()
 
-    df, by_var, by_labels, by_order = _process_slice(df, by, by_labels, by_order)
-    df, over_var, over_labels, over_order = _process_slice(
+    df, by_var, by_labels_dict, by_order_arr = _process_slice(
+        df, by, by_labels, by_order
+    )
+    df, over_var, over_labels_dict, over_order_arr = _process_slice(
         df, over, over_labels, over_order
     )
 
@@ -548,24 +621,25 @@ def plot_dataframe(
 
     if xvar is None:
         if df.index.nlevels > 1:
-            raise ValueError("Cannot determine x-variable")
+            raise ValueError('Cannot determine x-variable')
         elif not df.index.name:
-            xvar = '_xvalues'
-            df.index.set_names([xvar], inplace=True)
+            xvar_ = '_xvalues'
+            df.index.set_names([xvar_], inplace=True)
         else:
-            xvar = df.index.name
+            xvar_ = str(df.index.name)
     else:
-        if xvar in df.columns and xvar not in df.index:
+        xvar_ = str(xvar)
+        if xvar_ in df.columns and xvar_ not in df.index:
             # Append xvar to index where it's expected by plotting functions.
             # Perform this indirectly so that MultiIndex columns work as well
             midx = df.index.to_frame(index=False)
-            midx[xvar] = df[xvar].to_numpy()
+            midx[xvar_] = df[xvar_].to_numpy()
             midx = pd.MultiIndex.from_frame(midx)
             df.index = midx
-            del df[xvar]
+            del df[xvar_]
 
-    varlist = [over_var, by_var, xvar]
-    index_other = [name for name in df.index.names if name not in varlist]
+    varlist: list[str] = [over_var, by_var, xvar_]
+    index_other = [str(name) for name in df.index.names if name not in varlist]
 
     # Reorder index levels (specific order is required below), push
     # user-given index levels that are not required to the end.
@@ -574,58 +648,64 @@ def plot_dataframe(
     # --- Fix plot types, labels and styles for each variable ---
 
     # Plot types
+    plot_type_dict: Mapping[str, str]
     if plot_type is None:
-        plot_type = {v: '' for v in yvars}
+        plot_type_dict = dict.fromkeys(yvars, '')
     elif isinstance(plot_type, str):
         # Same plot type for all variables
-        plot_type = {v: plot_type for v in yvars}
-    elif isinstance(plot_type, collections.abc.Mapping):
+        plot_type_dict = dict.fromkeys(yvars, plot_type)
+    elif isinstance(plot_type, Mapping):
         # Expected data type
-        pass
-    elif isinstance(plot_type, collections.abc.Iterable):
+        plot_type_map: Any = plot_type
+        plot_type_dict = {str(k): str(v) for k, v in plot_type_map.items()}
+    elif isinstance(plot_type, Iterable):
         # Plot types passed as list, assumed in same order as variables
-        plot_type = {v: t for v, t in zip(yvars, plot_type)}
+        plot_type_dict = dict(zip(yvars, plot_type, strict=False))
     else:
         raise ValueError('Unsupported plot_type value')
 
     # Process variable labels
+    yvar_labels_dict: Mapping[str, str] | None = None
     if isinstance(yvar_labels, str):
-        yvar_labels = {yvars[0]: yvar_labels}
-    elif isinstance(yvar_labels, collections.abc.Mapping):
+        yvar_labels_dict = {yvars[0]: yvar_labels}
+    elif isinstance(yvar_labels, Mapping):
         # Expected data type
-        pass
-    elif isinstance(yvar_labels, collections.abc.Iterable):
+        yvar_labels_map: Any = yvar_labels
+        yvar_labels_dict = {str(k): str(v) for k, v in yvar_labels_map.items()}
+    elif isinstance(yvar_labels, Iterable):
         # Convert from list to dict
-        yvar_labels = {v: lbl for v, lbl in zip(yvars, yvar_labels)}
+        yvar_labels_dict = dict(zip(yvars, yvar_labels, strict=False))
     elif yvar_labels is None and not by_labels:
-        yvar_labels = {v: v for v in yvars}
+        yvar_labels_dict = {v: v for v in yvars}
     elif yvar_labels is None:
         pass
     else:
         raise ValueError('Unsupported yvar_labels value')
 
     # Replicate style for all variables, if needed
+    styles: Mapping[str, AbstractStyle]
     if isinstance(style, AbstractStyle):
         # Will be propagated / converted to dict below
         style = [style]
-    if isinstance(style, collections.abc.Mapping):
+    if isinstance(style, Mapping):
         # Expected data type
-        styles = style
-    elif isinstance(style, collections.abc.Sequence):
-        styles = anything_to_list(style)
-        if len(styles) == 1 and len(yvars) > 1:
-            styles = styles * len(yvars)
+        styles_map: Any = style
+        styles = {str(k): v for k, v in styles_map.items()}
+    elif isinstance(style, Sequence):
+        styles_list = list(style)
+        if len(styles_list) == 1 and len(yvars) > 1:
+            styles_list = styles_list * len(yvars)
         # Convert to dict
-        styles = {v: s for v, s in zip(yvars, styles)}
+        styles = dict(zip(yvars, styles_list, strict=False))
     else:
         raise ValueError('Unsupported style vale')
 
     # Determine number of rows and columns from number of vars to be plotted.
-    ncol = len(over_order) if not ncol else ncol
-    nrow = int(math.ceil(len(over_order) / ncol))
-    npanels = len(over_order)
+    ncol = ncol if ncol else len(over_order_arr)
+    nrow = math.ceil(len(over_order_arr) / ncol)
+    npanels = len(over_order_arr)
 
-    def fplot(ax, idx):
+    def fplot(ax: Axes, idx: tuple[int, int], **kwargs: Any) -> None:
         i, j = idx
 
         ipanel = i * ncol + j
@@ -642,41 +722,40 @@ def plot_dataframe(
             return
 
         # Restrict to data plotted in particular panel
-        df_panel = df.xs(over_order[ipanel], level=over_var, axis=0, drop_level=False)
+        df_panel = df.xs(
+            over_order_arr[ipanel], level=over_var, axis=0, drop_level=False
+        )
 
-        for ivar, yvar in enumerate(yvars):
+        for _ivar, yvar in enumerate(yvars):
             # Variable-specific style
             style = styles[yvar]
-            data = df_panel[yvar]
+            data: pd.DataFrame = df_panel[yvar]  # type: ignore
 
-            if moment_name:
-                mname = moment_name
-            else:
-                mname = _find_moment_name(data)
+            mname = moment_name or _find_moment_name(data)
 
             df_moment = data[mname]
 
             barwidth = 1.0
 
-            for k, by_value in enumerate(by_order):
+            for k, by_value in enumerate(by_order_arr):
                 mask = df_moment.index.isin([by_value], level=by_var)
                 if not mask.any():
                     # For this panel there are no observations for the given layer
                     continue
                 yvalues = df_moment[mask].to_numpy()
-                xvalues = df_moment[mask].index.get_level_values(xvar).to_numpy()
+                xvalues = df_moment[mask].index.get_level_values(xvar_).to_numpy()
 
                 # Legend labels. by-labels take precedence due to backwards
                 # compatibility!
                 leglbl = None
-                if by_labels and yvar_labels:
-                    bylbl = by_labels.get(by_value, by_value)
-                    vlbl = yvar_labels.get(yvar, yvar)
+                if by_labels_dict and yvar_labels_dict:
+                    bylbl = by_labels_dict.get(by_value, by_value)
+                    vlbl = yvar_labels_dict.get(yvar, yvar)
                     leglbl = f'{vlbl}: {bylbl}'
-                elif by_labels:
-                    leglbl = by_labels.get(by_value, by_value)
-                elif yvar_labels:
-                    leglbl = yvar_labels.get(yvar, yvar)
+                elif by_labels_dict:
+                    leglbl = by_labels_dict.get(by_value, by_value)
+                elif yvar_labels_dict:
+                    leglbl = yvar_labels_dict.get(yvar, yvar)
                 else:
                     # Fallback: use default string representation of -by- value
                     leglbl = f'{by_value}'
@@ -685,42 +764,49 @@ def plot_dataframe(
                     # Disable artificial legend labels when nothing is displayed
                     leglbl = None
 
-                if plot_type[yvar] == 'bar':
+                if plot_type_dict[yvar] == 'bar':
                     if xvalues.size > 1:
                         dx = np.amin(xvalues[1:] - xvalues[:-1]) * 0.8
-                        barwidth = dx / len(by_order)
-                        if len(by_order) % 2 == 0:
-                            left = barwidth * (len(by_order) - 1) / 2
+                        barwidth = dx / len(by_order_arr)
+                        if len(by_order_arr) % 2 == 0:
+                            left = barwidth * (len(by_order_arr) - 1) / 2
                         else:
-                            left = barwidth * (len(by_order) // 2)
+                            left = barwidth * (len(by_order_arr) // 2)
 
                         xvalues = xvalues - left + barwidth * k
                 elif jitter:
                     dx = xvalues[-1] - xvalues[0]
-                    if len(by_order) % 2 == 0:
-                        left = dx * jitter * (len(by_order) + 1) / 2
+                    if len(by_order_arr) % 2 == 0:
+                        left = dx * jitter * (len(by_order_arr) + 1) / 2
                     else:
-                        left = dx * jitter * (len(by_order) // 2)
+                        left = dx * jitter * (len(by_order_arr) // 2)
 
                     offset = dx * jitter * k
                     xvalues = xvalues - left + offset
 
-                yerr = _get_yerr(data.xs(by_value, level=by_var), mname, yvalues)
+                df_by: pd.DataFrame = data.xs(by_value, level=by_var)  # type: ignore
+                yerr = _get_yerr(df_by, mname, yvalues)
 
-                if plot_type[yvar] == 'bar':
-                    kw = style.bar_kwargs[k]
-
+                if plot_type_dict[yvar] == 'bar':
                     bw = barwidth * (1.0 - 2.0 * style.barmargin)
 
-                    ax.bar(xvalues, yvalues, width=bw, yerr=yerr, label=leglbl, **kw)
+                    ax.bar(
+                        xvalues,
+                        yvalues,
+                        width=bw,
+                        yerr=yerr,
+                        label=leglbl,
+                        **style.bar_kwargs[k],
+                    )
 
-                elif plot_type[yvar] == 'area' and yerr is not None:
+                elif plot_type_dict[yvar] == 'area' and yerr is not None:
                     ylb = yvalues - yerr[0]
                     yub = yvalues + yerr[1]
                     isfin = any(np.isfinite(ylb) & np.isfinite(yub))
                     if isfin:
-                        kw = style.fill_between_face_kwargs[k]
-                        ax.fill_between(xvalues, ylb, yub, **kw)
+                        ax.fill_between(
+                            xvalues, ylb, yub, **style.fill_between_face_kwargs[k]
+                        )
 
                         # Create lower and upper boundaries manually
                         kw = style.fill_between_edge_kwargs[k].copy()
@@ -732,29 +818,35 @@ def plot_dataframe(
                     kw['zorder'] += 20
                     ax.plot(xvalues, yvalues, label=leglbl, **kw)
 
-                elif plot_type[yvar] == 'scatter':
+                elif plot_type_dict[yvar] == 'scatter':
+                    df_by: pd.DataFrame = df_panel.xs(by_value, level=by_var)  # type: ignore
                     size = _get_scatter_size(
-                        scatter_size, yvar, df_panel.loc[by_value], style.markersize[k]
+                        scatter_size, yvar, df_by, style.markersize[k]
                     )
 
                     if style.split_scatter:
                         # Plot face component of scatter
-                        kw = style.scatter_face_kwargs[k]
-                        ax.scatter(xvalues, yvalues, s=size, **kw)
+                        ax.scatter(
+                            xvalues, yvalues, s=size, **style.scatter_face_kwargs[k]
+                        )
 
                         # Plot edge component of scatter
-                        kw = style.scatter_edge_kwargs[k]
+                        kw = style.scatter_edge_kwargs[k].copy()
                         kw['zorder'] += 1
                         ax.scatter(xvalues, yvalues, s=size, label=leglbl, **kw)
                     else:
                         # Default: plot edges and faces in single call
-                        kw = style.scatter_kwargs[k]
-                        ax.scatter(xvalues, yvalues, s=size, label=leglbl, **kw)
+                        ax.scatter(
+                            xvalues,
+                            yvalues,
+                            s=size,
+                            label=leglbl,
+                            **style.scatter_kwargs[k],
+                        )
 
                 else:
-                    kw = style.errorbar_kwargs[k]
                     # Check whether style includes a marker
-                    marker = kw.get('marker', None)
+                    marker = style.errorbar_kwargs[k].get('marker')
                     has_marker = bool(marker)
                     if marker:
                         marker = marker.lower().strip()
@@ -763,8 +855,13 @@ def plot_dataframe(
                     # Split between line/marker components only if marker is
                     # present
                     if style.split_scatter and has_marker:
-                        kw = style.errorbar_no_marker_kwargs[k]
-                        ax.errorbar(xvalues, yvalues, yerr=yerr, label=leglbl, **kw)
+                        ax.errorbar(
+                            xvalues,
+                            yvalues,
+                            yerr=yerr,
+                            label=leglbl,
+                            **style.errorbar_no_marker_kwargs[k],
+                        )
 
                         kw = style.marker_no_line_kwargs[k].copy()
                         if 'zorder' in kw:
@@ -773,32 +870,39 @@ def plot_dataframe(
                             kw['zorder'] = 1
                         ax.plot(xvalues, yvalues, **kw)
                     else:
-                        kw = style.errorbar_kwargs[k]
-                        ax.errorbar(xvalues, yvalues, yerr=yerr, label=leglbl, **kw)
+                        ax.errorbar(
+                            xvalues,
+                            yvalues,
+                            yerr=yerr,
+                            label=leglbl,
+                            **style.errorbar_kwargs[k],
+                        )
 
         # --- Label over group ---
 
-        lbl = over_labels.get(over_order[ipanel], None)
+        lbl = over_labels_dict.get(over_order_arr[ipanel], None)
         positions = anything_to_tuple(over_label_pos, force=True)
         labels = anything_to_tuple(lbl, force=True)
-        for lbl, pos in zip(labels, positions):
-            _style: AbstractStyle = styles[yvars[0]]
-            if pos.lower() == 'title':
-                ax.set_title(lbl, **_style.title)
-            else:
-                kw = _style.text.copy()
-                kw.update(_text_loc_to_kwargs(pos))
-                kw['s'] = lbl
-                kw['transform'] = ax.transAxes
+        if labels and positions:
+            for lbl, pos in zip(labels, positions, strict=True):
+                _style: AbstractStyle = styles[yvars[0]]
+                if pos.lower() == 'title':
+                    ax.set_title(lbl, **_style.title)
+                else:
+                    # Use title variant of text attributes
+                    kw = _style.text_title.copy()
+                    kw.update(_text_loc_to_kwargs(pos))
+                    kw['s'] = lbl
+                    kw['transform'] = ax.transAxes
 
-                ax.text(**kw)
+                    ax.text(**kw)
 
         # --- Call any user-provided callback function ---
 
         if callable(callback):
             callback(ax, idx, df_panel, styles[yvars[0]], *callback_args)
 
-    kwargs_default = {'style': styles[yvars[0]]}
+    kwargs_default: dict[str, Any] = {'style': styles[yvars[0]]}
 
     kwargs_default.update(kwargs)
     kwargs = kwargs_default
