@@ -1,0 +1,62 @@
+"""
+Unit tests for plot styles and UniqueDict.
+
+Author: Richard Foltyn
+"""
+
+from pydynopt.plot.styles import _DEFAULT_MPL_MAP, UniqueDict
+
+
+def test_unique_dict_mpl_map() -> None:
+    """Verify that UniqueDict maps attributes correctly in all major dictionary methods."""
+    d = UniqueDict(_DEFAULT_MPL_MAP)
+
+    # 1. __setitem__ & __getitem__
+    d['linewidth'] = 2.5
+    assert d['lw'] == 2.5
+    assert d['linewidth'] == 2.5
+    assert 'linewidth' in d
+    assert 'lw' in d
+
+    # 2. __init__ with kwargs
+    d2 = UniqueDict(_DEFAULT_MPL_MAP, linestyle='--', color='blue')
+    assert d2['ls'] == '--'
+    assert d2['linestyle'] == '--'
+    assert d2['c'] == 'blue'
+    assert d2['color'] == 'blue'
+
+    # 3. get()
+    assert d2.get('linestyle') == '--'
+    assert d2.get('ls') == '--'
+    assert d2.get('nonexistent', 'default') == 'default'
+
+    # 4. update()
+    d2.update(linewidth=3.0)
+    assert d2['lw'] == 3.0
+    d2.update({'markeredgecolor': 'red'})
+    assert d2['mec'] == 'red'
+
+    # 5. pop()
+    val = d2.pop('color')
+    assert val == 'blue'
+    assert 'c' not in d2
+    assert 'color' not in d2
+
+    # 6. setdefault()
+    d2.setdefault('markerfacecolor', 'green')
+    assert d2['mfc'] == 'green'
+
+
+def test_font_properties_mapping() -> None:
+    """Verify font_properties and font map to fontproperties."""
+    d = UniqueDict(_DEFAULT_MPL_MAP)
+
+    d['font_properties'] = 'serif'
+    assert d['fontproperties'] == 'serif'
+    assert d['font'] == 'serif'
+    assert d['font_properties'] == 'serif'
+
+    d.update(font='sans-serif')
+    assert d['fontproperties'] == 'sans-serif'
+    assert d['font'] == 'sans-serif'
+    assert d['font_properties'] == 'sans-serif'
