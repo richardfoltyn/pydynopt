@@ -1,4 +1,87 @@
-[tool.black]
+[project]
+name = "pydynopt"
+version = "0.1.0"
+description = "A Python package with support functions for economics and econometrics."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pandas>=2.3.3,<3.0.0",
+    "numpy>=2.4.6",
+    "scipy>=1.17.1",
+    "numba>=0.65.1",
+    "matplotlib>=3.10.9",
+    "patsy>=1.0.2",
+    "pandas-stubs>=2.3,<3.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+]
+
+
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
 line-length = 88
-skip-magic-trailing-comma = 1
-skip-string-normalization = 1
+indent-width = 4
+target-version = "py313"
+# Auto-apply safe fixes (for example, unused imports) when Ruff runs with linting.
+fix = true
+
+[tool.ruff.format]
+quote-style = "single"
+# Format Python snippets inside docstrings for consistent examples.
+docstring-code-format = true
+# Match docstring snippet wrapping to the configured line length policy.
+docstring-code-line-length = "dynamic"
+
+
+[tool.ruff.lint]
+# Keep explicit rules you already enabled.
+# F401: remove unused imports.
+# F541: drop f-prefix on strings without placeholders.
+# I: normalize and sort imports.
+# B: flake8-bugbear correctness and robustness checks.
+# C4: comprehension style simplifications.
+# SIM: simplify boolean/control-flow patterns.
+# UP: pyupgrade modernizations for Python 3.13.
+# RUF: Ruff-native consistency checks.
+# D, DOC: docstring style checks.
+extend-select = ["F401", "F541", "I", "B", "C4", "SIM", "UP", "RUF", "D", "DOC"]
+
+[tool.ruff.lint.isort]
+# Normalize `import x as y, z as w` style for stable import diffs.
+combine-as-imports = true
+# Sort imports consistently inside each section.
+force-sort-within-sections = true
+
+[tool.ruff.lint.pydocstyle]
+# Ensure it understands you are using NumPy style format
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+# Allow package re-exports in `__init__` modules without F401 noise.
+"**/__init__.py" = ["F401"]
+
+
+[tool.pyright]
+extraPaths = [
+    "src"
+]
+reportUnusedCallResult = false
+reportAssignmentType = false
+reportAny = false
+reportExplicitAny = false
+reportUnannotatedClassAttribute = false
+
+[tool.ty.environment]
+extra-paths = [
+    "src/"
+]
