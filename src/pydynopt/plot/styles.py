@@ -5,15 +5,13 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-import collections.abc
-from collections.abc import Mapping
-from copy import deepcopy
-from typing import Optional, Union
-
-import matplotlib
-from matplotlib.font_manager import FontProperties
-import itertools as it
+from collections.abc import Iterator, Mapping, Sequence
 import numpy as np
+from copy import deepcopy
+
+from matplotlib.font_manager import FontProperties
+import matplotlib.font_manager as fm
+import itertools as it
 
 import copy
 
@@ -35,10 +33,10 @@ _FIGURE_LAYOUT_MAP = {
 
 # Mapping from keyword arguments for ticklabels() to tick_params()
 _TICKLABEL_PARAMS_MAP = dict(
-    fontfamily="labelfontfamily",
-    fontsize="labelsize",
-    color="labelcolor",
-    rotation="labelrotation",
+    fontfamily='labelfontfamily',
+    fontsize='labelsize',
+    color='labelcolor',
+    rotation='labelrotation',
 )
 
 
@@ -62,6 +60,33 @@ _DEFAULT_MPL_MAP = dict(
 )
 
 
+def select_font(font_family: str | Sequence[str], default: str = 'serif') -> str:
+    """
+    Select a font family from the system's available fonts. If the desired font
+    is not available, return a default font family.
+
+    Parameters
+    ----------
+    font_family : str
+        The desired font family.
+    default : str, optional
+        The default font family to use if the desired font is not available.
+
+    Returns
+    -------
+    str
+        The selected font family.
+    """
+    available_fonts = [f.name for f in fm.fontManager.ttflist]
+    if isinstance(font_family, str):
+        return font_family if font_family in available_fonts else default
+    else:
+        for ff in font_family:
+            if ff in available_fonts:
+                return ff
+        return default
+
+
 class UniqueDict(dict):
     """
     Sub-class of dict which maps long forms of MPL arguments to plot() and other
@@ -69,20 +94,22 @@ class UniqueDict(dict):
     ("lw" instead of possibly "lw" and "linewidth", etc.)
     """
 
-    def __init__(self, mapping: Optional[Mapping] = None, **kwargs):
+    def __init__(
+        self, mapping: Mapping[str, object] | None = None, **kwargs: object
+    ) -> None:
         self.mapping = mapping
         super().__init__(**kwargs)
 
-    def __setitem__(self, key: str, value) -> None:
+    def __setitem__(self, key: str, value: object) -> None:
         key = self.mapping.get(key, key)
         super().__setitem__(key, value)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> object:
         key = self.mapping.get(key, key)
         return super().__getitem__(key)
 
 
-def _to_tuple(value) -> tuple:
+def _to_tuple(value: object) -> tuple[object, ...]:
     """
     Return a tuple created from the given value. If `value` is None,
     return a tuple containing only None.
@@ -107,11 +134,11 @@ def _to_tuple(value) -> tuple:
 
 
 class Cycler:
-    def __init__(self, items=None):
+    def __init__(self, items: object = None) -> None:
         self.items: tuple = _to_tuple(items)
         self.cache: tuple | None = None
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: int | slice) -> object:
         if isinstance(item, slice):
             end = item.stop
             if end is None and self.cache:
@@ -123,7 +150,7 @@ class Cycler:
             self.cache = tuple(next(col) for _ in range(end + 1))
         return self.cache[item]
 
-    def __deepcopy__(self, memodict={}):
+    def __deepcopy__(self, memodict: dict[object, object] = {}) -> 'Cycler':
         obj = type(self)(self.items)
         return obj
 
@@ -154,26 +181,26 @@ class Transparency(Cycler):
 
 
 class ConstFillProperty:
-    def __init__(self, const, values=None):
+    def __init__(self, const: object, values: object = None) -> None:
         self.values = copy.copy(values)
         self.const = const
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: int) -> object:
         if self.values is None or item >= len(self.values):
             return self.const
         else:
             return self.values[item]
 
-    def __deepcopy__(self, memodict={}):
+    def __deepcopy__(self, memodict: dict[object, object] = {}) -> 'ConstFillProperty':
         obj = ConstFillProperty(self.const, self.values)
         return obj
 
 
 class PlotStyleDict(object):
-    def __init__(self, style):
+    def __init__(self, style: 'AbstractStyle') -> None:
         self.style = style
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: int) -> dict[str, object]:
         keys = {
             'color',
             'lw',
@@ -205,11 +232,11 @@ class StyleAttrMapping:
     retrieved for a sequence of objects to be plotted.
     """
 
-    def __init__(self, style, mapping):
+    def __init__(self, style: 'AbstractStyle', mapping: Mapping[str, object]) -> None:
         self._style = style
         self._mapping = mapping
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: int) -> dict[str, object]:
         """
         Return the style defined by key/value pairs at a given index.
 
@@ -258,7 +285,7 @@ class AbstractStyle:
     LEG_TITLE_FONTPROP_KWARGS = {}
     LBL_FONTPROP_KWARGS = {}
     TITLE_FONTPROP_KWARGS = {}
-    SUBTITLE_FONTPROP_KWARGS = {}
+    SUPTITLE_FONTPROP_KWARGS = {}
     TEXT_FONTPROP_KWARGS = {}
 
     LEG_KWARGS = {}
@@ -287,8 +314,61 @@ class AbstractStyle:
     MFC = [None]
     HATCH = [None]
 
-    def __init__(self):
-        cls = self.__class__
+    @classmethod
+    def _iter_class_defaults(
+        cls: type['AbstractStyle'],
+    ) -> Iterator[tuple[str, object]]:
+        """
+        Yield class-level default attributes used to initialize style instances.
+
+        The method walks the method resolution order (MRO) from base classes to
+        subclasses so that subclass attributes override base-class attributes with
+        the same name. Only public, ALL_CAPS attributes are included; methods,
+        properties, descriptors, and private names are excluded.
+
+        Parameters
+        ----------
+        cls : type[AbstractStyle]
+            Style class whose defaults should be collected.
+
+        Yields
+        ------
+        tuple[str, object]
+            Pairs of attribute name and attribute value for each default.
+        """
+        for base in reversed(cls.mro()):
+            if not issubclass(base, AbstractStyle):
+                continue
+            for name, value in base.__dict__.items():
+                if not name.isupper() or name.startswith('_'):
+                    continue
+                if isinstance(value, (staticmethod, classmethod, property)):
+                    continue
+                if callable(value):
+                    continue
+                yield name, value
+
+    def _freeze_class_defaults(self) -> None:
+        """
+        Copy class-level defaults onto the instance.
+
+        This creates instance-owned snapshots of all default style attributes so
+        that subsequent mutations to class attributes do not affect existing
+        objects.
+
+        Parameters
+        ----------
+        self : AbstractStyle
+
+        Returns
+        -------
+        None
+        """
+        for name, value in type(self)._iter_class_defaults():
+            setattr(self, name, deepcopy(value))
+
+    def __init__(self, fontfamily: str | None = None) -> None:
+        self._freeze_class_defaults()
 
         self.cell_size = 6
         self.dpi = 96
@@ -296,9 +376,9 @@ class AbstractStyle:
         # Note: MPL defines aspect as height / width
         self.ax_aspect = None  # Aspect ratio to set via ax.set_aspect()
         # Note: MPL defines aspect as height / width
-        self.ax_box_aspect = None # Aspect ratio to set via ax.set_box_aspect()
+        self.ax_box_aspect = None  # Aspect ratio to set via ax.set_box_aspect()
         self._margins = 0.02
-        self._grid = cls.GRID_KWARGS.copy()
+        self._grid = self.GRID_KWARGS.copy()
         self._color = None
         self._facecolor = None
         self._facealpha = None
@@ -322,8 +402,8 @@ class AbstractStyle:
         self._hatch = None
         self._barmargin = 0.0
         self._zorder = None
-        self._figure = cls.FIGURE_KWARGS.copy()
-        self._subplot = cls.SUBPLOT_KWARGS.copy()
+        self._figure = self.FIGURE_KWARGS.copy()
+        self._subplot = self.SUBPLOT_KWARGS.copy()
         self._ylabel = None
         self._xlabel = None
         self._xticklabels = None
@@ -335,36 +415,36 @@ class AbstractStyle:
         self._legend = None
         self._text = None
         self.split_scatter = False
-        self._guideline = UniqueDict(mapping=_DEFAULT_MPL_MAP, **cls.GUIDELINE_KWARGS)
+        self._guideline = UniqueDict(mapping=_DEFAULT_MPL_MAP, **self.GUIDELINE_KWARGS)
 
         self._plot_all = PlotStyleDict(self)
 
-    def __deepcopy__(self, memodict={}):
+        # Override font family instead of having to redefine all font properties
+        # in subclasses. This can be useful if we want different fonts for
+        # slides and tables.
+        if fontfamily:
+            for attr, value in self.__dict__.items():
+                # Update font family in dicts used to construct font properties
+                if attr.find('FONTPROP') != -1 and isinstance(value, dict):
+                    value['family'] = fontfamily
+                # Update font family in dicts used as keyword arguments
+                elif attr.endswith('KWARGS') and isinstance(value, dict):
+                    if 'fontfamily' in value:
+                        value['fontfamily'] = fontfamily
+                    elif 'family' in value:
+                        value['family'] = fontfamily
+
+    def __deepcopy__(self, memodict: dict[object, object] = {}) -> 'AbstractStyle':
         cls = self.__class__
         obj = cls()
 
-        blacklist = ()
-
-        for attr in dir(self):
-            if attr in blacklist:
+        for attr, value in self.__dict__.items():
+            if attr == '_plot_all':
                 continue
-            elif attr.startswith('__'):
-                # Skip all private stuff used by Python
-                continue
-            elif isinstance(getattr(cls, attr, None), property):
-                # Skip all properties
-                continue
-            elif hasattr(cls, attr):
-                # Skip class attributes
-                continue
-
-            value = getattr(self, attr)
-
             if callable(value):
-                # Skip all methods
                 continue
-            elif value is None:
-                setattr(self, attr, None)
+            if value is None:
+                setattr(obj, attr, None)
             elif isinstance(value, (int, float)):
                 setattr(obj, attr, value)
             else:
@@ -377,100 +457,93 @@ class AbstractStyle:
         return obj
 
     @property
-    def figure(self):
+    def figure(self) -> dict[str, object]:
         return self._figure
 
     @property
-    def legend(self):
+    def legend(self) -> dict[str, object]:
         if self._legend is None:
-            cls = self.__class__
-            self._legend = cls.LEG_KWARGS.copy()
+            self._legend = self.LEG_KWARGS.copy()
             # Add font properties
-            fp = FontProperties(**cls.LEG_FONTPROP_KWARGS)
+            fp = FontProperties(**self.LEG_FONTPROP_KWARGS)
             self._legend.update({'prop': fp})
-            if cls.LEG_TITLE_FONTPROP_KWARGS:
-                fp = FontProperties(**cls.LEG_TITLE_FONTPROP_KWARGS)
+            if self.LEG_TITLE_FONTPROP_KWARGS:
+                fp = FontProperties(**self.LEG_TITLE_FONTPROP_KWARGS)
                 self._legend.update(title_fontproperties=fp)
         return self._legend
 
     @legend.setter
-    def legend(self, value):
+    def legend(self, value: Mapping[str, object]) -> None:
         self._legend = dict(value)
 
     @property
-    def text(self):
+    def text(self) -> dict[str, object]:
         if self._text is None:
-            cls = self.__class__
-            fp = FontProperties(**cls.TEXT_FONTPROP_KWARGS)
-            self._text = cls.TEXT_KWARGS.copy()
+            fp = FontProperties(**self.TEXT_FONTPROP_KWARGS)
+            self._text = self.TEXT_KWARGS.copy()
             self._text.update({'fontproperties': fp})
         return self._text
 
     @text.setter
-    def text(self, value):
+    def text(self, value: Mapping[str, object]) -> None:
         self._text = dict(value)
 
     @property
-    def title(self):
+    def title(self) -> dict[str, object]:
         if self._title is None:
-            cls = self.__class__
-            fp = FontProperties(**cls.TITLE_FONTPROP_KWARGS)
-            self._title = cls.TITLE_KWARGS.copy()
+            fp = FontProperties(**self.TITLE_FONTPROP_KWARGS)
+            self._title = self.TITLE_KWARGS.copy()
             self._title.update({'fontproperties': fp})
         return self._title
 
     @title.setter
-    def title(self, value):
+    def title(self, value: Mapping[str, object]) -> None:
         self._title = dict(value)
 
     @property
-    def suptitle(self):
+    def suptitle(self) -> dict[str, object]:
         if self._suptitle is None:
-            cls = self.__class__
-            fp = FontProperties(**cls.SUBTITLE_FONTPROP_KWARGS)
-            self._suptitle = cls.SUPTITLE_KWARGS.copy()
+            fp = FontProperties(**self.SUPTITLE_FONTPROP_KWARGS)
+            self._suptitle = self.SUPTITLE_KWARGS.copy()
             self._suptitle.update({'fontproperties': fp})
         return self._suptitle
 
     @suptitle.setter
-    def suptitle(self, value):
+    def suptitle(self, value: Mapping[str, object]) -> None:
         self._suptitle = dict(value)
 
     @property
-    def xlabel(self):
+    def xlabel(self) -> dict[str, object]:
         if self._xlabel is None:
-            cls = self.__class__
-            fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
-            self._xlabel = cls.LBL_KWARGS.copy()
+            fp = FontProperties(**self.LBL_FONTPROP_KWARGS)
+            self._xlabel = self.LBL_KWARGS.copy()
             self._xlabel.update({'fontproperties': fp})
         return self._xlabel
 
     @xlabel.setter
-    def xlabel(self, value):
+    def xlabel(self, value: Mapping[str, object]) -> None:
         self._xlabel = dict(value)
 
     @property
-    def ylabel(self):
+    def ylabel(self) -> dict[str, object]:
         if self._ylabel is None:
-            cls = self.__class__
-            fp = FontProperties(**cls.LBL_FONTPROP_KWARGS)
-            self._ylabel = cls.LBL_KWARGS.copy()
+            fp = FontProperties(**self.LBL_FONTPROP_KWARGS)
+            self._ylabel = self.LBL_KWARGS.copy()
             self._ylabel.update({'fontproperties': fp})
         return self._ylabel
 
     @ylabel.setter
-    def ylabel(self, value):
+    def ylabel(self, value: Mapping[str, object]) -> None:
         self._ylabel = dict(value)
 
     @property
-    def xticklabels(self):
+    def xticklabels(self) -> dict[str, object]:
         if self._xticklabels is None:
-            cls = self.__class__
-            self._xticklabels = cls.TICKLABEL_KWARGS.copy()
+            self._xticklabels = self.TICKLABEL_KWARGS.copy()
         return self._xticklabels
 
     @xticklabels.setter
-    def xticklabels(self, value):
+    def xticklabels(self, value: Mapping[str, object]) -> None:
         """
         Set the keyword arguments passed to set_xticklabels()
 
@@ -481,14 +554,13 @@ class AbstractStyle:
         self._xticklabels = dict(value)
 
     @property
-    def yticklabels(self):
+    def yticklabels(self) -> dict[str, object]:
         if self._yticklabels is None:
-            cls = self.__class__
-            self._yticklabels = cls.TICKLABEL_KWARGS.copy()
+            self._yticklabels = self.TICKLABEL_KWARGS.copy()
         return self._yticklabels
 
     @yticklabels.setter
-    def yticklabels(self, value):
+    def yticklabels(self, value: Mapping[str, object]) -> None:
         """
         Set the keyword arguments passed to set_yticklabels()
 
@@ -499,7 +571,7 @@ class AbstractStyle:
         self._yticklabels = dict(value)
 
     @property
-    def xtick_params(self) -> dict:
+    def xtick_params(self) -> dict[str, object]:
         """
         Returns collection of keyword arguments that can be passed to
         set_tick_params().
@@ -509,8 +581,7 @@ class AbstractStyle:
         dict
         """
         if self._xtick_params is None:
-            cls = self.__class__
-            self._xtick_params = cls.TICK_PARAMS_KWARGS.copy()
+            self._xtick_params = self.TICK_PARAMS_KWARGS.copy()
             # Update with label properties. Keyword arguments have different names
             # when passed to tick_params() and only a subset is supported.
             self._xtick_params.update(
@@ -523,7 +594,7 @@ class AbstractStyle:
         return self._xtick_params
 
     @xtick_params.setter
-    def xtick_params(self, value: Mapping):
+    def xtick_params(self, value: Mapping[str, object]) -> None:
         """
         Sets the collection of keyword arguments passed to
         set_tick_params().
@@ -535,7 +606,7 @@ class AbstractStyle:
         self._xtick_params = dict(value)
 
     @property
-    def ytick_params(self) -> dict:
+    def ytick_params(self) -> dict[str, object]:
         """
         Returns collection of keyword arguments that can be passed to
         set_tick_params().
@@ -545,8 +616,7 @@ class AbstractStyle:
         dict
         """
         if self._ytick_params is None:
-            cls = self.__class__
-            self._ytick_params = cls.TICK_PARAMS_KWARGS.copy()
+            self._ytick_params = self.TICK_PARAMS_KWARGS.copy()
             # Update with label properties. Keyword arguments have different names
             # when passed to tick_params() and only a subset is supported.
             self._ytick_params.update(
@@ -559,7 +629,7 @@ class AbstractStyle:
         return self._ytick_params
 
     @ytick_params.setter
-    def ytick_params(self, value: Mapping):
+    def ytick_params(self, value: Mapping[str, object]) -> None:
         """
         Sets the collection of keyword arguments passed to
         set_tick_params().
@@ -571,11 +641,11 @@ class AbstractStyle:
         self._ytick_params = dict(value)
 
     @property
-    def grid(self) -> dict:
+    def grid(self) -> dict[str, object]:
         return self._grid
 
     @grid.setter
-    def grid(self, value: Union[Mapping, bool]):
+    def grid(self, value: Mapping[str, object] | bool) -> None:
         if isinstance(value, bool):
             visible = self._grid.get('visible', True)
             if value:
@@ -584,7 +654,7 @@ class AbstractStyle:
                     # not produce any grid once it's been turned off.
                     # Do this only if b=False, otherwise ignore grid=True
                     # as it's enabled in some form anyway.
-                    self._grid = self.__class__.GRID_KWARGS.copy()
+                    self._grid = self.GRID_KWARGS.copy()
                 self._grid['visible'] = True
             else:
                 self._grid = {'visible': False}
@@ -599,78 +669,75 @@ class AbstractStyle:
             self._grid = dict(value)
 
     @property
-    def subplot(self):
+    def subplot(self) -> dict[str, object]:
         if self._subplot is None:
-            cls = self.__class__
-            self._subplot = cls.SUBPLOT_KWARGS.copy()
+            self._subplot = self.SUBPLOT_KWARGS.copy()
         return self._subplot
 
     @property
-    def color(self):
+    def color(self) -> Colors:
         if self._color is None:
-            self._color = Colors(type(self).COLORS)
+            self._color = Colors(self.COLORS)
         return self._color
 
     @color.setter
-    def color(self, value):
+    def color(self, value: object) -> None:
         if isinstance(value, Colors):
             self._color = deepcopy(value)
         else:
             self._color = Colors(value)
 
     @property
-    def edgecolor(self):
+    def edgecolor(self) -> Colors:
         if self._edgecolor is None:
             # If nothing is set use the default colors
             self._edgecolor = self.color
         return self._edgecolor
 
     @edgecolor.setter
-    def edgecolor(self, value):
+    def edgecolor(self, value: object) -> None:
         if isinstance(value, Colors):
             self._edgecolor = deepcopy(value)
         else:
             self._edgecolor = Colors(value)
 
     @property
-    def facecolor(self):
-        cls = self.__class__
+    def facecolor(self) -> Colors:
         if self._facecolor is None:
-            if cls.FACECOLORS:
-                self._facecolor = Colors(cls.FACECOLORS)
+            if self.FACECOLORS:
+                self._facecolor = Colors(self.FACECOLORS)
             else:
                 self._facecolor = deepcopy(self.color)
         return self._facecolor
 
     @facecolor.setter
-    def facecolor(self, value):
+    def facecolor(self, value: object) -> None:
         if isinstance(value, Colors):
             self._facecolor = deepcopy(value)
         else:
             self._facecolor = Colors(value)
 
     @property
-    def facealpha(self):
+    def facealpha(self) -> Transparency:
         if self._facealpha is None:
-            self._facealpha = Transparency(type(self).ALPHAS)
+            self._facealpha = Transparency(self.ALPHAS)
         return self._facealpha
 
     @facealpha.setter
-    def facealpha(self, value):
+    def facealpha(self, value: object) -> None:
         if isinstance(value, Transparency):
             self._facealpha = deepcopy(value)
         else:
             self._facealpha = Colors(value)
 
     @property
-    def linewidth(self):
-        cls = self.__class__
+    def linewidth(self) -> LineWidth:
         if self._linewidth is None:
-            self._linewidth = LineWidth(cls.LINEWIDTH)
+            self._linewidth = LineWidth(self.LINEWIDTH)
         return self._linewidth
 
     @linewidth.setter
-    def linewidth(self, value):
+    def linewidth(self, value: object) -> None:
         if isinstance(value, LineWidth):
             self._linewidth = deepcopy(value)
         else:
@@ -678,17 +745,17 @@ class AbstractStyle:
             self._linewidth = LineWidth(value)
 
     @property
-    def lw(self):
+    def lw(self) -> LineWidth:
         return self.linewidth
 
     @property
-    def edgelinewidth(self):
+    def edgelinewidth(self) -> LineWidth:
         if self._edgelinewidth is None:
-            self._edgelinewidth = LineWidth(type(self).EDGELINEWIDTH)
+            self._edgelinewidth = LineWidth(self.EDGELINEWIDTH)
         return self._edgelinewidth
 
     @edgelinewidth.setter
-    def edgelinewidth(self, value):
+    def edgelinewidth(self, value: object) -> None:
         if isinstance(self, LineWidth):
             self._edgelinewidth = deepcopy(value)
         else:
@@ -696,13 +763,13 @@ class AbstractStyle:
             self._edgelinewidth = LineWidth(value)
 
     @property
-    def linestyle(self):
+    def linestyle(self) -> LineStyle:
         if self._linestyle is None:
-            self._linestyle = LineStyle(type(self).LINESTYLES)
+            self._linestyle = LineStyle(self.LINESTYLES)
         return self._linestyle
 
     @linestyle.setter
-    def linestyle(self, value):
+    def linestyle(self, value: object) -> None:
         if isinstance(value, LineStyle):
             self._linestyle = deepcopy(value)
         else:
@@ -710,17 +777,17 @@ class AbstractStyle:
             self._linestyle = LineStyle(value)
 
     @property
-    def ls(self):
+    def ls(self) -> LineStyle:
         return self.linestyle
 
     @property
-    def edgelinestyle(self):
+    def edgelinestyle(self) -> LineStyle:
         if self._edgelinestyle is None:
-            self._edgelinestyle = LineStyle(type(self).EDGELINESTYLE)
+            self._edgelinestyle = LineStyle(self.EDGELINESTYLE)
         return self._edgelinestyle
 
     @edgelinestyle.setter
-    def edgelinestyle(self, value):
+    def edgelinestyle(self, value: object) -> None:
         if isinstance(value, LineStyle):
             self._edgelinestyle = deepcopy(value)
         else:
@@ -728,13 +795,13 @@ class AbstractStyle:
             self._edgelinestyle = LineStyle(value)
 
     @property
-    def edgealpha(self):
+    def edgealpha(self) -> Transparency:
         if self._edgealpha is None:
-            self._edgealpha = Transparency(type(self).EDGEALPHA)
+            self._edgealpha = Transparency(self.EDGEALPHA)
         return self._edgealpha
 
     @edgealpha.setter
-    def edgealpha(self, value):
+    def edgealpha(self, value: object) -> None:
         if isinstance(value, Transparency):
             self._edgealpha = deepcopy(value)
         else:
@@ -742,13 +809,13 @@ class AbstractStyle:
             self._edgealpha = Transparency(value)
 
     @property
-    def alpha(self):
+    def alpha(self) -> Transparency:
         if self._alpha is None:
-            self._alpha = Transparency(type(self).ALPHAS)
+            self._alpha = Transparency(self.ALPHAS)
         return self._alpha
 
     @alpha.setter
-    def alpha(self, value):
+    def alpha(self, value: object) -> None:
         if isinstance(value, Transparency):
             self._alpha = deepcopy(value)
         else:
@@ -756,27 +823,27 @@ class AbstractStyle:
             self._alpha = Transparency(value)
 
     @property
-    def ecolor(self):
+    def ecolor(self) -> Colors:
         if self._ecolor is None:
             # If nothing is set use the default colors
             self._ecolor = Colors(['black'])
         return self._ecolor
 
     @ecolor.setter
-    def ecolor(self, value):
+    def ecolor(self, value: object) -> None:
         if isinstance(value, Colors):
             self._ecolor = deepcopy(value)
         else:
             self._ecolor = Colors(value)
 
     @property
-    def elinewidth(self):
+    def elinewidth(self) -> LineWidth:
         if self._elinewidth is None:
             self._elinewidth = LineWidth((1.0,))
         return self._elinewidth
 
     @elinewidth.setter
-    def elinewidth(self, value):
+    def elinewidth(self, value: object) -> None:
         if isinstance(value, LineWidth):
             self._elinewidth = deepcopy(value)
         else:
@@ -784,13 +851,13 @@ class AbstractStyle:
             self._elinewidth = LineWidth(value)
 
     @property
-    def marker(self):
+    def marker(self) -> Marker:
         if self._marker is None:
-            self._marker = Marker(type(self).MARKERS)
+            self._marker = Marker(self.MARKERS)
         return self._marker
 
     @marker.setter
-    def marker(self, value):
+    def marker(self, value: object) -> None:
         if isinstance(value, Marker):
             self._marker = deepcopy(value)
         else:
@@ -800,13 +867,13 @@ class AbstractStyle:
             self._marker = Marker(value)
 
     @property
-    def markersize(self):
+    def markersize(self) -> ConstFillProperty:
         if self._markersize is None:
-            self._markersize = ConstFillProperty(const=type(self).MARKERSIZE)
+            self._markersize = ConstFillProperty(const=self.MARKERSIZE)
         return self._markersize
 
     @markersize.setter
-    def markersize(self, value):
+    def markersize(self, value: object) -> None:
         if isinstance(value, ConstFillProperty):
             self._markersize = deepcopy(value)
         else:
@@ -815,13 +882,13 @@ class AbstractStyle:
             self._markersize = ConstFillProperty(default, value)
 
     @property
-    def markevery(self):
+    def markevery(self) -> ConstFillProperty:
         if self._markevery is None:
             self._markevery = ConstFillProperty(const=1)
         return self._markevery
 
     @markevery.setter
-    def markevery(self, value):
+    def markevery(self, value: object) -> None:
         if isinstance(value, ConstFillProperty):
             self._markevery = deepcopy(value)
         else:
@@ -830,39 +897,39 @@ class AbstractStyle:
             self._markevery = ConstFillProperty(default, value)
 
     @property
-    def mec(self):
+    def mec(self) -> Colors:
         if self._mec is None:
-            self._mec = Colors(type(self).MEC)
+            self._mec = Colors(self.MEC)
         return self._mec
 
     @mec.setter
-    def mec(self, value):
+    def mec(self, value: object) -> None:
         if isinstance(value, Colors):
             self._mec = deepcopy(value)
         else:
             self._mec = Colors(value)
 
     @property
-    def mfc(self):
+    def mfc(self) -> Colors:
         if self._mfc is None:
-            self._mfc = Colors(type(self).MFC)
+            self._mfc = Colors(self.MFC)
         return self._mfc
 
     @mfc.setter
-    def mfc(self, value):
+    def mfc(self, value: object) -> None:
         if isinstance(value, Colors):
             self._mfc = deepcopy(value)
         else:
             self._mfc = Colors(value)
 
     @property
-    def mew(self):
+    def mew(self) -> LineWidth:
         if self._mew is None:
             self._mew = LineWidth((0.5,))
         return self._mew
 
     @mew.setter
-    def mew(self, value):
+    def mew(self, value: object) -> None:
         if isinstance(value, LineWidth):
             self._mew = deepcopy(value)
         else:
@@ -870,13 +937,13 @@ class AbstractStyle:
             self._mew = LineWidth(value)
 
     @property
-    def hatch(self):
+    def hatch(self) -> ConstFillProperty:
         if self._hatch is None:
             self._hatch = ConstFillProperty(None)
         return self._hatch
 
     @hatch.setter
-    def hatch(self, value):
+    def hatch(self, value: object) -> None:
         if isinstance(value, ConstFillProperty):
             self._hatch = deepcopy(value)
         else:
@@ -885,11 +952,11 @@ class AbstractStyle:
             self._hatch = ConstFillProperty(default, value)
 
     @property
-    def barmargin(self):
+    def barmargin(self) -> float:
         return self._barmargin
 
     @barmargin.setter
-    def barmargin(self, value):
+    def barmargin(self, value: object) -> None:
         try:
             value = float(value)
         except TypeError:
@@ -901,13 +968,13 @@ class AbstractStyle:
         self._barmargin = value
 
     @property
-    def zorder(self):
+    def zorder(self) -> ConstFillProperty:
         if self._zorder is None:
             self._zorder = ConstFillProperty(const=10)
         return self._zorder
 
     @zorder.setter
-    def zorder(self, value):
+    def zorder(self, value: object) -> None:
         if isinstance(value, ConstFillProperty):
             self._zorder = deepcopy(value)
         else:
@@ -915,22 +982,22 @@ class AbstractStyle:
             self._zorder = ConstFillProperty(10, value)
 
     @property
-    def guideline(self) -> dict:
+    def guideline(self) -> dict[str, object]:
         return self._guideline
 
     @guideline.setter
-    def guideline(self, value: Optional[Mapping] = None):
+    def guideline(self, value: Mapping[str, object] | None = None) -> None:
         if value is not None:
             self._guideline = UniqueDict(mapping=_DEFAULT_MPL_MAP, **value)
         else:
             self._guideline = UniqueDict(mapping=_DEFAULT_MPL_MAP)
 
     @property
-    def margins(self):
+    def margins(self) -> float | np.ndarray | None:
         return self._margins
 
     @margins.setter
-    def margins(self, value):
+    def margins(self, value: object) -> None:
         """
         Set subplot margins. Values are relative to the data margins and
         need to be in the interval [0, 1]. If multiple values are given,
@@ -959,7 +1026,7 @@ class AbstractStyle:
         self._margins = value
 
     @property
-    def figure_layout(self):
+    def figure_layout(self) -> FigureLayout:
         """
         Return the figure layout setting
 
@@ -977,7 +1044,7 @@ class AbstractStyle:
             return FigureLayout.DEFAULT
 
     @figure_layout.setter
-    def figure_layout(self, value):
+    def figure_layout(self, value: FigureLayout) -> None:
         """
         Set the figure layout
 
@@ -999,11 +1066,11 @@ class AbstractStyle:
                 self._figure[k] = True
 
     @property
-    def plot_kwargs(self):
+    def plot_kwargs(self) -> PlotStyleDict:
         return self._plot_all
 
     @property
-    def fill_between_kwargs(self):
+    def fill_between_kwargs(self) -> StyleAttrMapping:
         """
         Return a sequence of collections of key/value pairs that can be passed
         to matplotlib's fill_between()
@@ -1026,7 +1093,7 @@ class AbstractStyle:
         return kwargs
 
     @property
-    def fill_between_face_kwargs(self):
+    def fill_between_face_kwargs(self) -> StyleAttrMapping:
         """
         Return a sequence of collections of key/value pairs that can be passed
         to matplotlib's fill_between() when plotting the "face" component.
@@ -1048,7 +1115,7 @@ class AbstractStyle:
         return kwargs
 
     @property
-    def fill_between_edge_kwargs(self):
+    def fill_between_edge_kwargs(self) -> StyleAttrMapping:
         """
         Return a sequence of collections of key/value pairs that can be passed to
         matplotlib's plot() function when separately plotting the lower
@@ -1071,7 +1138,7 @@ class AbstractStyle:
         return kwargs
 
     @property
-    def errorbar_kwargs(self):
+    def errorbar_kwargs(self) -> StyleAttrMapping:
         """
         Return a sequence of collections of key/value pairs that can be passed to
         matplotlib's errorbar().
@@ -1104,7 +1171,7 @@ class AbstractStyle:
         return kwargs
 
     @property
-    def errorbar_no_marker_kwargs(self):
+    def errorbar_no_marker_kwargs(self) -> StyleAttrMapping:
         """
         Return a sequence of collections of key/value pairs that can be passed to
         matplotlib's errorbar(). All marker-related attributes are
@@ -1134,7 +1201,7 @@ class AbstractStyle:
         return kwargs
 
     @property
-    def marker_no_line_kwargs(self):
+    def marker_no_line_kwargs(self) -> StyleAttrMapping:
         """
         Return a sequence of collections of key/value pairs that can be passed to
         matplotlib's plot() or errorbar(). Only includes marker-related
@@ -1163,7 +1230,7 @@ class AbstractStyle:
         return kwargs
 
     @property
-    def bar_kwargs(self):
+    def bar_kwargs(self) -> StyleAttrMapping:
         """
         Returns a sequence of collections of key/value pairs that can be passed
         to matplotlib's bar().
@@ -1195,7 +1262,7 @@ class AbstractStyle:
         return kwargs
 
     @property
-    def scatter_kwargs(self):
+    def scatter_kwargs(self) -> StyleAttrMapping:
         """
         Returns a sequence of collections of key/value pairs that can be passed
         to matplotlib's scatter().
@@ -1220,7 +1287,7 @@ class AbstractStyle:
         return kwargs
 
     @property
-    def scatter_face_kwargs(self):
+    def scatter_face_kwargs(self) -> StyleAttrMapping:
         """
         Returns a sequence of collections of key/value parts that can be used
         to plot the "face" component of split scatter plots and should
@@ -1242,7 +1309,7 @@ class AbstractStyle:
         return kwargs
 
     @property
-    def scatter_edge_kwargs(self):
+    def scatter_edge_kwargs(self) -> StyleAttrMapping:
         """
         Returns a sequence of collections of key/value parts that can be used
         to plot the "edge" component of split scatter plots and should
@@ -1278,7 +1345,7 @@ class DefaultStyle(AbstractStyle):
 
     TITLE_FONTPROP_KWARGS = {'family': 'serif', 'size': 'medium', 'style': 'italic'}
 
-    SUBTITLE_FONTPROP_KWARGS = {
+    SUPTITLE_FONTPROP_KWARGS = {
         'family': 'serif',
         'size': 'x-large',
         'style': 'italic',
@@ -1335,8 +1402,8 @@ class PurpleBlue(DefaultStyle):
 
 
 class Presentation(DefaultStyle):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
 
         self.cell_size = 5.0
         # Green, Black/violet, Red, Gray
@@ -1364,8 +1431,8 @@ class AlternatingStyle(DefaultStyle):
         'linewidth': 0.5,
     }
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
 
         colors = ['#0570b0', '#e31a1c', '#88419d', '#fc8d59', '#252525']
         # colors = ['#0570b0', '#d94801', '#41ae76', '#6a51a3', '#d7301f']
@@ -1407,8 +1474,8 @@ class QualitativeStyle(DefaultStyle):
         'linewidth': 0.35,
     }
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
 
         colors = ['#0570b0', 'black', '#e31a1c', '#88419d', '#fc8d59', '#aa5500']
 
@@ -1429,7 +1496,8 @@ class ColorBrewerStyle(DefaultStyle):
         name: str = 'Set1',
         ptype: PaletteType = PaletteType.QUALITATIVE,
         ncolors: int = 5,
-    ):
+        **kwargs
+    ) -> None:
         """
 
         Parameters
@@ -1443,14 +1511,14 @@ class ColorBrewerStyle(DefaultStyle):
             available number of colors for a given palette.
 
         """
-        super().__init__()
+        super().__init__(**kwargs)
 
         import pkgutil
 
         try:
             import palettable
         except ImportError:
-            raise ImportError('Required package \'palettable\' is missing')
+            raise ImportError("Required package 'palettable' is missing")
 
         obj = pkgutil.resolve_name(f'palettable.colorbrewer.{ptype}.{name}_{ncolors}')
 
