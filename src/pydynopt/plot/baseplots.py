@@ -1,4 +1,6 @@
 """
+Helpers for creating and styling rectangular Matplotlib subplot grids.
+
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
 
@@ -6,210 +8,328 @@ Author: Richard Foltyn
 """
 
 import collections.abc
-import copy
 from collections.abc import Mapping, Sequence
-from typing import Optional, Union
+import copy
+from pathlib import Path
+from typing import Any, Literal, Protocol
 
-import numpy as np
-import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
+import matplotlib.pyplot as plt
 from matplotlib.ticker import Formatter, Locator
+import numpy as np
 
-from .styles import DefaultStyle, AbstractStyle
-from ..utils import anything_to_tuple, anything_to_dict
+from ..utils import anything_to_dict
+from .styles import AbstractStyle, DefaultStyle
+
+__all__ = ['hide_subplot', 'plot_grid']
 
 
-def plot_grid(
-    fun,
-    nrow: int = 1,
-    ncol: int = 1,
-    *,
-    column_title: Optional[Union[Sequence[str], str]] = None,
-    title: str | Sequence[str] | np.ndarray | None = None,
-    suptitle: Optional[str] = None,
-    figure_kw: Optional[Mapping] = None,
-    subplot_kw: Optional[Mapping] = None,
-    sharex: Union[bool, str] = True,
-    sharey: Union[bool, str] = True,
-    xlabel: Optional[str] = None,
-    ylabel: Optional[str] = None,
-    xlim: Optional[tuple[float, float]] = None,
-    ylim: Optional[tuple[float, float] | np.ndarray] = None,
-    xticks: Optional[Sequence[float] | np.ndarray | Locator] = None,
-    yticks: Optional[Sequence[float] | np.ndarray | Locator] = None,
-    xticklabels: Optional[Sequence[str]] = None,
-    yticklabels: Optional[Sequence[str]] = None,
-    xtickformatter: Optional[Formatter] = None,
-    ytickformatter: Optional[Formatter] = None,
-    legend_at: tuple[int, int] = (0, 0),
-    legend_loc: str = 'best',
-    legend: bool = False,
-    legend_title: Optional[str] = None,
-    bbox_to_anchor=None,
-    outfile: Optional[str] = None,
-    style: Optional[AbstractStyle] = None,
-    aspect: Optional[float] = None,
-    close_fig: bool = True,
-    pass_style: bool = False,
-    metadata: Optional[Mapping] = None,
-    identity: bool = None,
-    hline: Optional[Sequence[float] | np.ndarray] = None,
-    vline: Optional[Sequence[float] | np.ndarray] = None,
-    show: bool = True,
-    **kwargs,
-) -> np.ndarray[Axes]:
+type ShareMode = bool | Literal['all', 'none', 'row', 'col']
+type LegendAtArg = str | tuple[int, int] | Sequence[tuple[int, int]] | np.ndarray | None
+type BboxAnchor = tuple[float, float] | tuple[float, float, float, float]
+type SharedAxisGroup = tuple[str, int] | tuple[str, int, int]
+type GuideLinesArg = (
+    Mapping[float, Mapping[str, Any] | None]
+    | Sequence[float]
+    | np.ndarray
+    | float
+    | None
+)
+
+
+def _shared_axis_group(mode: ShareMode, i: int, j: int) -> SharedAxisGroup:
+    """Return an identifier for the axis-sharing group of subplot (i, j)."""
+    if mode is True or mode == 'all':
+        return 'all', 0
+    if mode == 'row':
+        return 'row', i
+    if mode == 'col':
+        return 'col', j
+    return 'panel', i, j
+
+
+def _handle_titles(
+    column_title: Sequence[str] | str | None,
+    title: str | Sequence[str] | np.ndarray | None,
+    nrow: int,
+    ncol: int,
+) -> tuple[np.ndarray, np.ndarray]:
     """
-    Creates a rectangular grid of subplots and calls a user-provided function
-    for each subplot to render user-supplied content.
+    Handle and broadcast subplot titles and column titles.
 
     Parameters
     ----------
-    fun : callable
-        Callback function that is called for each subplot with arguments
-            fun(ax, idx, *args, **kwargs)
-        where `ax` is the MPL Axes class, `idx` is a tuple (row, col)
-        identifying the current subplot, and `args` and `kwargs` are
-        the corresponding arguments to `plot_grid` passed directly to the
-        callback function.
-    nrow : int
-        Number of rows
-    ncol : int
-        Number of columns
-    column_title : str or array_like
+    column_title
         List of column titles. Will be ignored if `title` is given.
-    title: str or array_like
-        Titles to each for each subplot. Will be broadcast to match
+    title
+        Titles for each subplot. Will be broadcast to match the dimensions
+        of the subplot grid.
+    nrow
+        Number of rows.
+    ncol
+        Number of columns.
+
+    Returns
+    -------
+    column_title_
+        Processed and broadcasted column titles.
+    title_
+        Processed and broadcasted subplot titles.
+    """
+    if column_title is None:
+        column_title_ = np.zeros((ncol,), dtype=object)
+    else:
+        column_title_ = np.atleast_1d(column_title)
+
+    if title is None:
+        title_ = np.zeros((nrow, ncol), dtype=object)
+    else:
+        # Disable column titles, axes titles take precedence
+        column_title_ = np.zeros(ncol, dtype=object)
+        title_tmp = np.atleast_2d(title)
+        title_ = np.broadcast_to(title_tmp, (nrow, ncol))
+
+    return column_title_, title_
+
+
+def _handle_legend_at(legend_at: LegendAtArg) -> str | np.ndarray | None:
+    """
+    Validate and format the legend_at specification.
+
+    Parameters
+    ----------
+    legend_at
+        Location of the subplot(s) or figure where the legend should be placed.
+
+    Returns
+    -------
+    Processed legend position (either string representation or 2D array of coordinates).
+    """
+    if legend_at is None:
+        return None
+
+    if isinstance(legend_at, str):
+        if legend_at.lower() != 'figure':
+            msg = f'Invalid string value for legend_at: {legend_at}'
+            raise ValueError(msg)
+        return legend_at
+
+    legend_at_arr = np.array(legend_at, dtype=int)
+    if not (1 <= legend_at_arr.ndim <= 2):
+        raise ValueError('legend_at must be 1D or 2D.')
+    if legend_at_arr.shape[-1] != 2:
+        raise ValueError('legend_at entries must be (row, col) pairs.')
+    return legend_at_arr.reshape((-1, 2))
+
+
+def _handle_axis_label(
+    label: str | Sequence[str] | None,
+    expected_size: int,
+    label_name: str,
+) -> np.ndarray | None:
+    """
+    Validate, broadcast and format xlabel or ylabel sequences.
+
+    Parameters
+    ----------
+    label
+        Input labels to process.
+    expected_size
+        The expected length of the broadcasted labels (ncol for xlabel, nrow for ylabel).
+    label_name
+        The type of label ('xlabel' or 'ylabel') used for ValueError messages.
+
+    Returns
+    -------
+    An array of labels conformable to expected_size, or None.
+    """
+    if label is None:
+        return None
+
+    label_arr = np.atleast_1d(label)
+    if len(label_arr) != expected_size:
+        if len(label_arr) != 1:
+            raise ValueError(f'Non-conformable number of {label_name}s passed')
+        label_arr = np.repeat(label_arr, expected_size)
+    return label_arr
+
+
+class PlotGridFunc(Protocol):
+    """Callback protocol for plot_grid()."""
+
+    def __call__(self, ax: Axes, idx: tuple[int, int], **kwargs: Any) -> Any: ...
+
+
+def plot_grid(
+    fun: PlotGridFunc,
+    nrow: int = 1,
+    ncol: int = 1,
+    *,
+    column_title: Sequence[str] | str | None = None,
+    title: str | Sequence[str] | np.ndarray | None = None,
+    suptitle: str | None = None,
+    figure_kw: Mapping[str, Any] | None = None,
+    subplot_kw: Mapping[str, Any] | None = None,
+    sharex: ShareMode = True,
+    sharey: ShareMode = True,
+    xlabel: str | Sequence[str] | None = None,
+    ylabel: str | Sequence[str] | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: Sequence[float] | np.ndarray | None = None,
+    xticks: Sequence[float] | np.ndarray | Locator | None = None,
+    yticks: Sequence[float] | np.ndarray | Locator | None = None,
+    xticklabels: Sequence[str] | None = None,
+    yticklabels: Sequence[str] | None = None,
+    xtickformatter: Formatter | None = None,
+    ytickformatter: Formatter | None = None,
+    legend_at: LegendAtArg = (0, 0),
+    legend_loc: str | tuple[float, float] = 'best',
+    legend: bool = False,
+    legend_title: str | None = None,
+    bbox_to_anchor: BboxAnchor | None = None,
+    outfile: Path | str | None = None,
+    style: AbstractStyle | None = None,
+    aspect: float | None = None,
+    close_fig: bool = True,
+    pass_style: bool = False,
+    metadata: Mapping[str, Any] | None = None,
+    identity: bool | Mapping[str, Any] | None = None,
+    hline: GuideLinesArg = None,
+    vline: GuideLinesArg = None,
+    show: bool = True,
+    **kwargs: Any,
+) -> np.ndarray:
+    """
+    Create a rectangular grid of subplots and call a user-provided function to render user-supplied content.
+
+    Parameters
+    ----------
+    fun
+        Callback function that is called for each subplot with arguments
+            fun(ax, idx, **kwargs)
+        where `ax` is the MPL Axes class, `idx` is a tuple (row, col)
+        identifying the current subplot, and `kwargs` are keyword arguments
+        passed directly to the callback function.
+    nrow
+        Number of rows.
+    ncol
+        Number of columns.
+    column_title
+        List of column titles. Will be ignored if `title` is given.
+    title
+        Titles for each subplot. Will be broadcast to match
         the dimensions of the subplot grid.
-    suptitle : str
-        Suptitle, currently not properly implemented
-    figure_kw : dict
-        Dictionary of keyword arguments passed to MPL's subplots() function
-        via **kwargs.
-    subplot_kw : dict
-        Dictionary passed to MPL's subplots() as the `subplot_kw` argument
-    sharex : bool or str, optional
+    suptitle
+        Figure-level title.
+    figure_kw
+        Dictionary of keyword arguments passed to MPL's subplots() function.
+    subplot_kw
+        Dictionary passed to MPL's subplots() as the `subplot_kw` argument.
+    sharex
         Controls sharing of properties among x axes. Valid values are
-        True (or 'all'), False (or 'none'), 'row' and 'col'
-    sharey : bool or str, optional
+        True (or 'all'), False (or 'none'), 'row' and 'col'.
+    sharey
         Controls sharing of properties among y axes. Valid values are
-        True (or 'all'), False (or 'none'), 'row' and 'col'
-    xlabel : str
-        x-axis label
-    ylabel : str or array_like or None
-        y-axis label
-    xlim : iterable
-        Lower and upper x-axis limits
-    ylim : array_like
+        True (or 'all'), False (or 'none'), 'row' and 'col'.
+    xlabel
+        x-axis label(s). If a sequence is passed, it must have length `ncol`
+        (or length 1, in which case the value is repeated).
+    ylabel
+        y-axis label(s). If a sequence is passed, it must have length `nrow`
+        (or length 1, in which case the value is repeated).
+    xlim
+        Lower and upper x-axis limits.
+    ylim
         Lower and upper y-axis limits. Can be specified either as a tuple
         if limits are to be applied across all rows / columns, or as an
         array of shape [nrow, ncol, 2] with panel-specific limits.
-    xticks : array_like, optional
-        Location of (major) x-ticks. Ignored if subplots don't have shared
-        x-values.
-    xticklabels : array_like, optional
+    xticks
+        Location of major x-ticks.
+    xticklabels
         Ticklabels for x-ticks. Ignored if x-ticks not given or not used.
-    yticks : array_like, optional
-        Location of (major) y-ticks. Ignored if subplots don't have shared
-        y-values.
-    yticklabels : array_like, optional
+    yticks
+        Location of major y-ticks.
+    yticklabels
         Ticklabels for y-ticks. Ignored if y-ticks not given or not used.
-    xtickformatter : matplotlib.ticker.Formatter, optional
-    ytickformatter : matplotlib.ticker.Formatter, optional
-    legend_at : array_like
+    xtickformatter
+        Formatter for x-ticks.
+    ytickformatter
+        Formatter for y-ticks.
+    legend_at
         Subplot in which legend should be placed (default: (0,0)). Accepts
         either a single tuple if legend should be placed in only one subplot,
-        or a list of tuples for multiple legends.
-    legend_loc : str, tuple of float
+        a list of tuples for multiple legends, or 'figure' for a figure-level
+        legend.
+    legend_loc
         MPL-compatible string identifying where the legend should be placed
-        within a subplot
-    legend : bool
-        If true, legend is displayed in the subplot identified by `legend_at`
-    legend_title : str, optional
+        within a subplot.
+    legend
+        If true, legend is displayed in the subplot identified by `legend_at`.
+    legend_title
         Title used for the legend.
-    bbox_to_anchor : 2-tuple or 4-tuple of floats, optional
+    bbox_to_anchor
         Passed to legend() call.
-    outfile : str or None
-        If not None, figure is saved into given file
-    style : styles.AbstractStyle
+    outfile
+        If not None, figure is saved into given file.
+    style
         Instance of AbstractStyle controlling various rendering options.
-    aspect : float, optional
-        Aspect ratio used to construct figure
-    close_fig : bool
+    aspect
+        Aspect ratio used to construct figure.
+    close_fig
         If true (default), close the figure after plotting if an output
         file is specified. This can be disabled if the figure should
         be shown on screen after being saved in a file.
-    pass_style : bool, optional
+    pass_style
         If true and style is not None, add style to kwargs when calling
         plotting function.
-    metadata : dict, optional
+    metadata
         Dictionary of metadata passed to savefig(). Admissible values depend
         on backend used to generate the figure.
-    identity : bool or Mapping, optional
+    identity
         Plot identity line. If passed as mapping, key/value pairs
         are passed as kwargs to ax.axline() to control plot style.
-    hline : array_like, optional
-        List of y-values for horizontal rules that should be added to each panel.
-    vline : array_like, optional
-        List of x-values for vertical rules that should be added to each panel.
-    show: bool
-        If true, display figure.
-    kwargs :
-        Keyword arguments passed directly to `fun`
+    hline
+        Horizontal guide lines. Can be a sequence of y-values, or a mapping
+        ``y -> style_overrides`` where each value overrides style.guideline.
+    vline
+        Vertical guide lines. Can be a sequence of x-values, or a mapping
+        ``x -> style_overrides`` where each value overrides style.guideline.
+    show
+        If true and `outfile` is None, display figure.
+    kwargs
+        Keyword arguments passed directly to `fun`.
+
+    Returns
+    -------
+    axes
+        Array of MPL Axes objects with shape (`nrow`, `ncol`).
     """
+    hline_ = anything_to_dict(hline, force=True)
+    vline_ = anything_to_dict(vline, force=True)
 
-    hline = anything_to_dict(hline, force=True)
-    vline = anything_to_dict(vline, force=True)
-
-    if column_title is None:
-        column_title = np.zeros((nrow,), dtype=object)
-
-    column_title = np.atleast_1d(column_title)
-
-    if title is None:
-        title = np.zeros((nrow, ncol), dtype=object)
-    else:
-        # Disable column titles, axes titles take precedence
-        column_title = np.zeros(nrow, dtype=object)
-        title = np.atleast_2d(title)
-        title = np.broadcast_to(title, (nrow, ncol))
-
-    if legend_at is not None:
-        if isinstance(legend_at, str):
-            if legend_at.lower() != 'figure':
-                msg = f'Invalid string value for legend_at: {legend_at}'
-                raise ValueError(msg)
-        else:
-            legend_at = np.array(legend_at, dtype=int)
-            assert 1 <= legend_at.ndim <= 2
-            assert legend_at.shape[-1] == 2
-            legend_at = legend_at.reshape((-1, 2))
+    column_title_, title_ = _handle_titles(column_title, title, nrow, ncol)
+    legend_at_ = _handle_legend_at(legend_at)
 
     if style is None:
         style = DefaultStyle()
 
-    if ylim is not None:
-        ylim = broadcast_ylim(nrow, ncol, ylim)
+    ylim_ = broadcast_ylim(nrow, ncol, ylim) if ylim is not None else None
 
     # Obtain aspect ratio: first try whatever is stored in 'aspect' attribute
-    # of style object, then override this with the 'aspect' argument
-    # if it's not None.
-    aspect_default = 1.0
-    if style is not None:
-        aspect_default = getattr(style, 'aspect', 1.0)
-    aspect = aspect if aspect is not None else aspect_default
+    # of style object, then override this with the 'aspect' argument if it's not None.
+    aspect_: float = aspect or getattr(style, 'aspect', 1.0)
 
-    ax_aspect = None
-    if style is not None:
-        ax_aspect = getattr(style, 'ax_aspect', None)
+    ax_aspect = getattr(style, 'ax_aspect', None)
+    ax_aspect_default = ax_aspect or aspect_
 
-    ax_aspect_default = ax_aspect if ax_aspect is not None else aspect
-
-    if pass_style and style is not None:
+    if pass_style:
         kwargs = kwargs.copy()
         kwargs['style'] = style
 
     # Aspect ratio is defined as width / height
-    fig_kw = {'figsize': (style.cell_size * ncol, style.cell_size * nrow / aspect)}
+    fig_kw: dict[str, Any] = {
+        'figsize': (style.cell_size * ncol, style.cell_size * nrow / aspect_)
+    }
     fig_kw.update(style.figure)
 
     if figure_kw is not None:
@@ -229,25 +349,28 @@ def plot_grid(
         **fig_kw,
     )
 
-    if xlabel is not None:
-        xlabel = np.atleast_1d(xlabel)
-        if len(xlabel) != ncol:
-            if len(xlabel) != 1:
-                raise ValueError('Non-conformable number of xlabels passed')
-            xlabel = np.repeat(xlabel, ncol)
+    xlabel_ = _handle_axis_label(xlabel, ncol, 'xlabel')
+    ylabel_ = _handle_axis_label(ylabel, nrow, 'ylabel')
 
-    if ylabel is not None:
-        ylabel = np.atleast_1d(ylabel)
-        if len(ylabel) != nrow:
-            if len(ylabel) != 1:
-                raise ValueError('Non-conformable number of ylabels passed')
-            ylabel = np.repeat(ylabel, nrow)
+    if xticks is not None and not isinstance(xticks, Locator):
+        xticks_ = np.atleast_1d(xticks)
+    else:
+        xticks_ = xticks
+
+    if yticks is not None and not isinstance(yticks, Locator):
+        yticks_ = np.atleast_1d(yticks)
+    else:
+        yticks_ = yticks
 
     margins = style.margins
     if margins is not None:
-        margins1d, *rest = np.broadcast_arrays(margins, np.arange(4))
+        margins1d, *_ = np.broadcast_arrays(margins, np.arange(4))
     else:
         margins1d = np.zeros(4)
+
+    # Margins are interpreted as fractions of axis range.
+    has_x_margins = not np.allclose(margins1d[[0, 2]], 0.0)
+    has_y_margins = not np.allclose(margins1d[[1, 3]], 0.0)
 
     # determine whether subplots have the same x-axes
     if isinstance(sharex, str):
@@ -265,28 +388,11 @@ def plot_grid(
         for j in range(ncol):
             ax = axes[i, j]
 
-            if i == 0:
-                if j < column_title.shape[0] and column_title[j]:
-                    ax.set_title(column_title[j], **style.title)
+            if i == 0 and j < column_title_.shape[0] and column_title_[j]:
+                ax.set_title(column_title_[j], **style.title)
 
-            if ttl := title[i, j]:
+            if ttl := title_[i, j]:
                 ax.set_title(ttl, **style.title)
-
-            if xlim is not None:
-                dx = xlim[1] - xlim[0]
-                xlb = xlim[0] - margins1d[0] / ax_aspect_default * dx
-                xub = xlim[1] + margins1d[2] / ax_aspect_default * dx
-                ax.set_xlim((xlb, xub))
-
-            if ylim is not None:
-                dy = ylim[i, j, 1] - ylim[i, j, 0]
-                ylb = ylim[i, j, 0] - margins1d[1] * dy
-                yub = ylim[i, j, 1] + margins1d[3] * dy
-                ax.set_ylim((ylb, yub))
-
-            # No limits specified, margin is a float applicable to all sides
-            if ylim is None and xlim is None and isinstance(margins, float):
-                ax.margins(margins)
 
             if style.grid:
                 ax.grid(**style.grid)
@@ -294,32 +400,30 @@ def plot_grid(
             if xtickformatter is not None:
                 ax.xaxis.set_major_formatter(xtickformatter)
 
-            if isinstance(xticks, Locator):
+            if isinstance(xticks_, Locator):
                 # Create a copy of the locator instance as assigning the same locator
                 # to multiple Axes seems to harmonize their ticks, which is not what
                 # we want if sharex=False.
-                ax.xaxis.set_major_locator(copy.deepcopy(xticks))
-            elif xticks is not None:
-                xticks = np.atleast_1d(xticks)
+                ax.xaxis.set_major_locator(copy.deepcopy(xticks_))
+            elif xticks_ is not None:
                 if (i == (nrow - 1) or not has_sharex) and xticklabels is not None:
-                    ax.set_xticks(xticks, xticklabels, **style.xticklabels)
+                    ax.set_xticks(xticks_, xticklabels, **style.xticklabels)
                 else:
-                    ax.set_xticks(xticks)
+                    ax.set_xticks(xticks_)
 
             if ytickformatter is not None:
                 ax.yaxis.set_major_formatter(ytickformatter)
 
-            if isinstance(yticks, Locator):
+            if isinstance(yticks_, Locator):
                 # Create a copy of the locator instance as assigning the same locator
                 # to multiple Axes seems to harmonize their ticks, which is not what
                 # we want if sharey=False.
-                ax.yaxis.set_major_locator(copy.deepcopy(yticks))
-            elif yticks is not None:
-                yticks = np.atleast_1d(yticks)
+                ax.yaxis.set_major_locator(copy.deepcopy(yticks_))
+            elif yticks_ is not None:
                 if (j == 0 or not has_sharey) and yticklabels is not None:
-                    ax.set_yticks(yticks, yticklabels, **style.yticklabels)
+                    ax.set_yticks(yticks_, yticklabels, **style.yticklabels)
                 else:
-                    ax.set_yticks(yticks)
+                    ax.set_yticks(yticks_)
 
             if getattr(style, 'rotate_yticklabels', False):
                 ax.tick_params(axis='y', labelrotation=90)
@@ -330,11 +434,11 @@ def plot_grid(
             ax.xaxis.set_tick_params(which='major', **style.xtick_params)
             ax.yaxis.set_tick_params(which='major', **style.ytick_params)
 
-            if xlabel is not None and (i == (nrow - 1) or not sharex):
-                ax.set_xlabel(xlabel[j], **style.xlabel)
+            if xlabel_ is not None and (i == (nrow - 1) or not has_sharex):
+                ax.set_xlabel(xlabel_[j], **style.xlabel)
 
-            if ylabel is not None and (j == 0 or not sharey):
-                ax.set_ylabel(ylabel[i], **style.ylabel)
+            if ylabel_ is not None and (j == 0 or not has_sharey):
+                ax.set_ylabel(ylabel_[i], **style.ylabel)
 
             fun(ax, (i, j), **kwargs)
 
@@ -351,25 +455,70 @@ def plot_grid(
                 ax_on = ax.xaxis.get_visible() and ax.yaxis.get_visible()
                 frame_on = ax.get_frame_on()
                 if ax_on or frame_on:
-                    kw = dict(lw=0.5, alpha=0.8, zorder=-1, color='black')
+                    kw = {'lw': 0.5, 'alpha': 0.8, 'zorder': -1, 'color': 'black'}
                     # Update keyword arguments, if applicable
                     if isinstance(identity, collections.abc.Mapping):
                         kw.update(identity)
                     ax.axline((0, 0), slope=1, **kw)
 
             # Plot horizontal guide lines
-            for ycoord, stl in hline.items():
+            for ycoord, stl in hline_.items():
                 kw = style.guideline.copy()
                 if stl:
                     kw.update(stl)
                 ax.axhline(ycoord, **kw)
 
             # Plot vertical guide lines
-            for xcoord, stl in vline.items():
+            for xcoord, stl in vline_.items():
                 kw = style.guideline.copy()
                 if stl:
                     kw.update(stl)
                 ax.axvline(xcoord, **kw)
+
+    # === Apply margins and limits ===
+
+    # Apply explicit limits (if provided) and margin offsets. If limits are not
+    # provided, use axis limits after all panels have been plotted.
+    xlim_base: dict[tuple[str, int] | tuple[str, int, int], tuple[float, float]] = {}
+    ylim_base: dict[tuple[str, int] | tuple[str, int, int], tuple[float, float]] = {}
+
+    for i in range(nrow):
+        for j in range(ncol):
+            ax = axes[i, j]
+
+            if xlim is not None:
+                xlim0 = xlim
+            elif has_x_margins:
+                key = _shared_axis_group(sharex, i, j)
+                if key not in xlim_base:
+                    xlim_base[key] = ax.get_xlim()
+                xlim0 = xlim_base[key]
+            else:
+                xlim0 = None
+
+            if xlim0 is not None:
+                dx = xlim0[1] - xlim0[0]
+                xlb = xlim0[0] - margins1d[0] / ax_aspect_default * dx
+                xub = xlim0[1] + margins1d[2] / ax_aspect_default * dx
+                ax.set_xlim((xlb, xub))
+
+            if ylim_ is not None:
+                ylim0 = ylim_[i, j]
+            elif has_y_margins:
+                key = _shared_axis_group(sharey, i, j)
+                if key not in ylim_base:
+                    ylim_base[key] = ax.get_ylim()
+                ylim0 = ylim_base[key]
+            else:
+                ylim0 = None
+
+            if ylim0 is not None:
+                dy = ylim0[1] - ylim0[0]
+                ylb = ylim0[0] - margins1d[1] * dy
+                yub = ylim0[1] + margins1d[3] * dy
+                ax.set_ylim((ylb, yub))
+
+    # === Legend ===
 
     if legend:
         # Merge keywords that might be present in style with potential
@@ -381,28 +530,31 @@ def plot_grid(
             kw['loc'] = legend_loc
         kw['title'] = legend_title
 
-        if isinstance(legend_at, str) and legend_at.lower() == 'figure':
+        if isinstance(legend_at_, str) and legend_at_.lower() == 'figure':
             # Legend should be placed relative to whole figure. This will only
             # work if constrained_layout is NOT used, needs to be turned off
             # in figure kwargs in style!
-            leg = fig.legend(**kw)
-        elif legend_loc is not None and legend_at is not None:
-            for i, idx in enumerate(legend_at):
-                axes[idx[0], idx[1]].legend(**kw)
+            fig.legend(**kw)
+        elif legend_loc and isinstance(legend_at_, np.ndarray):
+            for idx in legend_at_:
+                row, col = int(idx[0]), int(idx[1])
+                ax_to_legend = axes[row, col]
+                assert isinstance(ax_to_legend, Axes)
+                ax_to_legend.legend(**kw)
 
-    if suptitle is not None and suptitle:
+    if suptitle:
         fig.suptitle(suptitle, **style.suptitle)
 
     # === y-ticks for shared ylims ===
 
     # Turn off ytick labels if ylim are the same for entire row
     # for all but the first column
-    if not sharey:
+    if not has_sharey:
         for i in range(nrow):
             # Determine whether ylim in this row are identical for all columns
             ylim_same = False
-            if ylim is not None:
-                ylim_same = all(np.all(ylim[i] == ylim[i, 0:1], axis=0))
+            if ylim_ is not None:
+                ylim_same = all(np.all(ylim_[i] == ylim_[i, 0:1], axis=0))
 
             yticks_same = True
             yticks0 = axes[i, 0].get_yticks()
@@ -420,7 +572,10 @@ def plot_grid(
                     axes[i, j].set_yticklabels([])
 
     if outfile:
-        fig.savefig(outfile, metadata=metadata)
+        kw: dict[str, Any] = {}
+        if Path(outfile).suffix == '.pdf':
+            kw['metadata'] = metadata
+        fig.savefig(outfile, **kw)
         if close_fig:
             plt.close(fig)
     elif show:
@@ -429,24 +584,26 @@ def plot_grid(
     return axes
 
 
-def broadcast_ylim(nrow, ncol, ylim):
+def broadcast_ylim(
+    nrow: int,
+    ncol: int,
+    ylim: Sequence[float] | np.ndarray,
+) -> np.ndarray:
     """
     Broadcast ylim across rows / columns as needed.
 
     Parameters
     ----------
-    nrow : int
-    ncol : int
-    ylim : array_like
+    nrow
+    ncol
+    ylim
         ylim values as passed into plot_grid() by user code.
 
     Returns
     -------
-    ylim : np.ndarray
-        ylims broadcast across rows / columns. Return array has shape
-        [nrow, ncol, 2]
+    ylims broadcast across rows / columns. Return array has shape
+    [nrow, ncol, 2]
     """
-
     # Tile ylim as needed to obtain array dimension (nrow, ncol, 2)
     ylim = np.atleast_1d(ylim)
     if not (1 <= ylim.ndim <= 3):
@@ -472,32 +629,11 @@ def broadcast_ylim(nrow, ncol, ylim):
     return ylim
 
 
-def _set_properties(obj, **kwargs):
+def hide_subplot(ax: Axes) -> None:
     """
-    Apply given properties specified as keyword arguments to given object
-    using set_XXX() methods, if present.
+    Set various parameters to hide the frame, axes, ticks, etc. of a subplot.
 
-    Parameters
-    ----------
-    obj
-    kwargs
-    """
-
-    for key, value in kwargs.items():
-        if hasattr(type(obj), f'set_{key}'):
-            method = getattr(type(obj), f'set_{key}')
-            method(obj, value)
-        else:
-            try:
-                setattr(obj, key, value)
-            except:
-                pass
-
-
-def hide_subplot(ax: Axes):
-    """
-    Set various parameters to hide the frame, axes, ticks, etc. of a subplot. This
-    can be used to hide "residual" subplots that are not needed when plotting a
+    This can be used to hide "residual" subplots that are not needed when plotting a
     rectangular grid of subplots.
 
     Parameters
@@ -506,8 +642,8 @@ def hide_subplot(ax: Axes):
     """
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
-    ax.set_ylabel("")
-    ax.set_xlabel("")
+    ax.set_ylabel('')
+    ax.set_xlabel('')
     ax.tick_params(bottom=False, left=False)
     ax.set_frame_on(False)
     ax.grid(None)
