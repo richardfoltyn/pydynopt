@@ -1,261 +1,271 @@
 """
-This work is licensed under CC BY 4.0,
-https://creativecommons.org/licenses/by/4.0/
+Utility functions for pickling and unpickling objects with compression.
+
+This work is licensed under CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
 
 Author: Richard Foltyn
 """
 
+from collections.abc import Callable
 import gzip
 import logging
 import os
+from pathlib import Path
 import pickle
-import re
-from os.path import join
-from typing import Any, Optional
+from typing import Any
 
-__all__ = ["dump", "load", "get_cached_object", "get_hash_value"]
+__all__ = ['dump', 'get_cached_object', 'get_hash_value', 'load']
 
 
 def dump(
-    path: str,
+    path: Path | str,
     obj: Any,
-    directory: Optional[str] = None,
+    directory: Path | str | None = None,
     compress: bool = True,
     overwrite: bool = True,
-    nthreads: Optional[int] = -1,
-    **kwargs,
-):
+    nthreads: int | None = -1,
+    **kwargs: Any,
+) -> None:
     """
-    Pickle an object and dump it to a file, optionally using GZIP or LZ4
-    compression.
+    Pickle an object and dump it to a file.
+
+    Optionally use GZIP or LZ4 compression.
 
     Parameters
     ----------
-    path : str
-        File name or path
-    obj : object
-    directory : str or None, optional
-        Base directory
-    compress : bool
+    path
+        File name or path.
+    obj
+        Object to pickle.
+    directory
+        Base directory.
+    compress
         If true, apply gzip or lz4 compression to pickled objects.
-    overwrite : bool
+    overwrite
         If true, overwrite an existing file. Otherwise, append a unique number
         before the extension to create a unique file name.
-    nthreads : int or None, optional
+    nthreads
         Number of threads to use for decompression (if applicable). A value of -1 uses
         all available logical cores.
-    kwargs :
+    kwargs
         Keyword arguments passed to respective open() function of the chosen
         compression library.
     """
+    logger = logging.getLogger('IO')
 
-    logger = logging.getLogger("IO")
-
-    if not os.path.isabs(path):
-        if directory:
-            path = join(directory, path)
-
-    path = os.path.normpath(path)
+    path = Path(path)
+    if not path.is_absolute() and directory:
+        path = Path(directory) / path
 
     if nthreads is None:
-        nthreads = int(os.cpu_count() / 2)
+        nthreads = int((os.cpu_count() or 2) / 2)
     elif nthreads == -1:
-        nthreads = os.cpu_count()
+        nthreads = os.cpu_count() or 1
 
     kw = {}
 
     if compress:
-        has_lz4 = False
-        try:
-            import lz4.frame
+        valid_suffixes = {'.gz', '.lz4', '.xz', '.zstd'}
+        if path.suffix.lower() not in valid_suffixes:
+            path = path.with_name(path.name + '.zstd')
 
-            has_lz4 = True
-        except ImportError:
-            pass
-
-        if not re.match(".*((gz)|(lz4)|(xz)|(zstd))$", path, re.IGNORECASE):
-            path += ".xz"
-
-        if re.match(r".*\.gz$", path, re.IGNORECASE):
+        suffix = path.suffix.lower()
+        if suffix == '.gz':
             lopen = gzip.open
-        elif re.match(r".*\.xz$", path, re.IGNORECASE):
+        elif suffix == '.xz':
             import lzma
 
             lopen = lzma.open
-        elif re.match(r".*\.lz4$", path, re.IGNORECASE) and has_lz4:
-            lopen = lz4.frame.open
-        elif re.match(r".*\.zstd", path, re.IGNORECASE):
+        elif suffix == '.lz4':
             try:
-                import pyzstd
-                from pyzstd import CParameter
+                import lz4  # ty: ignore[unresolved-import]
 
-                lopen = pyzstd.open
+                lopen = lz4.frame.open
+            except ImportError:
+                raise ValueError('lz4 package is not installed') from None
+        elif suffix == '.zstd':
+            try:
+                # Built-in zstd support added in Python 3.14
+                from compression import zstd  # ty: ignore[unresolved-import]
+
+                lopen = zstd.open
                 kw = {
-                    "level_or_option": {
-                        CParameter.nbWorkers: nthreads,
-                        CParameter.compressionLevel: 19,
+                    'options': {
+                        zstd.CompressionParameter.nb_workers: nthreads,
+                        zstd.CompressionParameter.compression_level: 19,
                     }
                 }
             except ImportError:
-                raise ValueError(
-                    "Cannot use zstd compression, pyzstd library not installed"
-                )
+                try:
+                    import pyzstd  # ty: ignore[unresolved-import]
+                    from pyzstd import CParameter  # ty: ignore[unresolved-import]
+
+                    lopen = pyzstd.open
+                    kw = {
+                        'level_or_option': {
+                            CParameter.nbWorkers: nthreads,
+                            CParameter.compressionLevel: 19,
+                        }
+                    }
+                except ImportError:
+                    raise ValueError(
+                        'Cannot use zstd compression, neither zstd nor pyzstd library is installed'
+                    ) from None
         else:
-            raise RuntimeError("Unsupported compression format")
+            raise RuntimeError('Unsupported compression format')
     else:
         lopen = open
 
-    if os.path.isfile(path) and not overwrite:
-        # Use non-greedy match to get multiple extensions, if present
-        pattern = r"(?P<root>.*?)(?P<ext>\.[^.]+)(?P<compress>\.[^.]+)?$"
-        m = re.match(pattern, path)
+    if path.is_file() and not overwrite:
+        suffixes = path.suffixes
+        if suffixes:
+            # Keep up to two extensions (e.g., .pkl.gz)
+            ext_parts = suffixes[-2:]
+            ext = ''.join(ext_parts)
+            root = path.name.removesuffix(ext)
 
-        root = m.group("root")
-        ext = m.group("ext")
-        ext_compress = m.group("compress")
-        if ext_compress:
-            ext += ext_compress
-
-        i = 0
-        while True:
-            fn_try = "{:s}_{:03d}{:s}".format(root, i, ext)
-            if not os.path.isfile(fn_try):
-                path = fn_try
-                break
-            else:
-                i += 1
+            i = 0
+            while True:
+                fn_try = path.with_name(f'{root}_{i:03d}{ext}')
+                if not fn_try.is_file():
+                    path = fn_try
+                    break
+                else:
+                    i += 1
 
     kw.update(kwargs)
 
-    with lopen(path, "wb", **kw) as f:
+    with lopen(path, 'wb', **kw) as f:  # ty: ignore[no-matching-overload]
         pickle.dump(obj, f)
 
-    msg = "Saved to {:s}".format(path)
+    msg = f'Saved to {path}'
     logger.info(msg)
 
 
-def load(
-    path: str, directory: Optional[str] = None, **kwargs
-):
+def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -> Any:
     """
-    Load a pickled object from a given file, optionally decompressing it if
-    required.
+    Load a pickled object from a given file.
+
+    Optionally decompress the file if required.
 
     Parameters
     ----------
-    path : str
-    directory : str or None
-    kwargs : dict
+    path
+        File name or path.
+    directory
+        Base directory.
+    kwargs
         Keyword arguments passed to respective open() function of the chosen
         compression library.
 
     Returns
     -------
-    obj :
-        Unpickled object
+    Unpickled object.
     """
-
-    logger = logging.getLogger("IO")
+    logger = logging.getLogger('IO')
 
     if not path:
-        raise ValueError(f'Invalid path \'{path}\'')
+        raise ValueError(f"Invalid path '{path}'")
 
-    if not os.path.isfile(path):
-        if directory:
-            path = join(directory, path)
+    path = Path(path)
+    if not path.is_file() and directory:
+        path = Path(directory) / path
 
-    path = os.path.normpath(path)
-
-    logger.info("Loading from {:s}".format(path))
+    logger.info(f'Loading from {path}')
 
     kw = {}
 
-    if m := re.match(r".*\.(?P<ext>[^.]+)$", path):
-        ext = m.group("ext").lower()
+    suffix = path.suffix.lower()
+    if suffix in ('.gz', '.gzip'):
+        lopen = gzip.open
+    elif suffix == '.lz4':
+        try:
+            import lz4  # ty: ignore[unresolved-import]
 
-        if ext in ("gz", "gzip"):
-            lopen = gzip.open
-        elif ext in ("lz4",):
+            lopen = lz4.frame.open
+        except ImportError:
+            raise ValueError(f'LZ4 library not installed, cannot load {path}') from None
+    elif suffix in ('.xz', '.lzma'):
+        import lzma
+
+        lopen = lzma.open
+    elif suffix == '.zstd':
+        try:
+            # Built-in zstd support added in Python 3.14
+            from compression import zstd  # ty: ignore[unresolved-import]
+
+            lopen = zstd.open
+        except ImportError:
             try:
-                import lz4.frame
-
-                lopen = lz4.frame.open
-            except ImportError:
-                raise IOError("LZ4 library not installed")
-        elif ext in ("xz", "lzma"):
-            import lzma
-
-            lopen = lzma.open
-        elif ext in ("zstd",):
-            try:
-                import pyzstd
-                from pyzstd import CParameter
+                import pyzstd  # ty: ignore[unresolved-import]
 
                 lopen = pyzstd.open
             except ImportError:
-                raise ImportError("pyzstd library not installed")
-        else:
-            lopen = open
+                raise ImportError(
+                    'neither zstd nor pyzstd library is installed'
+                ) from None
     else:
         lopen = open
 
     kw.update(kwargs)
 
-    with lopen(path, "rb", **kw) as f:
+    with lopen(path, 'rb', **kw) as f:
         obj = pickle.load(f)
 
     return obj
 
 
 def get_cached_object(
-    fcn: callable,
-    *args,
-    cache_file: Optional[str] = None,
-    cache_dir: Optional[str] = None,
+    fcn: Callable[..., Any],
+    *args: Any,
+    cache_file: Path | str | None = None,
+    cache_dir: Path | str | None = None,
     compress: bool = True,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Any:
     """
-    Load object from cache file, if present. Otherwise, call given function
-    to compute object and store it in given cache file.
+    Load object from cache file, if present.
+
+    Otherwise, call given function to compute object and store it in given
+    cache file.
 
     Parameters
     ----------
-    fcn : callable
+    fcn
         Function used to compute object if cache file is not found.
     args
-         Positional arguments passed to `fcn`
-    cache_file : str, optional
+        Positional arguments passed to `fcn`.
+    cache_file
         Cache file name or path.
-    cache_dir : str, optional
-        Cache directory
-    compress : bool
-        Use compression when storing the cache file
+    cache_dir
+        Cache directory.
+    compress
+        Use compression when storing the cache file.
     kwargs
-        Keyword arguments passed to `fcn`
+        Keyword arguments passed to `fcn`.
 
     Returns
     -------
-
+    Computed or cached object.
     """
-
     path = None
     if cache_file is not None:
         if cache_dir is not None:
-            path = os.path.join(cache_dir, cache_file)
+            path = Path(cache_dir) / cache_file
         else:
-            path = cache_file
+            path = Path(cache_file)
 
     if path:
-        extensions = ("", ".xz", ".lz4", ".gz")
+        extensions = ('', '.xz', '.lz4', '.gz')
         for ext in extensions:
-            p = f"{path}{ext}"
-            if os.path.isfile(p):
+            p = path.with_name(path.name + ext) if ext else path
+            if p.is_file():
                 obj = load(p)
                 return obj
 
     # Cached result does not exist, compute it
-    logging.info(f"Cached result not found, calling {fcn.__name__}()")
+    fcn_name = getattr(fcn, '__name__', 'callable')
+    logging.info(f'Cached result not found, calling {fcn_name}()')
 
     obj = fcn(*args, **kwargs)
 
@@ -265,19 +275,23 @@ def get_cached_object(
     return obj
 
 
-def get_hash_value(*args, **kwargs) -> str:
+def get_hash_value(*args: Any, **kwargs: Any) -> str:
     """
-    Convert sequence of objets to a hash value that can be used as a filename component.
+    Convert sequence of objects to a hash value.
+
+    Can be used as a filename component.
 
     Parameters
     ----------
     args
+        Positional arguments to hash.
+    kwargs
+        Keyword arguments to hash.
 
     Returns
     -------
-    str
+    Hash value.
     """
-
     import hashlib
 
     hashes = []
@@ -291,7 +305,7 @@ def get_hash_value(*args, **kwargs) -> str:
     for key, value in kwargs.items():
         for obj in (key, value):
             try:
-                h = hashlib.sha256(obj).hexdigest()
+                h = hashlib.sha256(obj).hexdigest()  # ty: ignore[invalid-argument-type]
             except TypeError:
                 h = hashlib.sha3_256(f'{obj}'.encode()).hexdigest()
             hashes.append(h)
