@@ -1,21 +1,40 @@
 """
+Logging utilities for the pydynopt package.
+
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
 
 Author: Richard Foltyn
 """
 
+from contextlib import suppress
 import datetime
+from importlib.metadata import PackageNotFoundError, version
 import logging
-import os.path
-import sys
 from logging import FileHandler, Logger
-from typing import Optional
+from pathlib import Path
+import platform
+import sys
+from typing import Any
 
 old_factory = logging.getLogRecordFactory()
 
 
-def record_factory(*args, **kwargs):
+def record_factory(*args: Any, **kwargs: Any) -> logging.LogRecord:
+    """
+    Record factory to attach relative time attributes.
+
+    Parameters
+    ----------
+    *args
+        Positional arguments.
+    **kwargs
+        Keyword arguments.
+
+    Returns
+    -------
+    The created log record with custom relative time attributes.
+    """
     record = old_factory(*args, **kwargs)
 
     # Created timestamp in seconds
@@ -28,26 +47,25 @@ def record_factory(*args, **kwargs):
     rminutes = int(rem / 60)
     rseconds = rem % 60
 
-    record.rday = rdays
-    record.rhrs = rhours
-    record.rmin = rminutes
-    record.rsec = rseconds
+    record.rday = rdays  # type: ignore[attr-defined]
+    record.rhrs = rhours  # type: ignore[attr-defined]
+    record.rmin = rminutes  # type: ignore[attr-defined]
+    record.rsec = rseconds  # type: ignore[attr-defined]
 
     return record
 
 
-def configure_logging(reltime: bool = True, stdout: bool = True):
+def configure_logging(reltime: bool = True, stdout: bool = True) -> None:
     """
     Configure a logging framework with the default console handler.
 
     Parameters
     ----------
-    reltime : bool
+    reltime
         Print time stamp as relative time since logging start.
-    stdout : bool
+    stdout
         Print log messages to stdout.
     """
-
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
 
@@ -75,7 +93,7 @@ def configure_logging(reltime: bool = True, stdout: bool = True):
 
         logger.addHandler(ch)
 
-    # Turn of DEBUG messages for Numba
+    # Turn off DEBUG messages for Numba
     logger = logging.getLogger('numba')
     logger.setLevel(logging.INFO)
 
@@ -85,17 +103,20 @@ def configure_logging(reltime: bool = True, stdout: bool = True):
     logger = logging.getLogger('numexpr.utils')
     logger.setLevel(logging.WARNING)
 
-    # Disable JAX compilation debug info
-    logger = logging.getLogger("jax")
+    logger = logging.getLogger('fontTools')
     logger.setLevel(logging.WARNING)
-    logger = logging.getLogger("jaxlib")
+
+    # Disable JAX compilation debug info
+    logger = logging.getLogger('jax')
+    logger.setLevel(logging.WARNING)
+    logger = logging.getLogger('jaxlib')
     logger.setLevel(logging.WARNING)
 
 
 def add_logfile(
-    file: str,
+    file: Path | str,
     *,
-    logdir: Optional[str] = None,
+    logdir: Path | str | None = None,
     file_timestamp: bool = False,
     date: bool = False,
     time: bool = False,
@@ -107,39 +128,42 @@ def add_logfile(
 
     Parameters
     ----------
-    file : str
-        Log file name or path
-    logdir : str, optional
-        Log directory
-    file_timestamp : bool
-        If true, append time stamp to log file
-    date : bool
+    file
+        Log file name or path.
+    logdir
+        Log directory.
+    file_timestamp
+        If true, append time stamp to log file.
+    date
         Add date to log output.
-    time : bool
+    time
         Add time stamp to log output.
-    reltime : bool
+    reltime
         Add relative time stamp since logging start. Ignores `date` and `time`
         arguments.
-    append : bool
-        If true, append to existing log file
-    """
+    append
+        If true, append to existing log file.
 
+    Returns
+    -------
+    The added file handler.
+    """
     timestamp = datetime.datetime.now()
+    path = Path(file)
 
     if file_timestamp:
         suffix = timestamp.strftime('%Y%m%d-%Hh%Mm')
-        root, ext = os.path.splitext(file)
-        if not ext:
-            ext = '.log'
-        file = f'{root}-{suffix}{ext}'
+        root = path.stem
+        ext = path.suffix or '.log'
+        path = path.with_name(f'{root}-{suffix}{ext}')
 
     if logdir:
-        file = os.path.join(logdir, file)
+        path = Path(logdir) / path
 
     logger = logging.getLogger()
 
     mode = 'a' if append else 'w'
-    fh = logging.FileHandler(file, mode=mode)
+    fh = logging.FileHandler(path, mode=mode)
     fh.setLevel(logging.DEBUG)
 
     if date or time:
@@ -160,7 +184,6 @@ def add_logfile(
             '[{rday:d}d {rhrs:02d}:{rmin:02d}:{rsec:04.1f}] {name} {levelname}: '
             '{message}'
         )
-        style = '{'
         formatter = logging.Formatter(fmt=fmt, style='{')
     else:
         fmt = '%(name)s %(levelname)s: %(message)s'
@@ -171,9 +194,7 @@ def add_logfile(
     logger.addHandler(fh)
 
     logger.info(f'Log started on {timestamp.strftime("%Y-%m-%d %H:%M:%S")}')
-    logger.info(f'Logging to {file}')
-
-    import platform
+    logger.info(f'Logging to {path}')
 
     info = platform.uname()
     tokens = []
@@ -187,20 +208,19 @@ def add_logfile(
     return fh
 
 
-def log_cmd_args(logger: Optional[Logger] = None, level: int = logging.DEBUG) -> None:
+def log_cmd_args(logger: Logger | None = None, level: int = logging.DEBUG) -> None:
     """
     Log command line arguments.
 
     Parameters
     ----------
     logger
+        Logger instance. If None, the root logger is used.
     level
+        Logging level.
     """
-
     if logger is None:
         logger = logging.getLogger()
-
-    import sys
 
     logger.log(level, 'Script:')
     logger.log(level, f'  {sys.argv[0]}')
@@ -211,92 +231,39 @@ def log_cmd_args(logger: Optional[Logger] = None, level: int = logging.DEBUG) ->
         logger.log(level, f'  {args}')
 
 
-def log_python_env(logger: Optional[Logger] = None, level: int = logging.DEBUG) -> None:
+def log_python_env(logger: Logger | None = None, level: int = logging.DEBUG) -> None:
     """
     Log version info for Python and important packages.
 
     Parameters
     ----------
-    logger : Logger
-    level : int
+    logger
+        Logger instance. If None, the root logger is used.
+    level
+        Logging level.
     """
-
     if logger is None:
         logger = logging.getLogger()
 
     logger.log(level, 'Python environment:')
-    import platform
 
     logger.log(level, f'  Python: {platform.python_version()}')
 
-    try:
-        import numpy
+    # List of distribution and display names for relevant packages. Note that the
+    # distribution name is used for version lookup and NEED NOT be the same as
+    # the import name (e.g., scikit-learn = distribution name)
+    packages = [
+        ('numpy', 'numpy'),
+        ('scipy', 'scipy'),
+        ('pandas', 'pandas'),
+        ('matplotlib', 'matplotlib'),
+        ('numba', 'numba'),
+        ('patsy', 'patsy'),
+        ('statsmodels', 'statsmodels'),
+        ('scikit-learn', 'sklearn'),
+        ('jax', 'JAX'),
+    ]
 
-        if version := getattr(numpy, '__version__', None):
-            logger.log(level, f'  numpy: {version}')
-    except ImportError:
-        pass
-
-    try:
-        import scipy
-
-        if version := getattr(scipy, '__version__', None):
-            logger.log(level, f'  scipy: {version}')
-    except ImportError:
-        pass
-
-    try:
-        import pandas
-
-        if version := getattr(pandas, '__version__', None):
-            logger.log(level, f'  pandas: {version}')
-    except ImportError:
-        pass
-
-    try:
-        import matplotlib
-
-        if version := getattr(matplotlib, '__version__', None):
-            logger.log(level, f'  matplotlib: {version}')
-    except ImportError:
-        pass
-
-    try:
-        import numba
-
-        if version := getattr(numba, '__version__', None):
-            logger.log(level, f'  numba: {version}')
-    except ImportError:
-        pass
-
-    try:
-        import patsy
-
-        if version := getattr(patsy, '__version__', None):
-            logger.log(level, f'  patsy: {version}')
-    except ImportError:
-        pass
-
-    try:
-        import statsmodels
-
-        if version := getattr(statsmodels, '__version__', None):
-            logger.log(level, f'  statsmodels: {version}')
-    except ImportError:
-        pass
-
-    try:
-        import sklearn
-
-        if version := getattr(sklearn, '__version__', None):
-            logger.log(level, f'  sklearn: {version}')
-    except ImportError:
-        pass
-
-    try:
-        import jax
-
-        if version := getattr(jax, '__version__', None):
-            logger.log(level, f'  JAX: {version}')
-    except ImportError:
-        pass
+    for dist_name, display_name in packages:
+        with suppress(PackageNotFoundError):
+            logger.log(level, f'  {display_name}: {version(dist_name)}')
