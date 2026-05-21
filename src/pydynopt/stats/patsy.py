@@ -5,8 +5,9 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
+from collections.abc import Iterable
 import re
-from typing import Iterable, Optional, Any
+from typing import Any, overload
 
 from patsy.desc import ModelDesc, Term
 
@@ -27,10 +28,10 @@ def patsy_formula_to_varnames(*formulas: str) -> list[str]:
     list of str
     """
 
-    varnames = dict()
+    varnames: dict[str, None] = {}
 
-    def find_names(s: str) -> list:
-        names = []
+    def find_names(s: str) -> list[str]:
+        names: list[str] = []
 
         s = s.strip()
 
@@ -74,7 +75,6 @@ def patsy_formula_to_varnames(*formulas: str) -> list[str]:
 
         for term in terms:
             for factor in term.factors:
-
                 expr = factor.name()
 
                 if m := re.match(r'C\((?P<name>[^,)]+)', expr):
@@ -88,11 +88,9 @@ def patsy_formula_to_varnames(*formulas: str) -> list[str]:
                         # nested.
                         expr = m.group(1)
                     names = find_names(expr)
-                    varnames.update({name: None for name in names})
+                    varnames.update(dict.fromkeys(names))
 
-    varnames = list(varnames.keys())
-
-    return varnames
+    return list(varnames.keys())
 
 
 def patsy_formula_to_categorical_varnames(*formulas: str) -> list[str]:
@@ -109,7 +107,7 @@ def patsy_formula_to_categorical_varnames(*formulas: str) -> list[str]:
     list of str
     """
 
-    varnames = dict()
+    varnames: dict[str, None] = {}
 
     for formula in formulas:
         if not formula:
@@ -126,9 +124,7 @@ def patsy_formula_to_categorical_varnames(*formulas: str) -> list[str]:
                     # tokens other than variable name and options.
                     varnames[m.group('name')] = None
 
-    varnames = list(varnames.keys())
-
-    return varnames
+    return list(varnames.keys())
 
 
 def patsy_formula_to_categorical_treatments(*formulas: str) -> dict[str, str]:
@@ -147,7 +143,7 @@ def patsy_formula_to_categorical_treatments(*formulas: str) -> dict[str, str]:
     dist of str
     """
 
-    treatments = dict()
+    treatments: dict[str, str] = {}
 
     for formula in formulas:
         if not formula:
@@ -171,7 +167,7 @@ def patsy_formula_to_categorical_treatments(*formulas: str) -> dict[str, str]:
     return treatments
 
 
-def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
+def patsy_add_levels(formula: str, data: Any) -> tuple[str, list[str]]:
     """
     Add levels information to categorical variables based on categorical
     values present in the data.
@@ -179,14 +175,14 @@ def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
     Parameters
     ----------
     formula : str
-    data :
+    data : Any
         DataFrame or something that can be turned into one.
 
     Returns
     -------
     formula_upd: str
         Update formula with added factor levels
-    factors : list
+    factors : list of str
         Name of factors found in formula
     """
 
@@ -195,7 +191,7 @@ def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
 
     df = anything_to_dataframe(data)
 
-    cache = dict()
+    cache: dict[str, Any] = {}
 
     mdesc = ModelDesc.from_formula(formula)
 
@@ -203,13 +199,12 @@ def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
     # intercept
     has_intercept = Term([]) in mdesc.rhs_termlist
 
-    def add_levels(termlist) -> tuple[str, list[str]]:
+    def add_levels(termlist: list[Term]) -> tuple[str, list[str]]:
 
-        factors_found = []
+        factors_found: list[str] = []
 
         for term in termlist:
             for factor in term.factors:
-
                 if not factor:
                     continue
 
@@ -222,15 +217,14 @@ def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
                 if re.match(r'.*levels=.*', code, re.IGNORECASE):
                     continue
 
-                name = m.group("name")
+                name = m.group('name')
                 factors_found.append(name)
 
                 if name in df.columns:
                     if name in cache:
                         values = cache[name]
                     else:
-                        values = df[name].unique()
-                        values.sort()
+                        values = sorted(df[name].unique())
                         cache[name] = values
 
                     code = code.strip()
@@ -265,6 +259,14 @@ def patsy_add_levels(formula: str, data) -> tuple[str | None, list[str]]:
     return formula_upd, factors
 
 
+@overload
+def patsy_strip_categorical(terms: str) -> str: ...  # pyright: ignore[reportOverlappingOverload]
+
+
+@overload
+def patsy_strip_categorical(terms: Iterable[str]) -> list[str]: ...
+
+
 def patsy_strip_categorical(terms: str | Iterable[str]) -> str | list[str]:
     """
     Strip additional meta-data such as Treatment() and levels from categorical
@@ -279,26 +281,27 @@ def patsy_strip_categorical(terms: str | Iterable[str]) -> str | list[str]:
     str or list of str
     """
 
-    terms_list = anything_to_list(terms)
+    terms_list = anything_to_list(terms, force=True)
 
     pattern = re.compile(r'.*C\(.*')
     pattern_cat = re.compile(r'C\((?P<inner>.+)\)(?P<suffix>.*)?')
-    cleaned = []
+    cleaned: list[str] = []
     for label in terms_list:
         if not (m := pattern.match(label)):
             cleaned.append(label)
             continue
 
-        factors = [s.strip() for s in label.split(':')]
-        tokens = []
+        factors: list[str] = [s.strip() for s in label.split(':')]
+        tokens: list[str] = []
         for factor in factors:
             if not (m := pattern_cat.match(factor)):
                 tokens.append(factor)
                 continue
 
             inner = m.group('inner')
-            suffix = m.group('suffix')
-            name = re.match(r'(?P<name>[^,)]+)', inner).group('name')
+            suffix = m.group('suffix') or ''
+            name_match = re.match(r'(?P<name>[^,)]+)', inner)
+            name = name_match.group('name') if name_match else ''
 
             lbl = f'C({name}){suffix}'
 
@@ -307,14 +310,14 @@ def patsy_strip_categorical(terms: str | Iterable[str]) -> str | list[str]:
         cleaned.append(':'.join(tokens))
 
     if isinstance(terms, str):
-        cleaned = cleaned[0]
+        return cleaned[0]
 
     return cleaned
 
 
-def patsy_strip_formula(formula: Optional[str]) -> str | None:
+def patsy_strip_formula(formula: str) -> str:
     """
-    Strip formulas of redudant white space.
+    Strip formulas of redundant white space.
 
     Parameters
     ----------
@@ -322,10 +325,10 @@ def patsy_strip_formula(formula: Optional[str]) -> str | None:
 
     Returns
     -------
-    str or None
+    str
     """
     if not formula:
-        return formula
+        return ''
 
     # Get rid of multiple consecutive white space characters
     formula = ' '.join(formula.strip().split())
