@@ -1,12 +1,10 @@
-"""
-Unit tests for df_weighted_mean()
-"""
-from typing import Sequence
+"""Unit tests for df_weighted_mean."""
 
-import pytest
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from pydynopt.pandas import df_weighted_mean
 from pydynopt.utils import anything_to_list
@@ -14,8 +12,10 @@ from pydynopt.utils import anything_to_list
 # Dimension sizes to be used for tests
 DIMS = (0, 1, 2, 11)
 
+
 @pytest.fixture(params=[1234])
 def rng(request):
+    """Return a reproducible NumPy random generator."""
     seed = request.param
     rng = np.random.default_rng(seed)
     return rng
@@ -23,21 +23,15 @@ def rng(request):
 
 @pytest.fixture(params=[1, 2, 3])
 def nlevels(request) -> int:
-    """
-    Define the number of levels used for DataFrame index.
-    """
+    """Return the number of index levels used for generated data."""
     return request.param
 
 
 @pytest.fixture
 def shapes(nlevels) -> np.ndarray:
-    """
-    Return a 2d array of all possible permutations of the dimenions in DIMS,
-    one in each row.
-    """
-
+    """Return all nlevels-dimensional shape combinations from DIMS."""
     dims = np.array(DIMS)
-    ii = np.meshgrid(*((dims, ) * nlevels))
+    ii = np.meshgrid(*((dims,) * nlevels))
     ii = np.hstack([i.reshape((-1, 1)) for i in ii])
 
     return ii
@@ -107,14 +101,7 @@ def create_data(
 
 
 def get_groups(data: pd.DataFrame) -> list[list[str]]:
-    """
-    Get all combinations of levels from the DataFrame's index that can be used to
-    group data using groupby().
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-    """
+    """Return all non-trivial index-level combinations for groupby."""
     levels = list(data.index.names)
     nlevels = len(levels)
 
@@ -134,39 +121,24 @@ def get_groups(data: pd.DataFrame) -> list[list[str]]:
 
 @pytest.fixture(params=[True, False])
 def use_weights(request) -> bool:
+    """Return whether weighted aggregation should be used in a test case."""
     return request.param
 
 
 @pytest.fixture(params=[0, 1, 2])
 def na_count(request):
-    """
-    Number of NaN values to insert into the inner-most level of the data.
-    """
+    """Return the number of NaNs to inject per innermost group."""
     return request.param
 
 
 @pytest.fixture(params=[1, 2, 3])
 def na_min_count(request):
-    """
-    Min number of obs. required to compute a group mean and store NaN otherwise.
-    """
+    """Return the minimum observations required before computing a mean."""
     return request.param
 
 
 def test_means(shapes, use_weights: bool, na_count: int, na_min_count: int, rng):
-    """
-    Test whether computed (grouped) means are correct, taking into account potential
-    NaN values.
-
-    Parameters
-    ----------
-    shapes
-    use_weights
-    na_count
-    na_min_count
-    rng
-    """
-
+    """Verify grouped means against a manual weighted/unweighted reference."""
     for shape in shapes:
         shape = tuple(shape)
         data = create_data(shape, weights=use_weights, rng=rng, na_count=na_count)
@@ -218,11 +190,7 @@ def test_means(shapes, use_weights: bool, na_count: int, na_min_count: int, rng)
 
 
 def test_arg_weights(rng):
-    """
-    Test whether passing weights using the default value, as column name,
-    or as Series yields the same results.
-    """
-
+    """Verify equivalent results for default, string, and Series weights."""
     shape = (2, 3, 4)
 
     data = create_data(shape, weights=True, rng=rng)
@@ -231,7 +199,6 @@ def test_arg_weights(rng):
     groups = get_groups(data)
 
     for group in groups:
-
         # Use default value
         res1 = df_weighted_mean(data, groups=group)
 
@@ -255,11 +222,33 @@ def test_arg_weights(rng):
         assert np.all(np.abs(res1[mask] - res3[mask]) < 1.0e-10)
 
 
-def test_multiindex(rng):
-    """
-    Test return values with MultiIndex in columns.
-    """
+def test_arg_weights_ndarray(rng):
+    """Verify ndarray weights match results from a weight column."""
+    shape = (2, 3, 4)
 
+    data = create_data(shape, weights=True, rng=rng)
+    weights = data['weight'].to_numpy(copy=True)
+
+    groups = get_groups(data)
+    groups.insert(0, None)
+
+    for group in groups:
+        res1 = df_weighted_mean(data, groups=group, weights='weight')
+
+        d2 = data.drop(columns=['weight'])
+        res2 = df_weighted_mean(d2, groups=group, weights=weights)
+
+        assert np.all(res1.notna() == res2.notna())
+
+        res1 = res1.to_numpy()
+        res2 = res2.to_numpy()
+
+        mask = ~np.isnan(res1)
+        assert np.all(np.abs(res1[mask] - res2[mask]) < 1.0e-10)
+
+
+def test_multiindex(rng):
+    """Verify MultiIndex output has expected level names and moments."""
     shape = (5, 4, 11)
 
     data = create_data(shape, weights=True, rng=rng)
@@ -267,7 +256,6 @@ def test_multiindex(rng):
     groups = get_groups(data)
 
     for group in groups:
-
         res = df_weighted_mean(data, groups=group, weights='weight', multi_index=True)
 
         levels = list(res.columns.names)
@@ -278,10 +266,7 @@ def test_multiindex(rng):
 
 
 def test_series(rng):
-    """
-    Test passing in data as Series instead of DataFrame
-    """
-
+    """Verify Series input matches DataFrame input for identical data."""
     shape = (1, 3, 1)
 
     data = create_data(shape, weights=True, rng=rng)
@@ -291,7 +276,6 @@ def test_series(rng):
     groups = get_groups(data)
 
     for group in groups:
-
         # DataFrame
         res1 = df_weighted_mean(data, groups=group, weights='weight')
 
@@ -301,11 +285,47 @@ def test_series(rng):
         assert np.all(np.abs(res1 - res2.to_frame()) < 1.0e-10)
 
 
-def test_varlist(rng):
-    """
-    Test implicit and explicit lists of columns for which mean should be computed.
-    """
+def test_varlist_scalar_returns_series(rng):
+    """Verify scalar varlist returns a named Series output."""
+    shape = (3, 5)
 
+    data = create_data(shape, weights=True, rng=rng, columns=['v1', 'v2'])
+    res = df_weighted_mean(
+        data,
+        groups=['level0'],
+        varlist='v1',
+        weights='weight',
+    )
+
+    assert isinstance(res, pd.Series)
+    assert res.name == 'v1'
+
+
+def test_na_min_count_validation(rng):
+    """Verify invalid na_min_count raises ValueError."""
+    data = create_data((2, 3), weights=True, rng=rng)
+
+    with pytest.raises(ValueError, match='na_min_count'):
+        df_weighted_mean(data, weights='weight', na_min_count=0)
+
+
+def test_nonfinite_weights_are_ignored():
+    """Verify observations with non-finite weights are excluded."""
+    data = pd.DataFrame(
+        {
+            'data': [1.0, 2.0, 3.0, 4.0],
+            'weight': [1.0, np.nan, np.inf, 2.0],
+        }
+    )
+
+    res = df_weighted_mean(data, weights='weight', varlist=['data'])
+    desired = (1.0 * 1.0 + 4.0 * 2.0) / (1.0 + 2.0)
+
+    assert np.isclose(res.loc[0, 'data'], desired)
+
+
+def test_varlist(rng):
+    """Verify implicit and explicit varlist selection rules."""
     shape = (4, 10)
 
     data = create_data(shape, weights=True, rng=rng, columns=['v1', 'v2'])
@@ -314,7 +334,6 @@ def test_varlist(rng):
     groups = get_groups(data)
 
     for group in groups:
-
         # Use default, all columns other than weight
         res1 = df_weighted_mean(data, groups=group, weights='weight')
 
@@ -342,10 +361,7 @@ def test_varlist(rng):
 
 
 def test_nobs(shapes, use_weights: bool, na_count: int, na_min_count: int, rng):
-    """
-    Test return values for the number of obs.
-    """
-
+    """Verify the optional observation-count output column."""
     columns = 'data'
     nobs_column = 'Nobs'
 
@@ -379,24 +395,17 @@ def test_nobs(shapes, use_weights: bool, na_count: int, na_min_count: int, rng):
                 desired_nobs = pd.Series(
                     (d['weight'] > 0).groupby(group).sum(), name=(columns, nobs_column)
                 )
-                desired_wgt = pd.Series(
-                    d['weight'].groupby(group).sum(), name=(columns, nobs_column)
-                )
             else:
                 desired_nobs = pd.Series(
                     (d['weight'] > 0).sum(), name=(columns, nobs_column)
                 )
-                desired_wgt = pd.Series(d['weight'].sum(), name=(columns, nobs_column))
 
             assert np.all(res[(columns, nobs_column)] == desired_nobs)
             # assert np.all(res[(columns, 'weight')] == desired_wgt)
 
 
 def test_sum_weights(shapes, na_count: int, na_min_count: int, rng):
-    """
-    Test return values for the sum of weights columns.
-    """
-
+    """Verify the optional sum-of-weights output column."""
     columns = 'data'
 
     for shape in shapes:
@@ -434,11 +443,7 @@ def test_sum_weights(shapes, na_count: int, na_min_count: int, rng):
 
 
 def test_index_groups(shapes, rng):
-    """
-    Test that results are the same irrespective of whether grouping variables are in
-    index or in columns.
-    """
-
+    """Verify identical results for index-based and column-based groups."""
     for shape in shapes:
         shape = tuple(shape)
         data = create_data(shape, weights=True, rng=rng)
@@ -460,13 +465,48 @@ def test_index_groups(shapes, rng):
                 data.reset_index(drop=False),
                 groups=group,
                 weights='weight',
-                varlist=['data']
+                varlist=['data'],
             )
 
             assert np.all(res1.notna() == res2.notna())
 
             # Pandas has some issues with multidimensional boolean masks, convert to
             # numpy to compare non-NaN values
+            res1 = res1.to_numpy()
+            res2 = res2.to_numpy()
+
+            mask = ~np.isnan(res1)
+            assert np.all(np.abs(res1[mask] - res2[mask]) < 1.0e-10)
+
+
+def test_index_groups_series_weights(shapes, rng):
+    """Verify Series-weight results for index-based and column-based groups."""
+    for shape in shapes:
+        shape = tuple(shape)
+        data = create_data(shape, weights=True, rng=rng)
+        weights = data['weight'].copy(deep=True)
+
+        groups = get_groups(data)
+        groups.insert(0, None)
+
+        for group in groups:
+            res1 = df_weighted_mean(
+                data.drop(columns=['weight']),
+                groups=group,
+                weights=weights,
+                varlist=['data'],
+            )
+
+            # Compute with grouping variables not in index.
+            res2 = df_weighted_mean(
+                data.reset_index(drop=False).drop(columns=['weight']),
+                groups=group,
+                weights=weights,
+                varlist=['data'],
+            )
+
+            assert np.all(res1.notna() == res2.notna())
+
             res1 = res1.to_numpy()
             res2 = res2.to_numpy()
 
