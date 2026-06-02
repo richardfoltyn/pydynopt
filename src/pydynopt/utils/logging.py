@@ -12,6 +12,7 @@ import datetime
 from importlib.metadata import PackageNotFoundError, version
 import logging
 from logging import FileHandler, Logger
+import os
 from pathlib import Path
 import platform
 import sys
@@ -267,3 +268,42 @@ def log_python_env(logger: Logger | None = None, level: int = logging.DEBUG) -> 
     for dist_name, display_name in packages:
         with suppress(PackageNotFoundError):
             logger.log(level, f'  {display_name}: {version(dist_name)}')
+
+
+def log_env_vars(logger: Logger | None = None, level: int = logging.DEBUG) -> None:
+    """
+    Log set environment variables related to OMP, MKL, or thread/CPU control.
+
+    Parameters
+    ----------
+    logger
+        Logger instance. If None, the root logger is used.
+    level
+        Logging level.
+    """
+    if logger is None:
+        logger = logging.getLogger()
+
+    # Prefixes for wildcard matching (case-insensitive)
+    prefixes = ('OMP_', 'MKL_', 'NUMBA_')
+    # Specific other environment variables related to thread/CPU control
+    specific_vars = {
+        'OPENBLAS_NUM_THREADS',
+        'NUMEXPR_NUM_THREADS',
+        'VECLIB_MAXIMUM_THREADS',
+        'TBB_NUM_THREADS',
+        'BLAS_NUM_THREADS',
+        'TF_NUM_INTEROP_THREADS',
+        'TF_NUM_INTRAOP_THREADS',
+    }
+
+    env_vars = {}
+    for key, value in os.environ.items():
+        key_upper = key.upper()
+        if any(key_upper.startswith(p) for p in prefixes) or key_upper in specific_vars:
+            env_vars[key] = value
+
+    if env_vars:
+        logger.log(level, 'Environment variables:')
+        for key in sorted(env_vars.keys()):
+            logger.log(level, f'  {key}: {env_vars[key]}')
