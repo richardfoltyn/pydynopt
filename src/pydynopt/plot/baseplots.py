@@ -183,7 +183,7 @@ def plot_grid(
     xtickformatter: Formatter | None = None,
     ytickformatter: Formatter | None = None,
     legend_at: LegendAtArg = (0, 0),
-    legend_loc: str | tuple[float, float] = 'best',
+    legend_loc: str | tuple[float, float] | None = None,
     legend: bool = False,
     legend_title: str | None = None,
     bbox_to_anchor: BboxAnchor | None = None,
@@ -535,7 +535,7 @@ def plot_grid(
             # work if constrained_layout is NOT used, needs to be turned off
             # in figure kwargs in style!
             fig.legend(**kw)
-        elif legend_loc and isinstance(legend_at_, np.ndarray):
+        elif isinstance(legend_at_, np.ndarray):
             for idx in legend_at_:
                 row, col = int(idx[0]), int(idx[1])
                 ax_to_legend = axes[row, col]
