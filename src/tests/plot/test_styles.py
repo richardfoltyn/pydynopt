@@ -60,3 +60,35 @@ def test_font_properties_mapping() -> None:
     assert d['fontproperties'] == 'sans-serif'
     assert d['font'] == 'sans-serif'
     assert d['font_properties'] == 'sans-serif'
+
+
+def test_barwidth() -> None:
+    """Verify that barwidth can be get and set correctly, with proper validation."""
+    import pytest
+
+    from pydynopt.plot.styles import DefaultStyle
+
+    style = DefaultStyle()
+    assert style.barwidth == 0.8
+
+    # Test valid values
+    style.barwidth = 0.5
+    assert style.barwidth == 0.5
+    style.barwidth = 1.0
+    assert style.barwidth == 1.0
+    style.barwidth = 0.0001
+    assert style.barwidth == 0.0001
+
+    # Test invalid values (must satisfy 0 < value <= 1)
+    with pytest.raises(ValueError):
+        style.barwidth = 0.0
+
+    with pytest.raises(ValueError):
+        style.barwidth = -0.5
+
+    with pytest.raises(ValueError):
+        style.barwidth = 1.001
+
+    # Test invalid type
+    with pytest.raises(ValueError):
+        style.barwidth = None  # type: ignore
