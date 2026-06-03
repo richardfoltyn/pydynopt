@@ -447,6 +447,7 @@ class AbstractStyle:
         self._mew: LineWidth | None = None
         self._hatch: ConstFillProperty[Any] | None = None
         self._barmargin: float = 0.0
+        self._barwidth: float = 0.8
         self._zorder: ConstFillProperty[float] | None = None
         self._figure: dict[str, object] = self.FIGURE_KWARGS.copy()
         self._subplot: dict[str, object] = self.SUBPLOT_KWARGS.copy()
@@ -1022,6 +1023,23 @@ class AbstractStyle:
             raise ValueError('Margin value must be in [0, 0.5)')
 
         self._barmargin = value
+
+    @property
+    def barwidth(self) -> float:
+        """Return the width of the all bars within a `by` group."""
+        return self._barwidth
+
+    @barwidth.setter
+    def barwidth(self, value: float | np.floating[Any]) -> None:
+        try:
+            value = float(value)
+        except TypeError as err:
+            raise ValueError('Width must be float!') from err
+
+        if value <= 0.0 or value > 1.0:
+            raise ValueError('Width value must be in (0, 1]')
+
+        self._barwidth = value
 
     @property
     def zorder(self) -> ConstFillProperty[float]:
