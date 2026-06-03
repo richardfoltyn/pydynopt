@@ -766,8 +766,8 @@ def plot_dataframe(
 
                 if plot_type_dict[yvar] == 'bar':
                     if xvalues.size > 1:
-                        dx = np.amin(xvalues[1:] - xvalues[:-1]) * 0.8
-                        barwidth = dx / len(by_order_arr)
+                        dx = np.amin(xvalues[1:] - xvalues[:-1])
+                        barwidth = dx / len(by_order_arr) * style.barwidth
                         if len(by_order_arr) % 2 == 0:
                             left = barwidth * (len(by_order_arr) - 1) / 2
                         else:
