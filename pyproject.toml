@@ -12,10 +12,12 @@ dependencies = [
     "matplotlib>=3.10.9",
     "patsy>=1.0.2",
     "pandas-stubs>=2.3,<3.0.0",
+    "statsmodels>=0.14.6",
 ]
 
 [dependency-groups]
 dev = [
+    "line-profiler>=5.0.2",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
 ]
