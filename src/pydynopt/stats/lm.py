@@ -78,25 +78,43 @@ def demean_within(
     means
         Group means, one observation per group.
     """
-    # Rescale weights if normalization is requested
-    if weights is not None and rescale_weights:
-        wsum = weights.groupby(groups).transform('sum')
-        weights = weights / wsum
-
-    # Apply (the same) weights to all variables in DataFrame or Series
-    if weights is not None:
-        x_mean = x.mul(weights, axis=0).groupby(groups).transform('sum')
+    if isinstance(groups, str):
+        if groups in x.index.names:
+            group_keys = x.index.get_level_values(groups)
+        else:
+            group_keys = x[groups]
+        groupby_keys = group_keys
+        reindex_keys = group_keys
     else:
-        x_mean = x.groupby(groups).transform('mean')
+        arrays = []
+        for grp in groups:
+            if grp in x.index.names:
+                arrays.append(x.index.get_level_values(grp))
+            else:
+                arrays.append(x[grp])
+        groupby_keys = arrays
+        reindex_keys = pd.MultiIndex.from_arrays(arrays)
 
-    # Keep only the first obs for each group
-    x_mean_first = x_mean.groupby(groups).first()
+    if weights is not None:
+        if rescale_weights:
+            w_sum = weights.groupby(groupby_keys, observed=True).sum()
+            xw_sum = x.mul(weights, axis=0).groupby(groupby_keys, observed=True).sum()
+            means = xw_sum.div(w_sum, axis=0)
+        else:
+            means = x.mul(weights, axis=0).groupby(groupby_keys, observed=True).sum()
+    else:
+        means = x.groupby(groupby_keys, observed=True).mean()
 
-    # Compute inplace: x_demean = x - x_mean
-    x_mean *= -1.0
-    x_mean += x
+    # Reindex means to align with the original index structure
+    x_mean = means.reindex(reindex_keys)
+    x_mean.index = x.index
 
-    return x_mean, x_mean_first
+    # Compute: x_demean = x - x_mean
+    x_demean = x - x_mean
+
+    return x_demean, means
+
+
 
 
 @overload
