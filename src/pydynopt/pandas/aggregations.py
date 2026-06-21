@@ -742,6 +742,8 @@ def weighted_pmf(
     generate
         Name of output variable.
     """
+    df = df.reset_index()
+
     if weights is not None:
         weights_val = df[weights] if isinstance(weights, str) else weights
     elif varname_weight is not None:
