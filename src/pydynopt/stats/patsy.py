@@ -1,11 +1,23 @@
 """
+Patsy formula helper functions.
+
+This module provides utility functions to manipulate and inspect patsy formula
+strings and extract variable/categorical names and base level treatments.
+
+Features:
+- Extract variable names and categorical variable names from formulas.
+- Identify categorical base level treatments.
+- Update formulas with factor levels from data.
+- Strip metadata from categorical formulas.
+- Clean up redundant whitespace in formulas.
+
 This work is licensed under CC BY 4.0,
-https://creativecommons.org/licenses/by/4.0/
+https://creativecommons.org/licenses/by/4.0/.
 
 Author: Richard Foltyn
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 import re
 from typing import Any, overload
 
@@ -21,13 +33,13 @@ def patsy_formula_to_varnames(*formulas: str) -> list[str]:
 
     Parameters
     ----------
-    *formulas : str
+    formulas
+        Patsy formula strings to process.
 
     Returns
     -------
-    list of str
+    List of unique variable names.
     """
-
     varnames: dict[str, None] = {}
 
     def find_names(s: str) -> list[str]:
@@ -95,18 +107,19 @@ def patsy_formula_to_varnames(*formulas: str) -> list[str]:
 
 def patsy_formula_to_categorical_varnames(*formulas: str) -> list[str]:
     """
-    Extract unique list of categorical variable names (i.e., variable
-    names surrounded by C()) from patsy formulas.
+    Extract unique list of categorical variable names from patsy formulas.
+
+    Categorical variable names are those surrounded by C() in the formula.
 
     Parameters
     ----------
-    *formulas : str
+    formulas
+        Patsy formula strings to process.
 
     Returns
     -------
-    list of str
+    List of unique categorical variable names.
     """
-
     varnames: dict[str, None] = {}
 
     for formula in formulas:
@@ -129,20 +142,21 @@ def patsy_formula_to_categorical_varnames(*formulas: str) -> list[str]:
 
 def patsy_formula_to_categorical_treatments(*formulas: str) -> dict[str, str]:
     """
-    Extract unique dictionary of categorical variable names (i.e., variable
-    names surrounded by C()) and their treatment (i.e., base level) from patsy formulas.
+    Extract unique dictionary of categorical variable names and their treatments.
 
-    Categorical variables which do not have a Treatment() term are ignored.
+    Extracts variable names surrounded by C() and their treatment (i.e., base level)
+    from patsy formulas. Categorical variables which do not have a Treatment()
+    term are ignored.
 
     Parameters
     ----------
-    *formulas : str
+    formulas
+        Patsy formula strings to process.
 
     Returns
     -------
-    dist of str
+    Mapping from categorical variable names to their base levels.
     """
-
     treatments: dict[str, str] = {}
 
     for formula in formulas:
@@ -169,23 +183,22 @@ def patsy_formula_to_categorical_treatments(*formulas: str) -> dict[str, str]:
 
 def patsy_add_levels(formula: str, data: Any) -> tuple[str, list[str]]:
     """
-    Add levels information to categorical variables based on categorical
-    values present in the data.
+    Add levels information to categorical variables based on values in the data.
 
     Parameters
     ----------
-    formula : str
-    data : Any
-        DataFrame or something that can be turned into one.
+    formula
+        Patsy formula string.
+    data
+        DataFrame or data structure that can be converted to one.
 
     Returns
     -------
-    formula_upd: str
-        Update formula with added factor levels
-    factors : list of str
-        Name of factors found in formula
+    formula_upd
+        Updated formula with added factor levels.
+    factors
+        Names of factors found in the formula.
     """
-
     if not formula:
         return formula, []
 
@@ -199,7 +212,7 @@ def patsy_add_levels(formula: str, data: Any) -> tuple[str, list[str]]:
     # intercept
     has_intercept = Term([]) in mdesc.rhs_termlist
 
-    def add_levels(termlist: list[Term]) -> tuple[str, list[str]]:
+    def add_levels(termlist: Sequence[Term]) -> tuple[str, list[str]]:
 
         factors_found: list[str] = []
 
@@ -269,18 +282,20 @@ def patsy_strip_categorical(terms: Iterable[str]) -> list[str]: ...
 
 def patsy_strip_categorical(terms: str | Iterable[str]) -> str | list[str]:
     """
-    Strip additional meta-data such as Treatment() and levels from categorical
-    variable definitions in a patsy formula.
+    Strip categorical metadata from variable definitions in a patsy formula.
+
+    Removes additional metadata such as Treatment() and levels from categorical
+    variable definitions.
 
     Parameters
     ----------
-    terms : str or Iterable of str
+    terms
+        Patsy terms or iterable of terms to strip.
 
     Returns
     -------
-    str or list of str
+    Patsy terms with categorical metadata removed.
     """
-
     terms_list = anything_to_list(terms, force=True)
 
     pattern = re.compile(r'.*C\(.*')
@@ -315,17 +330,18 @@ def patsy_strip_categorical(terms: str | Iterable[str]) -> str | list[str]:
     return cleaned
 
 
-def patsy_strip_formula(formula: str) -> str:
+def patsy_strip_formula(formula: str | None) -> str:
     """
     Strip formulas of redundant white space.
 
     Parameters
     ----------
-    formula : str
+    formula
+        Patsy formula string.
 
     Returns
     -------
-    str
+    Formula string with redundant white space removed.
     """
     if not formula:
         return ''
