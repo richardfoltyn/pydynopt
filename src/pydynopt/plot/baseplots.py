@@ -197,6 +197,9 @@ def plot_grid(
     hline: GuideLinesArg = None,
     vline: GuideLinesArg = None,
     show: bool = True,
+    colorbar: bool = False,
+    colorbar_at: tuple[int, int] | None = None,
+    colorbar_kw: Mapping[str, Any] | None = None,
     **kwargs: Any,
 ) -> np.ndarray:
     """
@@ -296,6 +299,12 @@ def plot_grid(
         ``x -> style_overrides`` where each value overrides style.guideline.
     show
         If true and `outfile` is None, display figure.
+    colorbar
+        If True, a colorbar is displayed for the scalar mappable in the subplot.
+    colorbar_at
+        Subplot in which colorbar should be placed.
+    colorbar_kw
+        Keyword arguments passed to ``fig.colorbar()``.
     kwargs
         Keyword arguments passed directly to `fun`.
 
@@ -541,6 +550,57 @@ def plot_grid(
                 ax_to_legend = axes[row, col]
                 assert isinstance(ax_to_legend, Axes)
                 ax_to_legend.legend(**kw)
+
+    # === Colorbar ===
+
+    if colorbar:
+        cb_kw: dict[str, Any] = {}
+        if style:
+            style_cb = getattr(style, 'colorbar', None)
+            if isinstance(style_cb, Mapping):
+                cb_kw.update(style_cb)
+        if colorbar_kw is not None:
+            cb_kw.update(colorbar_kw)
+
+        if colorbar_at is None:
+            cb_row, cb_col = 0, ncol - 1
+        else:
+            cb_row, cb_col = colorbar_at
+
+        cb_row = cb_row % nrow
+        cb_col = cb_col % ncol
+        ax_cb = axes[cb_row, cb_col]
+
+        mappable = None
+        if ax_cb.collections:
+            for coll in reversed(ax_cb.collections):
+                if coll.get_array() is not None:
+                    mappable = coll
+                    break
+        if mappable is None and ax_cb.images:
+            for img in reversed(ax_cb.images):
+                if img.get_array() is not None:
+                    mappable = img
+                    break
+
+        if mappable is not None:
+            cbar = fig.colorbar(mappable, ax=ax_cb, **cb_kw)
+
+            # Apply styling to colorbar tick labels
+            cbar_ticklabels = getattr(style, 'cbar_ticklabels', {})
+            cbar_tick_params = {}
+            for k, v in cbar_ticklabels.items():
+                if k == 'fontfamily':
+                    cbar_tick_params['labelfontfamily'] = v
+                elif k == 'fontsize':
+                    cbar_tick_params['labelsize'] = v
+                elif k == 'color':
+                    cbar_tick_params['labelcolor'] = v
+                elif k == 'rotation':
+                    cbar_tick_params['labelrotation'] = v
+                else:
+                    cbar_tick_params[k] = v
+            cbar.ax.tick_params(**cbar_tick_params)
 
     if suptitle:
         fig.suptitle(suptitle, **style.suptitle)

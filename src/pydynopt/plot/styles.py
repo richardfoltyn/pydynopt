@@ -96,7 +96,7 @@ class UniqueDict(dict):
             key = self.mapping.get(key, key)
         return super().__contains__(key)
 
-    def get(self, key: str, default: object = None) -> object:
+    def get(self, key: str, default: object = None) -> object:  # type: ignore
         """Get item mapping key via internal aliases, with fallback."""
         key = self.mapping.get(key, key)
         return super().get(key, default)
@@ -106,7 +106,7 @@ class UniqueDict(dict):
         key = self.mapping.get(key, key)
         return super().setdefault(key, default)
 
-    def pop(self, key: str, *args: Any) -> object:
+    def pop(self, key: str, *args: Any) -> object:  # type: ignore
         """Pop item mapping key via internal aliases."""
         key = self.mapping.get(key, key)
         return super().pop(key, *args)
@@ -352,6 +352,8 @@ class AbstractStyle:
     TEXT_KWARGS: ClassVar[dict[str, Any]] = {}
     TEXT_TITLE_KWARGS: ClassVar[dict[str, Any]] = {}
     GUIDELINE_KWARGS: ClassVar[dict[str, Any]] = {}
+    CBAR_KWARGS: ClassVar[dict[str, Any]] = {}
+    CBAR_TICKLABEL_KWARGS: ClassVar[dict[str, Any]] = {}
 
     COLORS: ClassVar[list[Any]] = ['black']
     FACECOLORS: ClassVar[list[Any] | None] = ['white']
@@ -462,6 +464,8 @@ class AbstractStyle:
         self._legend: dict[str, object] | None = None
         self._text: dict[str, object] | None = None
         self._text_title: dict[str, object] | None = None
+        self._colorbar: dict[str, object] | None = None
+        self._cbar_ticklabels: dict[str, object] | None = None
         self.split_scatter: bool = False
         self._guideline: UniqueDict = UniqueDict(
             mapping=_DEFAULT_MPL_MAP, **self.GUIDELINE_KWARGS
@@ -705,6 +709,28 @@ class AbstractStyle:
         if self._subplot is None:
             self._subplot = self.SUBPLOT_KWARGS.copy()
         return self._subplot
+
+    @property
+    def colorbar(self) -> dict[str, Any]:
+        """Return the colorbar properties."""
+        if self._colorbar is None:
+            self._colorbar = self.CBAR_KWARGS.copy()
+        return self._colorbar
+
+    @colorbar.setter
+    def colorbar(self, value: Mapping[str, object]) -> None:
+        self._colorbar = dict(value)
+
+    @property
+    def cbar_ticklabels(self) -> dict[str, Any]:
+        """Return the colorbar ticklabel properties."""
+        if self._cbar_ticklabels is None:
+            self._cbar_ticklabels = self.CBAR_TICKLABEL_KWARGS.copy()
+        return self._cbar_ticklabels
+
+    @cbar_ticklabels.setter
+    def cbar_ticklabels(self, value: Mapping[str, object]) -> None:
+        self._cbar_ticklabels = dict(value)
 
     @property
     def color(self) -> Colors:
@@ -1395,6 +1421,12 @@ class DefaultStyle(AbstractStyle):
     TEXT_KWARGS: ClassVar[dict[str, Any]] = {'alpha': 1.0, 'zorder': 500}
 
     TEXT_TITLE_KWARGS: ClassVar[dict[str, Any]] = {'alpha': 1.0, 'zorder': 1000}
+
+    CBAR_KWARGS: ClassVar[dict[str, Any]] = {}
+    CBAR_TICKLABEL_KWARGS: ClassVar[dict[str, Any]] = {
+        'fontfamily': 'serif',
+        'fontsize': 'small',
+    }
 
     LINESTYLES: ClassVar[list[str]] = ['-', '--', '-', '--']
     EDGELINESTYLE: ClassVar[list[str]] = ['-']
