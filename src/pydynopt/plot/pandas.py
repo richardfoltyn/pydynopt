@@ -523,6 +523,57 @@ def _get_scatter_size(
     return size
 
 
+def _get_scatter_color(
+    scatter_color: str | float | None,
+    yvar: str,
+    data: pd.DataFrame,
+    default: Any,
+) -> Any:
+    """
+    Return the marker color for scatter plots.
+
+    The color can be either a uniform constant, or values of a given column
+    from a DataFrame.
+
+    Parameters
+    ----------
+    scatter_color
+        Name of the column containing marker colors, or a uniform color.
+    yvar
+        Name of the dependent variable.
+    data
+        Input DataFrame.
+    default
+        Default color.
+
+    Returns
+    -------
+    Marker colors as a uniform color or an array of colors.
+    """
+    color = default
+    if scatter_color is None:
+        return color
+
+    found = False
+    if isinstance(scatter_color, str):
+        if isinstance(data.columns, pd.MultiIndex):
+            if yvar in data.columns.levels[0] and scatter_color in data[yvar].columns:
+                color = data[(yvar, scatter_color)].to_numpy().flatten()
+                found = True
+            elif scatter_color in data.columns.levels[0]:
+                color = data[scatter_color].to_numpy().flatten()
+                found = True
+        else:
+            if scatter_color in data.columns:
+                color = data[scatter_color].to_numpy().flatten()
+                found = True
+
+    if not found and scatter_color != 'color' and scatter_color is not None:
+        color = scatter_color
+
+    return color
+
+
 def plot_dataframe(
     df: pd.DataFrame,
     xvar: str | None = None,
@@ -542,7 +593,13 @@ def plot_dataframe(
     callback: Callable[..., None] | None = None,
     callback_args: tuple[Any, ...] = (),
     scatter_size: str | float | None = 'size',
+    scatter_color: str | None = 'color',
     style: StyleSpec = None,
+    cmap: Any = None,
+    norm: Any = None,
+    colorbar: bool = False,
+    colorbar_at: tuple[int, int] | None = None,
+    colorbar_kw: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> np.ndarray:
     """
@@ -593,11 +650,24 @@ def plot_dataframe(
         Tuple that will be expanded and passed as additional positional
         arguments to `callback()`.
     scatter_size
-        If string, it is interpreted as a column name in `df`
+        If string, it is interpreted as a column name in ``df``
         with values to be interpreted as marker sizes. If float,
         the value is used as a uniform marker size.
+    scatter_color
+        If string, it is interpreted as a column name in ``df``
+        with values to be interpreted as marker colors.
     style
         Plot style specification.
+    cmap
+        Colormap name or object used to map scalar color data.
+    norm
+        Normalization object used to map scalar color data.
+    colorbar
+        If True, a colorbar is displayed for the scalar mappable in the subplot.
+    colorbar_at
+        Subplot in which colorbar should be placed.
+    colorbar_kw
+        Keyword arguments passed to ``fig.colorbar()``.
     **kwargs
         Keyword arguments passed to plot_grid().
 
@@ -633,7 +703,10 @@ def plot_dataframe(
             # Append xvar to index where it's expected by plotting functions.
             # Perform this indirectly so that MultiIndex columns work as well
             midx = df.index.to_frame(index=False)
-            midx[xvar_] = df[xvar_].to_numpy()
+            xvar_data = df[xvar_]
+            if xvar_data.shape[1] > 1:
+                xvar_data = xvar_data['Mean']
+            midx[xvar_] = xvar_data.to_numpy()
             midx = pd.MultiIndex.from_frame(midx)
             df.index = midx
             del df[xvar_]
@@ -663,6 +736,33 @@ def plot_dataframe(
         plot_type_dict = dict(zip(yvars, plot_type, strict=False))
     else:
         raise ValueError('Unsupported plot_type value')
+
+    # Set up norm if scatter_color is a column name with numeric values
+    has_scatter = any(plot_type_dict[yvar] == 'scatter' for yvar in yvars)
+    if has_scatter and isinstance(scatter_color, str) and norm is None:
+        color_values = []
+        for yvar in yvars:
+            if isinstance(df.columns, pd.MultiIndex):
+                if (yvar, scatter_color) in df.columns:
+                    vals = df[(yvar, scatter_color)].to_numpy()
+                    color_values.append(vals)
+                elif scatter_color in df.columns.levels[0]:
+                    vals = df[scatter_color].to_numpy()
+                    color_values.append(vals)
+            else:
+                if scatter_color in df.columns:
+                    vals = df[scatter_color].to_numpy()
+                    color_values.append(vals)
+
+        if color_values:
+            import matplotlib.colors as mcolors
+
+            all_colors = np.concatenate([v.flatten() for v in color_values])
+            finite_colors = all_colors[np.isfinite(all_colors)]
+            if finite_colors.size > 0 and np.issubdtype(finite_colors.dtype, np.number):
+                vmin = np.nanmin(finite_colors)
+                vmax = np.nanmax(finite_colors)
+                norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
 
     # Process variable labels
     yvar_labels_dict: Mapping[str, str] | None = None
@@ -825,23 +925,77 @@ def plot_dataframe(
                     )
 
                     if style.split_scatter:
+                        kw = style.scatter_face_kwargs[k].copy()
+                        default = kw.pop('facecolors')
+                        color = _get_scatter_color(scatter_color, yvar, df_by, default)
+
+                        is_numeric_color = isinstance(
+                            color, np.ndarray
+                        ) and np.issubdtype(color.dtype, np.number)
+
+                        face_args: dict[str, Any] = {}
+                        if is_numeric_color:
+                            face_args['c'] = color
+                            face_args['cmap'] = cmap
+                            face_args['norm'] = norm
+                        else:
+                            face_args['c'] = color
+
                         # Plot face component of scatter
-                        ax.scatter(
-                            xvalues, yvalues, s=size, **style.scatter_face_kwargs[k]
-                        )
+                        ax.scatter(xvalues, yvalues, s=size, **face_args, **kw)
 
                         # Plot edge component of scatter
-                        kw = style.scatter_edge_kwargs[k].copy()
-                        kw['zorder'] += 1
-                        ax.scatter(xvalues, yvalues, s=size, label=leglbl, **kw)
-                    else:
-                        # Default: plot edges and faces in single call
+                        kw_edge = style.scatter_edge_kwargs[k].copy()
+                        kw_edge['zorder'] += 1
+
+                        edge_args: dict[str, Any] = {}
+                        if is_numeric_color:
+                            import matplotlib.pyplot as plt
+
+                            cmap_obj = (
+                                plt.colormaps.get_cmap(cmap)
+                                if isinstance(cmap, str) or cmap is None
+                                else cmap
+                            )
+                            mapped_colors = cmap_obj(norm(color))
+                            kw_edge['edgecolors'] = mapped_colors
+                        elif color is not None:
+                            if isinstance(color, np.ndarray):
+                                kw_edge['edgecolors'] = color
+
                         ax.scatter(
                             xvalues,
                             yvalues,
                             s=size,
                             label=leglbl,
-                            **style.scatter_kwargs[k],
+                            **edge_args,
+                            **kw_edge,
+                        )
+                    else:
+                        # Default: plot edges and faces in single call
+                        kw = style.scatter_kwargs[k].copy()
+                        default = kw.pop('facecolors')
+                        color = _get_scatter_color(scatter_color, yvar, df_by, default)
+
+                        is_numeric_color = isinstance(
+                            color, np.ndarray
+                        ) and np.issubdtype(color.dtype, np.number)
+
+                        scatter_args: dict[str, Any] = {}
+                        if is_numeric_color:
+                            scatter_args['c'] = color
+                            scatter_args['cmap'] = cmap
+                            scatter_args['norm'] = norm
+                        else:
+                            scatter_args['c'] = color
+
+                        ax.scatter(
+                            xvalues,
+                            yvalues,
+                            s=size,
+                            label=leglbl,
+                            **scatter_args,
+                            **kw,
                         )
 
                 else:
@@ -902,7 +1056,12 @@ def plot_dataframe(
         if callable(callback):
             callback(ax, idx, df_panel, styles[yvars[0]], *callback_args)
 
-    kwargs_default: dict[str, Any] = {'style': styles[yvars[0]]}
+    kwargs_default: dict[str, Any] = {
+        'style': styles[yvars[0]],
+        'colorbar': colorbar,
+        'colorbar_at': colorbar_at,
+        'colorbar_kw': colorbar_kw,
+    }
 
     kwargs_default.update(kwargs)
     kwargs = kwargs_default
