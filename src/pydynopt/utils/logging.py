@@ -247,6 +247,7 @@ def log_python_env(logger: Logger | None = None, level: int = logging.DEBUG) -> 
         logger = logging.getLogger()
 
     logger.log(level, 'Python environment:')
+    logger.log(level, f'  Interpreter: {sys.executable}')
 
     logger.log(level, f'  Python: {platform.python_version()}')
 
