@@ -25,11 +25,11 @@ def dump(
     overwrite: bool = True,
     nthreads: int | None = -1,
     **kwargs: Any,
-) -> None:
+) -> Path:
     """
     Pickle an object and dump it to a file.
 
-    Optionally use GZIP or LZ4 compression.
+    Optionally use GZIP, LZ4, XZ, or Zstandard compression.
 
     Parameters
     ----------
@@ -40,7 +40,8 @@ def dump(
     directory
         Base directory.
     compress
-        If true, apply gzip or lz4 compression to pickled objects.
+        If true, compress the pickled object. If the path has no recognized
+        compression suffix, append ``.zstd``.
     overwrite
         If true, overwrite an existing file. Otherwise, append a unique number
         before the extension to create a unique file name.
@@ -48,8 +49,14 @@ def dump(
         Number of threads to use for decompression (if applicable). A value of -1 uses
         all available logical cores.
     kwargs
-        Keyword arguments passed to respective open() function of the chosen
-        compression library.
+        Keyword arguments passed to the respective ``open()`` function of the
+        chosen compression library.
+
+    Returns
+    -------
+    Path actually written. This may differ from the requested path because of
+    the ``directory`` argument, compression suffix selection, or collision
+    numbering when ``overwrite`` is false.
     """
     logger = logging.getLogger('IO')
 
@@ -78,7 +85,7 @@ def dump(
             lopen = lzma.open
         elif suffix == '.lz4':
             try:
-                import lz4  # ty: ignore[unresolved-import]
+                import lz4.frame
 
                 lopen = lz4.frame.open
             except ImportError:
@@ -97,8 +104,8 @@ def dump(
                 }
             except ImportError:
                 try:
-                    import pyzstd  # ty: ignore[unresolved-import]
-                    from pyzstd import CParameter  # ty: ignore[unresolved-import]
+                    import pyzstd
+                    from pyzstd import CParameter
 
                     lopen = pyzstd.open
                     kw = {
@@ -141,6 +148,8 @@ def dump(
     msg = f'Saved to {path}'
     logger.info(msg)
 
+    return path
+
 
 def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -> Any:
     """
@@ -180,7 +189,7 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
         lopen = gzip.open
     elif suffix == '.lz4':
         try:
-            import lz4  # ty: ignore[unresolved-import]
+            import lz4.frame
 
             lopen = lz4.frame.open
         except ImportError:
@@ -197,7 +206,7 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
             lopen = zstd.open
         except ImportError:
             try:
-                import pyzstd  # ty: ignore[unresolved-import]
+                import pyzstd
 
                 lopen = pyzstd.open
             except ImportError:
@@ -256,7 +265,7 @@ def get_cached_object(
             path = Path(cache_file)
 
     if path:
-        extensions = ('', '.xz', '.lz4', '.gz')
+        extensions = ('', '.xz', '.lz4', '.gz', '.zstd')
         for ext in extensions:
             p = path.with_name(path.name + ext) if ext else path
             if p.is_file():
