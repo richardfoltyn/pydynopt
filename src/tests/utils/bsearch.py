@@ -1,8 +1,9 @@
 
 __author__ = 'Richard Foltyn'
 
-import numpy as np
 import unittest as ut
+
+import numpy as np
 
 from pydynopt.utils import bsearch, bsearch_eq
 
@@ -14,7 +15,6 @@ class BSearchTest(ut.TestCase):
         Run tests with randomly generated arrays of floats, using both unique
         and non-unique array values.
         """
-
         # include some pathological array sizes in tests
         for n in (1, 2, 3, 10, 101):
             arr1 = np.random.uniform(low=0, high=100, size=(n,))

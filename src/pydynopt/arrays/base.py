@@ -11,7 +11,8 @@ from math import log
 
 import numpy as np
 
-from pydynopt.numba import register_jitable, overload, JIT_OPTIONS
+from pydynopt.numba import JIT_OPTIONS, overload, register_jitable
+
 from .numba.arrays import clip_prob_array, clip_prob_scalar
 
 
@@ -36,7 +37,6 @@ def powerspace(xmin: float, xmax: float, n: int, exponent: float) -> np.ndarray:
     xx : np.ndarray
         Array containing "power-spaced" grid
     """
-
     N = int(n)
     ffrom, fto = float(xmin), float(xmax)
     fexponent = float(exponent)
@@ -76,7 +76,6 @@ def logspace(
     -------
     grid : np.ndarray
     """
-
     from scipy.optimize import brentq
 
     if insert_vals:
@@ -151,7 +150,6 @@ def clip_prob(value, tol, out=None):
     -------
     float or np.ndarray
     """
-
     if np.isscalar(value):
         return clip_prob_scalar(value, tol)
     else:
@@ -163,9 +161,9 @@ def clip_prob_generic(value, tol, out=None):
     """
     Generic for scalar arguments and array arguments without a return array `out`.
     """
-
     from numba import types
-    from .numba.arrays import clip_prob_scalar, clip_prob_array
+
+    from .numba.arrays import clip_prob_array, clip_prob_scalar
 
     f = None
     if isinstance(value, types.Float):
@@ -181,8 +179,8 @@ def clip_prob_generic(value, tol, out):
     """
     Generic fo array arguments with an `out` argument that is not None.
     """
-
     from numba import types
+
     from .numba.arrays import clip_prob_array_impl
 
     f = None

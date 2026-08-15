@@ -5,18 +5,17 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-import re
 from collections.abc import Callable, Sequence
 from copy import deepcopy
-from typing import Optional
+import re
 
 import numpy as np
 
-from pydynopt.plot.styles import DefaultStyle, AbstractStyle
 from pydynopt.plot.baseplots import plot_grid
+from pydynopt.plot.styles import AbstractStyle, DefaultStyle
 
 
-class PlotDimension(object):
+class PlotDimension:
 
     DEFAULT_LABEL_LOC = 'lower right'
 
@@ -27,7 +26,6 @@ class PlotDimension(object):
         Keep **kwargs for compatibility since older code might pass label_fun
         argument.
         """
-
         self.label_fmt = label_fmt
 
         # Backward compatibility: use label_fun argument if no label is present
@@ -69,7 +67,6 @@ class PlotDimension(object):
         6)  `at_idx` and `at_val` given: same as (5), but values are provided
             directly
         """
-
         if at_idx is None:
             if at_val is not None and values is not None:
                 at_idx = np.searchsorted(values, at_val).flatten()
@@ -177,17 +174,17 @@ class PlotDimension(object):
 
     def __repr__(self):
         if self.__repr__cached is None:
-            tokens = ['dim={:d}'.format(self.dim)]
+            tokens = [f'dim={self.dim:d}']
             if isinstance(self.index, slice):
                 index = self.index
-                sidx = "{!r}".format(index)
-                tokens.append('index={:s}'.format(sidx))
+                sidx = f"{index!r}"
+                tokens.append(f'index={sidx:s}')
             else:
                 index = np.atleast_1d(self.index)
                 if len(index) > 3:
                     sidx = '...'.join(str(x) for x in index[[0, -1]])
                 else:
-                    sidx = ','.join('{:d}'.format(int(x)) for x in index)
+                    sidx = ','.join(f'{int(x):d}' for x in index)
 
                 fmt = 'index=[{:s}]' if len(index) > 1 else 'index={:s}'
                 tokens.append(fmt.format(sidx))
@@ -203,7 +200,7 @@ class PlotDimension(object):
                 if len(values) > 3:
                     sval = '...'.join(str(x) for x in values[[0, -1]])
                 else:
-                    sval = ','.join("{:.3f}".format(x) for x in values)
+                    sval = ','.join(f"{x:.3f}" for x in values)
 
                 fmt = 'values=[{:s}]' if len(values) > 1 else 'values={:s}'
                 tokens.append(fmt.format(sval))
@@ -217,7 +214,7 @@ class PlotDimension(object):
         return self.__repr__cached
 
 
-class PlotMap(object):
+class PlotMap:
 
     def __init__(self, xaxis=None, rows=None, cols=None, layers=None,
                  fixed=None):
@@ -286,18 +283,18 @@ class PlotMap(object):
     def __repr__(self):
         tokens = list()
         if self.xaxis is not None:
-            tokens.append('{:d}=>x-axis'.format(self.xaxis.dim))
+            tokens.append(f'{self.xaxis.dim:d}=>x-axis')
         if self.rows is not None:
-            tokens.append('{:d}=>Rows'.format(self.rows.dim))
+            tokens.append(f'{self.rows.dim:d}=>Rows')
         if self.cols is not None:
-            tokens.append('{:d}=>Cols'.format(self.cols.dim))
+            tokens.append(f'{self.cols.dim:d}=>Cols')
         if self.layers is not None:
-            tokens.append('{:d}=>Layers'.format(self.layers.dim))
+            tokens.append(f'{self.layers.dim:d}=>Layers')
         if any(x.fixed for x in self.mapped.values()):
             fixed = list()
             for k, v in self.mapped.items():
                 if v.fixed:
-                    fixed.append('{:d}'.format(v.dim))
+                    fixed.append(f'{v.dim:d}')
             tokens.append('Fixed: {:s}'.format(' '.join(fixed)))
 
         s = 'PlotMap({:s})'.format(', '.join(tokens))
@@ -311,12 +308,10 @@ class PlotMap(object):
 
         Parameters
         ----------
-
         data : array_like
             Data array to which PlotMap should be applied
 
         """
-
         # create a concrete plot mapping for aligned data array
         pm = deepcopy(self)
 
@@ -490,7 +485,7 @@ class PlotMap(object):
         for d, i in zip(dim, at_idx):
             if d in self.mapped:
                 if not (self.mapped[d].fixed and replace):
-                    m = 'Mapping for dimension {:d} already exists!'.format(d)
+                    m = f'Mapping for dimension {d:d} already exists!'
                     raise ValueError(m)
             self.mapped[d] = PlotDimension(dim=d, at_idx=i, fixed=True)
 
@@ -538,7 +533,6 @@ class PlotMap(object):
         Nothing
 
         """
-
         self.map_generic('rows', dim, at_idx, at_val, values,
                          label=label, label_fmt=label_fmt, label_loc=label_loc)
 
@@ -565,7 +559,6 @@ class PlotMap(object):
 
         Parameters
         ----------
-
         dim : int
             Data array dimension to be mapped to rows.
 
@@ -584,13 +577,12 @@ class PlotMap(object):
         Nothing
 
         """
-
         self.map_generic('xaxis', dim, at_idx, at_val, values, label=label)
 
     def map_generic(self, kind, dim, *args, **kwargs):
 
         if dim in self.mapped:
-            raise ValueError('Dimension {:d} already mapped!'.format(dim))
+            raise ValueError(f'Dimension {dim:d} already mapped!')
 
         pd = getattr(self, kind)
         if pd is not None:
@@ -601,7 +593,6 @@ class PlotMap(object):
         self.mapped[pd.dim] = pd
 
     def plot(self, *args, **kwargs):
-
         """
         Plot data array using mappings specified prior to calling this method.
 
@@ -613,7 +604,6 @@ class PlotMap(object):
             Keyword arguments passed to plot_pm().
 
         """
-
         plot_pm(self, *args, **kwargs)
 
 
@@ -627,7 +617,6 @@ class LabelArgs:
 
     Attributes
     ----------
-
     row : int
         Current row's index on plot grid
 
@@ -645,6 +634,7 @@ class LabelArgs:
         Current value corresponding to `index` (None if not mapped)
 
     """
+
     def __init__(self, row, column, layer, index=None, value=None):
         # Set integer attributes via properties to ensure that these are
         # actually Python ints and not some degenerate numpy arrays
@@ -957,17 +947,17 @@ def plot_pm(
         style: AbstractStyle | Sequence[AbstractStyle] = DefaultStyle(),
         *,
         trim_iqr: float = 2.0,
-        xlim: Optional[tuple[float, float]] = None,
-        ylim: Optional[tuple[float, float]] = None,
+        xlim: tuple[float, float] | None = None,
+        ylim: tuple[float, float] | None = None,
         extendx: float = 0.01,
         extendy: float = 0.01,
         identity: bool = False,
         sharey: bool = True,
         legend: bool = True,
-        xlabel: Optional[str] = None,
-        ylabel: Optional[str] = None,
-        xticklabels: Optional[Sequence[str]] = None,
-        callback: Optional[callable] = None,
+        xlabel: str | None = None,
+        ylabel: str | None = None,
+        xticklabels: Sequence[str] | None = None,
+        callback: Callable | None = None,
         label_first_only: bool = True,
         **kwargs
 ):
@@ -1018,7 +1008,6 @@ def plot_pm(
         Parameters passed to plot_grid.
 
     """
-
     # Convert input arguments to sequences.
     if not isinstance(data, (list, tuple)):
         tmp = (data, )

@@ -9,7 +9,7 @@ Author: Richard Foltyn
 
 import numpy as np
 
-from pydynopt.numba import jit, JIT_OPTIONS
+from pydynopt.numba import JIT_OPTIONS, jit
 
 __all__ = ['bsearch', 'bsearch_impl']
 
@@ -41,7 +41,6 @@ def bsearch(needle: np.number, haystack: np.ndarray, ilb: int = 0) -> int:
     ilb :
         Index of lower bound of bracketing interval.
     """
-
     n = haystack.shape[0]
 
     if n <= 1:
@@ -70,14 +69,11 @@ def bsearch_impl(needle: np.number, haystack: np.ndarray, ilb: int = 0) -> int:
     ilb :
         Index of lower bound of bracketing interval.
     """
-
     n = haystack.shape[0]
     iub = n - 1
 
     if haystack[ilb] <= needle:
-        if haystack[ilb + 1] > needle:
-            return ilb
-        elif ilb == (n - 2):
+        if haystack[ilb + 1] > needle or ilb == (n - 2):
             return ilb
     else:
         ilb, iub = 0, ilb

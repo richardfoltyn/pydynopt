@@ -5,7 +5,5 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-from .stats import gini
-from .stats import quantile, percentile
-from .stats import quantile_rank, percentile_rank
+from .stats import gini, percentile, percentile_rank, quantile, quantile_rank
 from .utils import *

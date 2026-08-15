@@ -12,6 +12,7 @@ class SerialPool:
     changing the API.
 
     """
+
     def __init__(self, *args, **kwargs):
         pass
 
