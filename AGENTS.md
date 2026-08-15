@@ -8,9 +8,9 @@ All commands (tests, formatting, linting, type-checking) should be executed usin
 
 ### Executing Tests
 
-To run the unit tests in the virtual environment, use:
+To run the unit tests in the virtual environment in parallel (using `pytest-xdist`), use:
 ```bash
-uv run pytest
+uv run pytest -n auto
 ```
 
 To run a specific test file:
