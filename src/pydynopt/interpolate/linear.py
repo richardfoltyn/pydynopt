@@ -7,17 +7,18 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-from typing import Optional
-
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pydynopt.numba import jit, JIT_OPTIONS, overload
+from pydynopt.numba import JIT_OPTIONS, jit, overload
+
 from .numba.linear import (
     interp1d_array,
     interp1d_eval_array,
+    interp1d_eval_array_alloc,
     interp1d_eval_scalar,
     interp1d_locate_array,
+    interp1d_locate_array_alloc,
     interp1d_locate_scalar,
     interp1d_scalar,
     interp2d_array,
@@ -26,17 +27,15 @@ from .numba.linear import (
     interp2d_locate_array,
     interp2d_locate_scalar,
     interp2d_scalar,
-    interp1d_locate_array_alloc,
-    interp1d_eval_array_alloc,
 )
 
 __all__ = [
-    'interp1d_locate',
-    'interp1d_eval',
     'interp1d',
-    'interp2d_locate',
-    'interp2d_eval',
+    'interp1d_eval',
+    'interp1d_locate',
     'interp2d',
+    'interp2d_eval',
+    'interp2d_locate',
 ]
 
 # Add @jit wrappers around Numba implementations of interpolation routines
@@ -53,8 +52,8 @@ def interp1d_locate(
     x: ArrayLike,
     xp: np.ndarray,
     ilb: int = 0,
-    index_out: Optional[np.ndarray] = None,
-    weight_out: Optional[np.ndarray] = None,
+    index_out: np.ndarray | None = None,
+    weight_out: np.ndarray | None = None,
 ):
     """
     Python wrapper around Numba implementation of 1d interpolation search.
@@ -74,7 +73,6 @@ def interp1d_locate(
     -------
 
     """
-
     xx = np.atleast_1d(x)
 
     if xp.shape[0] < 2:
@@ -122,7 +120,7 @@ def interp1d_eval(
     extrapolate: bool = True,
     left: np.floating = np.nan,
     right: np.floating = np.nan,
-    out: Optional[np.ndarray] = None,
+    out: np.ndarray | None = None,
 ):
     """
     Python wrapper around Numba implementation of 1d interpolation.
@@ -144,7 +142,6 @@ def interp1d_eval(
     -------
 
     """
-
     ilb = np.atleast_1d(index)
     wgt_lb = np.atleast_1d(weight)
 
@@ -187,7 +184,7 @@ def interp1d(
     extrapolate: bool = True,
     left: np.floating = np.nan,
     right: np.floating = np.nan,
-    out: Optional[np.ndarray[np.floating]] = None,
+    out: np.ndarray[np.floating] | None = None,
     axis: int = -1,
 ):
     """
@@ -313,11 +310,11 @@ def interp2d_locate(x0, x1, xp0, xp1, ilb=None, index_out=None, weight_out=None)
     xx0 = np.atleast_1d(x0)
     xx1 = np.atleast_1d(x1)
 
-    xx0, xx1 = np.broadcast_arrays(xx0, xx1)
-
-    if np.any(xx0.shape != xx1.shape):
+    if xx0.shape != xx1.shape:
         msg = 'Non-conformable sample data arrays x0, x1'
         raise ValueError(msg)
+
+    xx0, xx1 = np.broadcast_arrays(xx0, xx1)
 
     shp = None
 
@@ -392,9 +389,12 @@ def interp2d(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
     out : float or np.ndarray
         Interpolated function values at given sample points
     """
-
     xx0 = np.atleast_1d(x0)
     xx1 = np.atleast_1d(x1)
+
+    if xx0.shape != xx1.shape:
+        msg = 'Non-conformable sample data arrays x0, x1'
+        raise ValueError(msg)
 
     xx0, xx1 = np.broadcast_arrays(xx0, xx1)
 
@@ -404,10 +404,6 @@ def interp2d(x0, x1, xp0, xp1, fp, ilb=None, extrapolate=True, out=None):
 
     if any(n < 2 for n in fp.shape):
         msg = 'At least two grid points needed in each dimension!'
-        raise ValueError(msg)
-
-    if np.any(xx0.shape != xx1.shape):
-        msg = 'Non-conformable sample data arrays x0, x1'
         raise ValueError(msg)
 
     if out is None:

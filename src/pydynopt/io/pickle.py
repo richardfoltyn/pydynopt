@@ -89,7 +89,10 @@ def dump(
 
                 lopen = lz4.frame.open
             except ImportError:
-                raise ValueError('lz4 package is not installed') from None
+                raise ValueError(
+                    'lz4 package is not installed. '
+                    'Install pydynopt[compression] to enable this compression format.'
+                ) from None
         elif suffix == '.zstd':
             try:
                 # Built-in zstd support added in Python 3.14
@@ -116,7 +119,8 @@ def dump(
                     }
                 except ImportError:
                     raise ValueError(
-                        'Cannot use zstd compression, neither zstd nor pyzstd library is installed'
+                        'Cannot use zstd compression, neither zstd nor pyzstd library is installed. '
+                        'Install pydynopt[compression] to enable this compression format.'
                     ) from None
         else:
             raise RuntimeError('Unsupported compression format')
@@ -193,7 +197,10 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
 
             lopen = lz4.frame.open
         except ImportError:
-            raise ValueError(f'LZ4 library not installed, cannot load {path}') from None
+            raise ValueError(
+                f'LZ4 library not installed, cannot load {path}. '
+                'Install pydynopt[compression] to enable this compression format.'
+            ) from None
     elif suffix in ('.xz', '.lzma'):
         import lzma
 
@@ -211,7 +218,8 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
                 lopen = pyzstd.open
             except ImportError:
                 raise ImportError(
-                    'neither zstd nor pyzstd library is installed'
+                    'neither zstd nor pyzstd library is installed. '
+                    'Install pydynopt[compression] to enable this compression format.'
                 ) from None
     else:
         lopen = open
