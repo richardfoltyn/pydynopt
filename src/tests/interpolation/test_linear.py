@@ -1,12 +1,11 @@
 __author__ = 'Richard Foltyn'
 
 
+import common
 import numpy as np
 import pytest
 
 from pydynopt.interpolate import interp1d
-
-import common
 
 
 class TestLinear(common.TestBase):

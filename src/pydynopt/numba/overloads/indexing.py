@@ -8,7 +8,7 @@ from numpy import ravel_multi_index, unravel_index
 
 from pydynopt.numba import JIT_OPTIONS, overload
 
-__all__ = ['unravel_index', 'ravel_multi_index']
+__all__ = ['ravel_multi_index', 'unravel_index']
 
 
 def _unravel_index_array(indices, shape, order='C'):
@@ -27,7 +27,6 @@ def _unravel_index_array(indices, shape, order='C'):
     -------
 
     """
-
     order = order.upper()
 
     lindices = np.atleast_1d(indices)
@@ -81,7 +80,6 @@ def _unravel_index_scalar(indices, shape, order='C'):
     -------
 
     """
-
     indices1d = np.array([indices])
 
     coords2d = np.unravel_index(indices1d, shape, order)
@@ -125,7 +123,6 @@ def _ravel_multi_index_array(multi_index, dims, mode='raise', order='C'):
     -------
 
     """
-
     # Convert dims which might be any sequence to a numpy array
     ravel_dims = np.empty(len(dims), dtype=np.int64)
     for i, d in enumerate(dims):

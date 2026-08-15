@@ -5,11 +5,10 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-from pydynopt.processes import markov_ergodic_dist
-from pydynopt.processes import markov_moments
-
 import numpy as np
 from scipy.stats import norm
+
+from pydynopt.processes import markov_ergodic_dist, markov_moments
 
 
 def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
@@ -54,7 +53,6 @@ def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
         Implied conditional std. deviation corresponding of AR(1)
 
     """
-
     if sigma_cond:
         sigma_z = np.sqrt(sigma ** 2 / (1 - rho ** 2))
         sigma_e = sigma
@@ -82,7 +80,7 @@ def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
         transm = np.ones((1, 1))
         z = np.zeros(1)
     else:
-        raise ValueError('Invalid number of states: n={:d}'.format(n))
+        raise ValueError(f'Invalid number of states: n={n:d}')
 
     assert np.all(np.abs(np.sum(transm, axis=1) - 1) < 1e-12)
 

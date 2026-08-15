@@ -5,7 +5,11 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-from .processes import markov_ergodic_dist, markov_moments, rouwenhorst
-from .processes import markov_simulate
-from .processes import istransm
+from .processes import (
+    istransm,
+    markov_ergodic_dist,
+    markov_moments,
+    markov_simulate,
+    rouwenhorst,
+)
 from .tauchen import tauchen
