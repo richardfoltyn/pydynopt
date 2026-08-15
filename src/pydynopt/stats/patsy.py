@@ -17,10 +17,14 @@ https://creativecommons.org/licenses/by/4.0/.
 Author: Richard Foltyn
 """
 
+import ast
 from collections.abc import Iterable, Sequence
+import math
 import re
 from typing import Any, overload
 
+import numpy as np
+import pandas as pd
 from patsy.desc import ModelDesc, Term
 
 from pydynopt.pandas import anything_to_dataframe
@@ -168,17 +172,156 @@ def patsy_formula_to_categorical_treatments(*formulas: str) -> dict[str, str]:
         for term in terms:
             for factor in term.factors:
                 expr = factor.name().strip()
+                parsed = ast.parse(expr, mode='eval')
+                categorical_call = parsed.body
 
-                # Categorical variable probably cannot have any additional
-                # tokens other than variable name and options.
-                if m := re.match(r'C\((?P<name>[^,)]+)(?P<rest>.*)\)', expr):
-                    var = m.group('name')
-                    # Extract treatment spec from the remainder
-                    if mt := re.match(r'.*Treatment\((.+)\).*', m.group('rest')):
-                        value = mt.group(1)
-                        treatments[var] = value
+                if not (
+                    isinstance(categorical_call, ast.Call)
+                    and isinstance(categorical_call.func, ast.Name)
+                    and categorical_call.func.id == 'C'
+                ):
+                    continue
+
+                if categorical_call.args:
+                    variable_node = categorical_call.args[0]
+                else:
+                    variable_node = next(
+                        (
+                            keyword.value
+                            for keyword in categorical_call.keywords
+                            if keyword.arg == 'data'
+                        ),
+                        None,
+                    )
+                if variable_node is None:
+                    continue
+
+                contrast_node = (
+                    categorical_call.args[1]
+                    if len(categorical_call.args) > 1
+                    else next(
+                        (
+                            keyword.value
+                            for keyword in categorical_call.keywords
+                            if keyword.arg == 'contrast'
+                        ),
+                        None,
+                    )
+                )
+                if not isinstance(contrast_node, ast.Call):
+                    continue
+                contrast_func = contrast_node.func
+                is_treatment = (
+                    isinstance(contrast_func, ast.Name)
+                    and contrast_func.id == 'Treatment'
+                ) or (
+                    isinstance(contrast_func, ast.Attribute)
+                    and contrast_func.attr == 'Treatment'
+                )
+                if not is_treatment:
+                    continue
+
+                variable = ast.get_source_segment(expr, variable_node)
+                if variable is None:
+                    continue
+
+                if contrast_node.args:
+                    treatment_node = contrast_node.args[0]
+                else:
+                    treatment_node = next(
+                        (
+                            keyword.value
+                            for keyword in contrast_node.keywords
+                            if keyword.arg == 'reference'
+                        ),
+                        None,
+                    )
+                if treatment_node is None:
+                    raise ValueError(
+                        f'Malformed Treatment() call for categorical factor '
+                        f'{variable!r} in {expr!r}: expected at least one argument.'
+                    )
+
+                treatment = ast.get_source_segment(expr, treatment_node)
+                if treatment is None:
+                    continue
+
+                treatments[variable] = treatment
 
     return treatments
+
+
+def _get_clean_factor_levels(series: pd.Series, factor_name: str) -> list[Any]:
+    """
+    Get clean, sorted, observed levels of a factor from a Series.
+
+    Parameters
+    ----------
+    series
+        The pandas Series to process.
+    factor_name
+        The name of the factor for error reporting.
+
+    Returns
+    -------
+    Sorted list of Python scalar values.
+    """
+    raw_unique = series.unique()
+
+    clean_values: list[Any] = []
+    seen: set[tuple[type, Any]] = set()
+
+    for val in raw_unique:
+        if val is None or val is pd.NA:
+            continue
+        if isinstance(val, (float, np.floating)) and np.isnan(val):
+            continue
+        try:
+            if pd.isna(val):
+                continue
+        except (TypeError, ValueError):
+            pass
+
+        if isinstance(val, np.generic):
+            val = val.item()
+
+        if val is None or val is pd.NA:
+            continue
+        if isinstance(val, (float, np.floating)) and np.isnan(val):
+            continue
+        try:
+            if pd.isna(val):
+                continue
+        except (TypeError, ValueError):
+            pass
+
+        is_safe = False
+        if isinstance(val, (bool, int)):
+            is_safe = True
+        elif isinstance(val, float):
+            is_safe = math.isfinite(val)
+        elif isinstance(val, str):
+            is_safe = True
+
+        if not is_safe:
+            raise ValueError(
+                f'Factor {factor_name!r} has value {val!r} of type {type(val).__name__} '
+                f'which cannot be represented safely in Patsy formula text.'
+            )
+
+        val_key = (type(val), val)
+        if val_key not in seen:
+            seen.add(val_key)
+            clean_values.append(val)
+
+    try:
+        sorted_values = sorted(clean_values)
+    except TypeError as e:
+        raise ValueError(
+            f'Values for factor {factor_name!r} cannot be sorted deterministically: {clean_values}'
+        ) from e
+
+    return sorted_values
 
 
 def patsy_add_levels(formula: str, data: Any) -> tuple[str, list[str]]:
@@ -237,12 +380,12 @@ def patsy_add_levels(formula: str, data: Any) -> tuple[str, list[str]]:
                     if name in cache:
                         values = cache[name]
                     else:
-                        values = sorted(df[name].unique())
+                        values = _get_clean_factor_levels(df[name], name)
                         cache[name] = values
 
                     code = code.strip()
                     code = code[: len(code) - 1]
-                    code += ', levels=[' + ','.join(str(v) for v in values) + '])'
+                    code += f', levels={values!r})'
 
                 factor.code = code
 
