@@ -7,7 +7,7 @@ Author: Richard Foltyn
 
 import numpy as np
 
-from pydynopt.numba import overload, register_jitable, JIT_OPTIONS
+from pydynopt.numba import JIT_OPTIONS, overload, register_jitable
 
 
 class OptimResult:
@@ -28,7 +28,6 @@ class OptimResult:
         -------
         s : str
         """
-
         fmt_float = '{:>20s}: {:g}'
         fmt_int = '{:>20s}: {:d}'
         fmt_default = '{:>20s}: {}'
@@ -51,7 +50,7 @@ class OptimResult:
                     s = fmt_float.format(attr, value)
                 else:
                     x = np.atleast_1d(value)
-                    s = ', '.join('{:g}'.format(xi) for xi in x)
+                    s = ', '.join(f'{xi:g}' for xi in x)
                     s = '[' + s + ']'
             else:
                 s = fmt_default.format(attr, value)
@@ -83,9 +82,7 @@ def _extract_arg_generic(arg, index=0):
     from numba import types
 
     f = None
-    if isinstance(arg, types.Number):
-        f = _extract_arg_identity
-    elif isinstance(arg, types.Array):
+    if isinstance(arg, types.Number) or isinstance(arg, types.Array):
         f = _extract_arg_identity
     else:
         f = _extract_arg_by_index
@@ -110,7 +107,6 @@ def _nderiv_array(func, x, fx=np.nan, eps=1.0e-8, *args):
     -------
     fpx : np.ndarray
     """
-
     n = len(x) + 1
     fx_all = np.empty(n, dtype=x.dtype)
 
@@ -146,7 +142,6 @@ def _nderiv_scalar(func, x, fx=np.nan, eps=1.0e-8, *args):
     -------
     fpx : float
     """
-
     xarr = np.array([x])
     fx_all = np.empty(2, dtype=xarr.dtype)
 
@@ -178,7 +173,6 @@ def nderiv(func, x, fx=np.nan, eps=1.0e-8, *args):
     -------
     fpx : float or np.ndaray
     """
-
     eps = float(eps)
 
     if np.isscalar(x):

@@ -35,7 +35,6 @@ def rouwenhorst(n, mu, rho, sigma):
         Transition matrix of discretized process where
             Pi[i,j] = Prob[z'=z_j | z=z_i]
     """
-
     if n < 1:
         msg = 'Invalid number of states'
         raise ValueError(msg)
@@ -96,7 +95,6 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
     mu : numpy.ndarray
         Ergodic distribution
     """
-
     # This function should also work for sparse matrices from scipy.sparse,
     # so do not use .T to get the transpose.
     if transpose:
@@ -119,7 +117,7 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
             else:
                 mu0 = mu1
         else:
-            msg = 'Failed to converge (delta = {:.e})'.format(dv)
+            msg = f'Failed to converge (delta = {dv:.e})'
             print(msg)
             raise ConvergenceError(it, dv)
     else:
@@ -165,7 +163,6 @@ def markov_moments(states, transm, ergodic_dist=None, moments=False,
         If `moments` is True, returns array containing the following
         (unconditional) moments: [mean, variance, skewness, kurtosis]
     """
-
     n = len(states)
 
     # unconditional centered moments
@@ -204,7 +201,7 @@ def markov_moments(states, transm, ergodic_dist=None, moments=False,
         sigma_e = 0.0
         sigma_x = 0.0
     else:
-        raise ValueError('Invalid number of states: {:d}'.format(n))
+        raise ValueError(f'Invalid number of states: {n:d}')
 
     if moments:
         # do not return the 0-th moment
@@ -235,7 +232,6 @@ def markov_simulate(transm, size, dtype=int, init=None):
     isim : ndarray
         Array of simulated draws.
     """
-
     if transm.shape[0] != transm.shape[1] or transm.ndim != 2:
         raise ValueError('Invalid transition matrix shape')
 
@@ -246,7 +242,7 @@ def markov_simulate(transm, size, dtype=int, init=None):
     if init is not None:
         init = int(init)
         if init >= transm.shape[0] or init < 0:
-            raise ValueError('Invalid initial value %d'.format(init))
+            raise ValueError('Invalid initial value %d')
 
     m = transm.shape[0]
     n = size
@@ -293,7 +289,6 @@ def istransm(m, transposed=False, tol=1e-12):
     valid : bool
         True if `tm` is a valid Markov transition matrix.
     """
-
     m = np.atleast_2d(m)
     if (m.shape[0] != m.shape[1]) or (m.ndim != 2):
         msg = 'Square matrix argument required'
@@ -335,7 +330,6 @@ def discretize_markov(nobs: int,
     tm_approx : np.ndarray
         Transition "histogram" in terms of observations
     """
-
     nstates = tm.shape[0]
     tm_approx = np.empty_like(tm, dtype=int)
 
@@ -433,7 +427,6 @@ def pmf_to_histogram(nobs: int,
     -------
     np.ndarray
     """
-
     assert np.all(pmf >= 0)
     idx = np.where(pmf > 0)[0]
 

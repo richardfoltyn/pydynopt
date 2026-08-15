@@ -34,7 +34,6 @@ class NDArrayLattice(PlotMap):
         Nothing
 
         """
-
         # Need to delete all existing fixed mappings, since the name of this
         # function implies that all existing ones are discarded
 

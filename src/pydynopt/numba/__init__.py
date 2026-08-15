@@ -10,20 +10,20 @@ from .dummy import (
     float32,
     float64,
     from_dtype,
-    int16,
-    uint16,
-    int32,
-    uint32,
-    int64,
-    uint64,
     int8,
-    uint8,
+    int16,
+    int32,
+    int64,
     jit,
     jitclass,
     overload,
     prange,
     register_jitable,
     string,
+    uint8,
+    uint16,
+    uint32,
+    uint64,
 )
 
 has_numba = False
@@ -42,12 +42,22 @@ if use_numba:
             from numba.experimental import jitclass
         except ImportError:
             from numba import jitclass
+        from numba import from_dtype, prange
         from numba.extending import overload, register_jitable
-        from numba.types import int8, uint8, int16, uint16, int32, uint32, int64, uint64
-        from numba.types import float32, float64
-        from numba.types import boolean, string
-        from numba import prange
-        from numba import from_dtype
+        from numba.types import (
+            boolean,
+            float32,
+            float64,
+            int8,
+            int16,
+            int32,
+            int64,
+            string,
+            uint8,
+            uint16,
+            uint32,
+            uint64,
+        )
 
         has_numba = True
 

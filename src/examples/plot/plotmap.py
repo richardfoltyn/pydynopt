@@ -5,10 +5,10 @@ Author: Richard Foltyn
 """
 
 
-from pydynopt.plot import PlotMap, DefaultStyle
+import matplotlib.pyplot as plt
 import numpy as np
 
-import matplotlib.pyplot as plt
+from pydynopt.plot import DefaultStyle, PlotMap
 
 
 def data_1d():
@@ -40,7 +40,6 @@ def demo_1d():
     Note 2: PlotMap.plot() does not require a style argument, but we use it
     here to make demo plots more compact.
     """
-
     # Create some demo data
     x, f = data_1d()
 
@@ -89,7 +88,6 @@ def demo_nd():
     Note 2: PlotMap.plot() does not require a style argument, but we use it
     here to make demo plots more compact.
     """
-
     x0, x1, x2, x3, f = data_4d()
 
     # Use a style with smaller subplots
@@ -158,7 +156,6 @@ def demo_annotations():
     Note 2: PlotMap.plot() does not require a style argument, but we use it
     here to make demo plots more compact.
     """
-
     x0, x1, x2, x3, f = data_4d()
 
     style = DefaultStyle()

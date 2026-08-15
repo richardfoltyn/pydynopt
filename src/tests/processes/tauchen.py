@@ -1,7 +1,7 @@
 __author__ = 'Richard Foltyn'
 
-import unittest2 as ut
 import numpy as np
+import unittest2 as ut
 
 from pydynopt.processes.tauchen import tauchen
 

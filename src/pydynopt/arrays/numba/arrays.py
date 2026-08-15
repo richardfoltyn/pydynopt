@@ -10,7 +10,7 @@ Author: Richard Foltyn
 
 import numpy as np
 
-from pydynopt.numba import register_jitable, JIT_OPTIONS
+from pydynopt.numba import JIT_OPTIONS, register_jitable
 
 
 def clip_prob_scalar(value, tol, out=None):
@@ -29,7 +29,6 @@ def clip_prob_scalar(value, tol, out=None):
     -------
     float
     """
-
     if value < tol:
         value = 0.0
     elif value > (1.0 - tol):
@@ -54,7 +53,6 @@ def clip_prob_array_impl(value, tol, out):
     -------
     np.ndarray
     """
-
     out[value < tol] = 0.0
     out[value > (1.0 - tol)] = 1.0
     return out

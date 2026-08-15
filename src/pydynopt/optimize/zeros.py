@@ -7,8 +7,9 @@ Author: Richard Foltyn
 
 import numpy as np
 
-from pydynopt.numba import overload, register_jitable, JIT_OPTIONS
-from ._zeros_scipy import RootResult, _ECONVERGED, _EMAXITER, _EVALUEERR
+from pydynopt.numba import JIT_OPTIONS, overload, register_jitable
+
+from ._zeros_scipy import _ECONVERGED, _EMAXITER, _EVALUEERR, RootResult
 from .common import nderiv
 
 __all__ = ['newton_bisect']
@@ -84,7 +85,6 @@ def _newton_bisect_impl(
     nfev : int
         Number of function evaluations
     """
-
     it = 0
     nfev = 0
 
@@ -301,7 +301,6 @@ def _newton_bisect_full(
     """
     Wrapper function to for newton_bisect that additiopnally returns a RootResult object.
     """
-
     result = RootResult()
 
     root, fx, converged, flag, it, nfev = _newton_bisect_impl(

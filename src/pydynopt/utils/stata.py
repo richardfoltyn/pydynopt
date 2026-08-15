@@ -5,15 +5,15 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
+from collections.abc import Mapping, Sequence
 import contextlib
 import glob
 import logging
 import os
+from pathlib import Path
 import shutil
 import sys
 import tempfile
-from collections.abc import Mapping, Sequence
-from pathlib import Path
 from typing import Any
 
 
