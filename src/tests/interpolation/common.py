@@ -1,17 +1,13 @@
 __author__ = 'Richard Foltyn'
 
 from abc import abstractmethod
-from typing import Optional
+from collections.abc import Callable, Sequence
+from itertools import combinations
 
 import numpy as np
 from numpy import linspace
-
-import pytest
-
-from collections.abc import Iterable, Sequence, Callable
-from itertools import combinations
-
 from numpy.random import Generator
+import pytest
 
 from pydynopt.utils import anything_to_tuple
 
@@ -42,9 +38,9 @@ def f_cartesian(f: Callable, *xp) -> np.ndarray:
 def func_generator(
         n: int,
         low: int = 1,
-        high: Optional[int] = None,
-        coefs: Optional[Sequence[float]] = None,
-        rng: Optional[Generator] = None
+        high: int | None = None,
+        coefs: Sequence[float] | None = None,
+        rng: Generator | None = None
 ):
     """
     Generate a set of functions that are linear in all possible interactions
@@ -72,12 +68,14 @@ def func_generator(
     coefs : array_like, optional
         Coefficients used for polynomial
     """
-
     # With at most n dimensions, we get 2 ** n - 1 possible interaction terms,
     # and need one additional coefficient for the constant
     ncoef = 2 ** n
     if coefs is None or len(coefs) < ncoef:
-        coefs = rng.normal(size=ncoef)
+        if rng is None:
+            coefs = np.random.normal(size=ncoef)
+        else:
+            coefs = rng.normal(size=ncoef)
     else:
         coefs = np.atleast_1d(coefs)
 
@@ -98,12 +96,12 @@ def func_generator(
                 for ia in combinations(subset, j + 1):
                     astr = ''
                     for k in ia:
-                        astr += 'x{:d}*'.format(k)
+                        astr += f'x{k:d}*'
                     # Remove last * character
                     astr = astr[:-1]
-                    dstr += ' {:+5.4f}*{}'.format(coefs[cidx], astr)
+                    dstr += f' {coefs[cidx]:+5.4f}*{astr}'
                     cidx += 1
-            dstr = '{} {:+5.4f}'.format(dstr, coefs[ncoef-1])
+            dstr = f'{dstr} {coefs[ncoef-1]:+5.4f}'
 
             # build function that contains all interactions of indices in
             # subset and a constant
@@ -159,7 +157,7 @@ class TestBase:
 
     @pytest.fixture
     def f_const(self, rng):
-        c = float(rng.normal(size=1))
+        c = float(rng.normal())
 
         def f(*args):
             args = anything_to_tuple(args)
@@ -195,7 +193,6 @@ class TestBase:
         Test whether interpolating exactly at interpolation nodes gives
         correct result.
         """
-
         xp, _ = data
         # we need to do this on a cartesian product of dimensions in xp,
         # as the vectors in xp might be of different length (if we have
@@ -232,7 +229,6 @@ class TestBase:
         """
         Verify that interpolation of 'pseudo'-linear functions works exactly.
         """
-
         xp, x = data
         for f in func_generator(ndim, rng=rng):
             test_equality(f_interp, f, xp, x, tol=1e-9)
@@ -256,7 +252,6 @@ def extend(array_like, by_frac=0.4, add_n=None):
     between the first and last element of each array by adding add_n//2
     elements to each end of the array.
     """
-
     arrays = anything_to_tuple(array_like)
 
     arr_extended = list()
@@ -287,7 +282,6 @@ def test_dimensions(f_interp, f, xp, length=(1, 2, 10, 100, 1001)):
     and that appropriate exceptions are raised when non-conformable
     arrays are passed as arguments.
     """
-
     xp = list(xp)
     fp = f_cartesian(f, *xp)
 
@@ -328,7 +322,6 @@ def test_equality(f_interp, f, xp, x, tol=1e-10):
     Verify that interpolated values are almost equal (i.e. abs.
     difference between actual and interpolated values is smaller than tol).
     """
-
     xp = tuple(xp)
     x = tuple(x)
 
@@ -349,7 +342,6 @@ def test_margin(f_interp, f, xp, x, marg,
     margins constant and effectively testing on a lower-dimensional
     function (f is assumed to be lower-dimensional).
     """
-
     xp = anything_to_tuple(xp)
     x = anything_to_tuple(x)
     marg = anything_to_tuple(marg)
