@@ -8,6 +8,10 @@ build/
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.ty/
 
 # Virtual environments
 .venv/
