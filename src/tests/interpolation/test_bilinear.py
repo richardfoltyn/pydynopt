@@ -1,14 +1,16 @@
 __author__ = 'Richard Foltyn'
 
-import numpy as np
-from numpy import linspace
-import pytest
 from itertools import permutations
 from random import randint
 
-from pydynopt.interpolate import interp1d_linear, interp2d_linear
-
 import common
+import numpy as np
+import pytest
+
+from pydynopt.interpolate import (
+    interp1d as interp1d_linear,
+    interp2d as interp2d_linear,
+)
 
 # dimensions of equal length
 shapes = tuple((x, x) for x in (2, 11, 100))
@@ -56,7 +58,6 @@ class TestBilinear(common.TestBase):
         that ndim-dimensional interpolation of wrapper function coincides
         with 1D interpolation of 'marginal' function.
         """
-
         xp, x = data
         x_ext = common.extend(x)
 
