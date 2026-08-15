@@ -1,4 +1,3 @@
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -10,11 +9,11 @@ __all__ = ['winsorize']
 
 def winsorize(
     data: pd.DataFrame | pd.Series | np.ndarray,
-    qlb: Optional[float] = None,
-    qub: Optional[float] = None,
+    qlb: float | None = None,
+    qub: float | None = None,
     *,
-    varname: Optional[str] = None,
-    weights: Optional[str | pd.Series | np.ndarray] = None,
+    varname: str | None = None,
+    weights: str | pd.Series | np.ndarray | None = None,
     inplace: bool = False,
     interpolation: str = "linear",
     **kwargs,
@@ -46,7 +45,7 @@ def winsorize(
 
     """
     if any(q is not None and not 0 < q < 1 for q in (qlb, qub)):
-        raise ValueError(f"Invalid quantile argument value")
+        raise ValueError("Invalid quantile argument value")
 
     has_weights = weights is not None
 

@@ -6,6 +6,5 @@ Author: Richard Foltyn
 """
 
 
-from .base import powerspace, logspace, clip_prob
-
+from .base import clip_prob, logspace, powerspace
 from .indexing import ind2sub, sub2ind

@@ -1,7 +1,6 @@
 import numpy as np
 from numpy.polynomial import chebyshev
 
-
 __all__ = ["chebyshev_polynomial"]
 
 
@@ -27,7 +26,6 @@ def chebyshev_polynomial(
     -------
     np.ndarray or pd.DataFrame
     """
-
     return_type = return_type.lower()
     if return_type not in ("ndarray", "dataframe"):
         raise ValueError("Invalid return_type argument")

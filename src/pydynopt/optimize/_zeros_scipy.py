@@ -35,15 +35,15 @@ import numpy as np
 
 from pydynopt.numba import (
     JIT_OPTIONS,
-    overload,
-    jitclass,
-    register_jitable,
+    boolean,
     float64,
     int64,
-    boolean,
+    jitclass,
+    overload,
+    register_jitable,
 )
 
-__all__ = ['brentq', 'RootResult']
+__all__ = ['RootResult', 'brentq']
 
 _iter = 100
 _xtol = 2.0e-12
@@ -82,7 +82,7 @@ flag_map = {
         ('flag', int64),
     ]
 )
-class RootResult(object):
+class RootResult:
     """
     Represents the root finding result.
 
@@ -180,7 +180,6 @@ def _brentq_impl(
         Number of function evaluations made.
 
     """
-
     xpre = a
     xcur = b
     xblk = 0.0

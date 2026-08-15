@@ -28,7 +28,6 @@ def ind2sub_array(indices, shape, axis=None, out=None):
     coords : np.ndarray
         Array of coordinates
     """
-
     unravel_ndim = len(shape)
     n = len(indices)
 
@@ -47,7 +46,6 @@ def ind2sub_array_impl(indices, shape, axis, out):
     """
     Implementation for array-valued ind2sub().
     """
-
     unravel_ndim = len(shape)
     unravel_size = 1
     for i in range(unravel_ndim):
@@ -93,7 +91,6 @@ def ind2sub_axis_array(indices, shape, axis=None, out=None):
     coords : np.ndarray
         Array of coordinates
     """
-
     n = len(indices)
     laxis = 0 if axis is None else axis
 
@@ -112,7 +109,6 @@ def ind2sub_axis_array_impl(indices, shape, axis, out):
     """
     Implementation for array-valued ind2sub(..., axis, out).
     """
-
     unravel_ndim = len(shape)
     unravel_size = 1
     for i in range(unravel_ndim):
@@ -160,7 +156,6 @@ def ind2sub_scalar(indices, shape, axis=None, out=None):
     coords : np.ndarray
         Array of coordinates
     """
-
     unravel_ndim = len(shape)
 
     if out is not None:
@@ -178,7 +173,6 @@ def ind2sub_scalar_impl(indices, shape, axis, out):
     """
     Implementation routine for ind2sub() with scalar arguments.
     """
-
     unravel_ndim = len(shape)
     val = indices
 
@@ -219,7 +213,6 @@ def ind2sub_axis_scalar(indices, shape, axis, out):
     int
         Coordinate along the requested axis.
     """
-
     lout = ind2sub_axis_scalar_impl(indices, shape, axis)
     out[0] = lout
     return lout
@@ -247,7 +240,6 @@ def ind2sub_axis_scalar_impl(indices, shape, axis=None, out=None):
     int
         Coordinate along the requested axis.
     """
-
     laxis = 0 if axis is None else axis
 
     unravel_ndim = len(shape)
@@ -293,7 +285,6 @@ def sub2ind_array(coords, shape, out=None):
     out : np.ndarray
         Array of indices into flatted array.
     """
-
     if out is not None:
         sub2ind_array_impl(coords, shape, out)
         return out
@@ -319,7 +310,6 @@ def sub2ind_array_impl(coords, shape, out):
     out : np.ndarray
         Array of indices into flatted array.
     """
-
     ndim = len(shape)
     stride = np.empty(ndim, dtype=np.int64)
     stride[-1] = 1
@@ -364,7 +354,6 @@ def sub2ind_scalar(coords, shape, out=None):
     out : int
         Index into flat array.
     """
-
     ndim = len(shape)
     if len(coords) != ndim:
         raise ValueError('Incompatible coordinate array size')

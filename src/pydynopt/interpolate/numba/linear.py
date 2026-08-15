@@ -11,7 +11,8 @@ Author: Richard Foltyn
 
 import numpy as np
 
-from pydynopt.numba import jit, register_jitable, JIT_OPTIONS
+from pydynopt.numba import JIT_OPTIONS, jit, register_jitable
+
 from .search import bsearch_impl
 
 
@@ -42,7 +43,6 @@ def interp1d_locate_scalar(x, xp, ilb: int = 0, index_out=None, weight_out=None)
     weight : float
         Weight on lower bound of bracketing interval
     """
-
     ilb = bsearch_impl(x, xp, ilb)
 
     weight = (xp[ilb + 1] - x) / (xp[ilb + 1] - xp[ilb])
@@ -76,7 +76,6 @@ def interp1d_locate_array_alloc(x, xp, ilb: int = 0, index_out=None, weight_out=
     index_out : np.ndarray
     weight_out : np.ndarray
     """
-
     lind_out = np.empty_like(x, dtype=np.int64) if index_out is None else index_out
     lwgt_out = np.empty_like(x, dtype=x.dtype) if weight_out is None else weight_out
 
@@ -110,7 +109,6 @@ def interp1d_locate_array(x, xp, ilb, index_out, weight_out):
     index_out : np.ndarray
     weight_out : np.ndarray
     """
-
     lind_out_flat = index_out.reshape((-1,))
     lwgt_out_flat = weight_out.reshape((-1,))
 
@@ -150,7 +148,6 @@ def interp1d_eval_scalar(
     fx : float
         Interpolant evaluated at sample point.
     """
-
     fx = weight * fp[index] + (1.0 - weight) * fp[index + 1]
 
     if not extrapolate:
@@ -190,7 +187,6 @@ def interp1d_eval_array_alloc(
     out : np.ndarray
         Interpolant evaluated at sample points.
     """
-
     lout = np.empty_like(weight) if out is None else out
 
     return interp1d_eval_array(index, weight, fp, extrapolate, left, right, lout)
@@ -223,7 +219,6 @@ def interp1d_eval_array(index, weight, fp, extrapolate, left, right, out):
     out : np.ndarray
         Interpolant evaluated at sample points.
     """
-
     index_flat = index.reshape((-1,))
     weight_flat = weight.reshape((-1,))
     out_flat = out.reshape((-1,))
@@ -265,7 +260,6 @@ def interp1d_scalar(
     -------
 
     """
-
     ilb, wgt = interp1d_locate_scalar(x, xp, ilb)
     fx = interp1d_eval_scalar(ilb, wgt, fp, extrapolate, left, right, out)
 
@@ -293,7 +287,6 @@ def interp1d_array(
     -------
 
     """
-
     lout = np.empty_like(x, dtype=x.dtype) if out is None else out
 
     interp1d_array_impl(x, xp, fp, lout, ilb, extrapolate, left, right)
@@ -323,7 +316,6 @@ def interp1d_array_impl(
     -------
 
     """
-
     out_flat = out.reshape((-1, 1))
 
     for i, xi in enumerate(x.flat):

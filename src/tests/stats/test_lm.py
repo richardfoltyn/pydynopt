@@ -2,7 +2,6 @@
 Unit tests for linear model utilities, specifically demean_within.
 """
 
-import numpy as np
 import pandas as pd
 import pytest
 

@@ -5,27 +5,26 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-import numpy as np
 
 __all__ = [
+    'boolean',
+    'float32',
+    'float64',
+    'from_dtype',
+    'int8',
+    'int16',
+    'int32',
+    'int64',
     'jit',
     'jitclass',
     'overload',
-    'register_jitable',
-    'float32',
-    'float64',
-    'int8',
-    'uint8',
-    'int16',
-    'uint16',
-    'int32',
-    'uint32',
-    'int64',
-    'uint64',
-    'boolean',
-    'string',
     'prange',
-    'from_dtype',
+    'register_jitable',
+    'string',
+    'uint8',
+    'uint16',
+    'uint32',
+    'uint64',
 ]
 
 
@@ -34,9 +33,7 @@ def jit_dummy(signature_or_function=None, *jit_args, **jit_kwargs):
     Default implementation of Numba's @jit decorator when Numba is not
     available or not desired.
     """
-    if signature_or_function is None:
-        pyfunc = None
-    elif isinstance(signature_or_function, list):
+    if signature_or_function is None or isinstance(signature_or_function, list):
         pyfunc = None
     else:
         pyfunc = signature_or_function

@@ -54,7 +54,6 @@ def ind2sub(indices, shape, axis=None, out=None):
     coords : int or np.ndarray
         Array of coordinates
     """
-
     if np.isscalar(indices):
         if axis is None:
             if out is None:
@@ -97,7 +96,6 @@ def ind2sub_impl_generic(indices, shape, axis, out):
     when axis=None).
 
     """
-
     from numba import types
 
     f = None
@@ -124,7 +122,6 @@ def ind2sub_generic(indices, shape, axis=None, out=None):
     not be called in the first place! We therefore only need to handle
     the case when one of them is missing.
     """
-
     from numba import types
 
     f = None
@@ -168,7 +165,6 @@ def sub2ind(coords, shape, out=None):
     out : np.ndarray
         Array of indices into flatted array.
     """
-
     coords = np.atleast_1d(coords)
 
     if coords.ndim == 1:

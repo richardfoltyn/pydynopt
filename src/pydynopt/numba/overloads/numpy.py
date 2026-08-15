@@ -7,8 +7,7 @@ Author: Richard Foltyn
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
 """
-from collections.abc import Mapping
-from typing import Optional, Union
+from collections.abc import Callable, Mapping
 
 import numpy as np
 from numpy import cumsum, insert
@@ -18,7 +17,7 @@ from pydynopt.numba import JIT_OPTIONS, jit, overload
 __all__ = ['cumsum', 'insert']
 
 
-def cumsum_dispatch(x: np.ndarray, axis: Optional[int] = None) -> Union[callable, None]:
+def cumsum_dispatch(x: np.ndarray, axis: int | None = None) -> Callable | None:
     """
     Overload for numpy.cumsum() with second argument (axis) given, which is not
     supported by Numba.
@@ -32,12 +31,11 @@ def cumsum_dispatch(x: np.ndarray, axis: Optional[int] = None) -> Union[callable
     -------
     callable or None
     """
-
     if axis is None:
         return np.cumsum
     elif x.ndim == 2 and axis is not None:
 
-        def _impl(x: np.ndarray, axis: Optional[int] = None) -> np.ndarray:
+        def _impl(x: np.ndarray, axis: int | None = None) -> np.ndarray:
             xout = np.empty_like(x)
             if axis == 0:
                 xout[0] = x[0]
@@ -55,7 +53,7 @@ def cumsum_dispatch(x: np.ndarray, axis: Optional[int] = None) -> Union[callable
         return _impl
 
 
-def overload_cumsum(jit_options: Optional[Mapping] = None):
+def overload_cumsum(jit_options: Mapping | None = None):
     """
     Overload np.cumsum() for 2d arrays if current version of Numba does not support
     axis argument.
@@ -66,7 +64,6 @@ def overload_cumsum(jit_options: Optional[Mapping] = None):
         JIT options passed to Numba's overload()
 
     """
-
     try:
 
         def f(x, axis):
@@ -116,7 +113,6 @@ def _insert(arr, obj, values, axis=None):
     out : np.ndarray
         A copy of arr with values inserted.
     """
-
     lobj = np.asarray(obj)
     lvalues = np.asarray(values)
 
