@@ -72,9 +72,9 @@ def dump(
     kw = {}
 
     if compress:
-        valid_suffixes = {'.gz', '.lz4', '.xz', '.zstd'}
+        valid_suffixes = {'.gz', '.lz4', '.xz', '.zstd', '.zst'}
         if path.suffix.lower() not in valid_suffixes:
-            path = path.with_name(path.name + '.zstd')
+            path = path.with_name(path.name + '.zst')
 
         suffix = path.suffix.lower()
         if suffix == '.gz':
@@ -93,7 +93,7 @@ def dump(
                     'lz4 package is not installed. '
                     'Install pydynopt[compression] to enable this compression format.'
                 ) from None
-        elif suffix == '.zstd':
+        elif suffix in ('.zstd', '.zst'):
             try:
                 # Built-in zstd support added in Python 3.14
                 from compression import zstd  # ty: ignore[unresolved-import]
@@ -205,7 +205,7 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
         import lzma
 
         lopen = lzma.open
-    elif suffix == '.zstd':
+    elif suffix in ('.zstd', '.zst'):
         try:
             # Built-in zstd support added in Python 3.14
             from compression import zstd  # ty: ignore[unresolved-import]
@@ -273,7 +273,7 @@ def get_cached_object(
             path = Path(cache_file)
 
     if path:
-        extensions = ('', '.xz', '.lz4', '.gz', '.zstd')
+        extensions = ('', '.xz', '.lz4', '.gz', '.zstd', '.zst')
         for ext in extensions:
             p = path.with_name(path.name + ext) if ext else path
             if p.is_file():
