@@ -20,7 +20,7 @@ def test_dump_uncompressed_returns_requested_path(tmp_path: Path) -> None:
     assert pickle_io.load(result) == _OBJECT
 
 
-@pytest.mark.parametrize('suffix', ('.gz', '.xz', '.lz4', '.zstd'))
+@pytest.mark.parametrize('suffix', ('.gz', '.xz', '.lz4', '.zstd', '.zst'))
 def test_dump_compressed_returns_requested_path(tmp_path: Path, suffix: str) -> None:
     """Return and round-trip paths for every supported compression format."""
     path = tmp_path / f'model.pkl{suffix}'
@@ -31,10 +31,10 @@ def test_dump_compressed_returns_requested_path(tmp_path: Path, suffix: str) -> 
     assert pickle_io.load(result) == _OBJECT
 
 
-def test_dump_appends_default_zstd_suffix(tmp_path: Path) -> None:
+def test_dump_appends_default_zst_suffix(tmp_path: Path) -> None:
     """Return the appended Zstandard path used by default compression."""
     requested_path = tmp_path / 'model.pkl'
-    expected_path = tmp_path / 'model.pkl.zstd'
+    expected_path = tmp_path / 'model.pkl.zst'
 
     result = pickle_io.dump(requested_path, _OBJECT, nthreads=1)
 
@@ -93,13 +93,27 @@ def test_dump_numbered_path_preserves_compound_suffix(tmp_path: Path) -> None:
     assert pickle_io.load(result) == 'new'
 
 
-def test_get_cached_object_discovers_default_zstd_cache(tmp_path: Path) -> None:
+def test_get_cached_object_discovers_default_zst_cache(tmp_path: Path) -> None:
     """Discover a cache written with the default Zstandard compression."""
     cache_path = tmp_path / 'cache.pkl'
     written_path = pickle_io.dump(cache_path, _OBJECT, nthreads=1)
     compute = Mock(side_effect=AssertionError('cache function should not be called'))
 
     result = pickle_io.get_cached_object(compute, cache_file=cache_path)
+
+    assert written_path == tmp_path / 'cache.pkl.zst'
+    assert result == _OBJECT
+    compute.assert_not_called()
+
+
+def test_get_cached_object_discovers_zstd_cache(tmp_path: Path) -> None:
+    """Discover a cache written with the .zstd compression format."""
+    cache_path = tmp_path / 'cache.pkl.zstd'
+    written_path = pickle_io.dump(cache_path, _OBJECT, nthreads=1)
+    compute = Mock(side_effect=AssertionError('cache function should not be called'))
+
+    # Request the base path without extension, it should discover cache.pkl.zstd
+    result = pickle_io.get_cached_object(compute, cache_file=tmp_path / 'cache.pkl')
 
     assert written_path == tmp_path / 'cache.pkl.zstd'
     assert result == _OBJECT
