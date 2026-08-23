@@ -107,6 +107,9 @@ def configure_logging(reltime: bool = True, stdout: bool = True) -> None:
     logger = logging.getLogger('fontTools')
     logger.setLevel(logging.WARNING)
 
+    logger = logging.getLogger('PIL')
+    logger.setLevel(logging.INFO)
+
     # Disable JAX compilation debug info
     logger = logging.getLogger('jax')
     logger.setLevel(logging.WARNING)
