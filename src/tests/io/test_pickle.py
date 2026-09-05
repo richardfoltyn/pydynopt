@@ -2,6 +2,8 @@
 
 import importlib.util
 from pathlib import Path
+import subprocess
+import sys
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -10,6 +12,22 @@ import pytest
 import pydynopt.io.pickle as pickle_io
 
 _OBJECT = {'name': 'test-object', 'values': [1, 2, 3]}
+
+
+class _PickleableObject:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+
+class _UnpickleableObject:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    def __reduce__(self) -> str | tuple[object, ...]:
+        raise TypeError('objects of this type cannot be pickled')
+
+    def __repr__(self) -> str:
+        return f'_UnpickleableObject({self.value})'
 
 
 def test_get_hash_value_is_invariant_to_mapping_order() -> None:
@@ -46,6 +64,120 @@ def test_get_hash_value_ignores_array_print_options() -> None:
         actual = pickle_io.get_hash_value(arr)
 
     assert actual == expected
+
+
+@pytest.mark.parametrize(
+    'value',
+    (
+        None,
+        True,
+        False,
+        0,
+        1.5,
+        'text',
+        b'bytes',
+        bytearray(b'bytes'),
+        memoryview(b'bytes'),
+    ),
+)
+def test_get_hash_value_supports_scalar_types(value: object) -> None:
+    """Hash supported scalar and bytes-like values consistently."""
+    expected = pickle_io.get_hash_value(value)
+    assert pickle_io.get_hash_value(value) == expected
+
+
+def test_get_hash_value_distinguishes_bytes_like_types() -> None:
+    """Distinguish bytes-like values with different type tags."""
+    values = (b'value', bytearray(b'value'), memoryview(b'value'))
+    hashes = {pickle_io.get_hash_value(value) for value in values}
+    assert len(hashes) == len(values)
+
+
+def test_get_hash_value_distinguishes_sequence_types() -> None:
+    """Distinguish lists, tuples, and generic sequences with equal contents."""
+    values = ([1, 2], (1, 2), range(1, 3))
+    hashes = {pickle_io.get_hash_value(value) for value in values}
+    assert len(hashes) == len(values)
+
+
+def test_get_hash_value_handles_nan() -> None:
+    """Canonicalize scalar NaN values."""
+    assert pickle_io.get_hash_value(float('nan')) == pickle_io.get_hash_value(
+        float('nan')
+    )
+
+
+def test_get_hash_value_includes_array_dtype_shape_and_endianness() -> None:
+    """Distinguish arrays with equal logical values but different metadata."""
+    arrays = (
+        np.array([1, 2], dtype=np.int32),
+        np.array([1, 2], dtype=np.int64),
+        np.array([[1, 2]], dtype=np.int32),
+        np.array([1, 2], dtype='>i4'),
+    )
+    hashes = {pickle_io.get_hash_value(arr) for arr in arrays}
+    assert len(hashes) == len(arrays)
+
+
+def test_get_hash_value_ignores_array_memory_layout() -> None:
+    """Produce the same hash for arrays with equal values and different layouts."""
+    arr_c = np.array([[1, 2], [3, 4]], order='C')
+    arr_f = np.array(arr_c, order='F')
+    assert pickle_io.get_hash_value(arr_c) == pickle_io.get_hash_value(arr_f)
+
+
+def test_get_hash_value_supports_numpy_scalars_and_object_arrays() -> None:
+    """Hash NumPy scalars and object arrays based on their type and contents."""
+    assert pickle_io.get_hash_value(np.int32(1)) != pickle_io.get_hash_value(
+        np.int64(1)
+    )
+
+    arr1 = np.array([{'key': 'value'}, 1], dtype=object)
+    arr2 = np.array([{'key': 'value'}, 1], dtype=object)
+    arr3 = np.array([1, {'key': 'value'}], dtype=object)
+    assert pickle_io.get_hash_value(arr1) == pickle_io.get_hash_value(arr2)
+    assert pickle_io.get_hash_value(arr1) != pickle_io.get_hash_value(arr3)
+
+
+def test_get_hash_value_handles_nested_mixed_structures() -> None:
+    """Remain mapping-order invariant while detecting nested value changes."""
+    value1 = {'items': [np.array([1, 2]), ('key', b'value')], 'enabled': True}
+    value2 = {'enabled': True, 'items': [np.array([1, 2]), ('key', b'value')]}
+    value3 = {'enabled': True, 'items': [np.array([1, 3]), ('key', b'value')]}
+    assert pickle_io.get_hash_value(value1) == pickle_io.get_hash_value(value2)
+    assert pickle_io.get_hash_value(value1) != pickle_io.get_hash_value(value3)
+
+
+def test_get_hash_value_handles_pickleable_and_unpickleable_objects() -> None:
+    """Hash pickled objects and fall back to stable representations on failure."""
+    assert pickle_io.get_hash_value(_PickleableObject(1)) == pickle_io.get_hash_value(
+        _PickleableObject(1)
+    )
+    assert pickle_io.get_hash_value(_PickleableObject(1)) != pickle_io.get_hash_value(
+        _PickleableObject(2)
+    )
+    assert pickle_io.get_hash_value(_UnpickleableObject(1)) == pickle_io.get_hash_value(
+        _UnpickleableObject(1)
+    )
+    assert pickle_io.get_hash_value(_UnpickleableObject(1)) != pickle_io.get_hash_value(
+        _UnpickleableObject(2)
+    )
+
+
+def test_get_hash_value_is_deterministic_across_processes() -> None:
+    """Produce the same hash in a separate Python process."""
+    value = {'items': [1, 2.5, 'text'], 'metadata': {'enabled': True}}
+    script = """
+from pydynopt.io.pickle import get_hash_value
+print(get_hash_value({'items': [1, 2.5, 'text'], 'metadata': {'enabled': True}}))
+"""
+    result = subprocess.run(
+        [sys.executable, '-c', script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == pickle_io.get_hash_value(value)
 
 
 def test_atomic_dump_preserves_existing_file_on_failure(tmp_path: Path) -> None:
