@@ -12,9 +12,43 @@ import logging
 import os
 from pathlib import Path
 import pickle
+import struct
+import tempfile
 from typing import Any
+import zlib
 
-__all__ = ['dump', 'get_cached_object', 'get_hash_value', 'load']
+__all__ = ['CorruptFileError', 'dump', 'get_cached_object', 'get_hash_value', 'load']
+
+
+class CorruptFileError(Exception):
+    """A pickle file could not be decoded."""
+
+
+def _corrupt_file_errors() -> tuple[type[BaseException], ...]:
+    errors: list[type[BaseException]] = [
+        pickle.UnpicklingError,
+        EOFError,
+        struct.error,
+        gzip.BadGzipFile,
+        zlib.error,
+    ]
+
+    import lzma
+
+    errors.append(lzma.LZMAError)
+    try:
+        from compression import zstd  # type: ignore
+
+        errors.append(zstd.ZstdError)
+    except (ImportError, AttributeError):
+        pass
+    try:
+        import pyzstd
+
+        errors.append(pyzstd.ZstdError)
+    except (ImportError, AttributeError):
+        pass
+    return tuple(errors)
 
 
 def dump(
@@ -24,6 +58,7 @@ def dump(
     compress: bool = True,
     overwrite: bool = True,
     nthreads: int | None = -1,
+    atomic: bool = True,
     **kwargs: Any,
 ) -> Path:
     """
@@ -48,6 +83,8 @@ def dump(
     nthreads
         Number of threads to use for decompression (if applicable). A value of -1 uses
         all available logical cores.
+    atomic
+        If true, write to a temporary file and atomically replace the destination.
     kwargs
         Keyword arguments passed to the respective ``open()`` function of the
         chosen compression library.
@@ -95,8 +132,7 @@ def dump(
                 ) from None
         elif suffix in ('.zstd', '.zst'):
             try:
-                # Built-in zstd support added in Python 3.14
-                from compression import zstd  # ty: ignore[unresolved-import]
+                from compression import zstd  # type: ignore
 
                 lopen = zstd.open
                 kw = {
@@ -130,28 +166,41 @@ def dump(
     if path.is_file() and not overwrite:
         suffixes = path.suffixes
         if suffixes:
-            # Keep up to two extensions (e.g., .pkl.gz)
-            ext_parts = suffixes[-2:]
-            ext = ''.join(ext_parts)
+            ext = ''.join(suffixes[-2:])
             root = path.name.removesuffix(ext)
-
             i = 0
             while True:
                 fn_try = path.with_name(f'{root}_{i:03d}{ext}')
                 if not fn_try.is_file():
                     path = fn_try
                     break
-                else:
-                    i += 1
+                i += 1
 
     kw.update(kwargs)
 
-    with lopen(path, 'wb', **kw) as f:  # ty: ignore[no-matching-overload]
-        pickle.dump(obj, f)
+    tmp_path: Path | None = None
+    try:
+        if atomic:
+            fd, tmp_name = tempfile.mkstemp(
+                dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp'
+            )
+            os.close(fd)
+            tmp_path = Path(tmp_name)
+            write_path = tmp_path
+        else:
+            write_path = path
 
-    msg = f'Saved to {path}'
-    logger.info(msg)
+        with lopen(write_path, 'wb', **kw) as f:  # type: ignore
+            pickle.dump(obj, f)
 
+        if tmp_path is not None:
+            os.replace(tmp_path, path)
+            tmp_path = None
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+
+    logger.info(f'Saved to {path}')
     return path
 
 
@@ -168,7 +217,7 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
     directory
         Base directory.
     kwargs
-        Keyword arguments passed to respective open() function of the chosen
+        Keyword arguments passed to respective ``open()`` function of the chosen
         compression library.
 
     Returns
@@ -176,7 +225,6 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
     Unpickled object.
     """
     logger = logging.getLogger('IO')
-
     if not path:
         raise ValueError(f"Invalid path '{path}'")
 
@@ -185,9 +233,7 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
         path = Path(directory) / path
 
     logger.info(f'Loading from {path}')
-
     kw = {}
-
     suffix = path.suffix.lower()
     if suffix in ('.gz', '.gzip'):
         lopen = gzip.open
@@ -207,8 +253,7 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
         lopen = lzma.open
     elif suffix in ('.zstd', '.zst'):
         try:
-            # Built-in zstd support added in Python 3.14
-            from compression import zstd  # ty: ignore[unresolved-import]
+            from compression import zstd  # type: ignore
 
             lopen = zstd.open
         except ImportError:
@@ -225,9 +270,15 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
         lopen = open
 
     kw.update(kwargs)
-
-    with lopen(path, 'rb', **kw) as f:
-        obj = pickle.load(f)
+    try:
+        with lopen(path, 'rb', **kw) as f:
+            obj = pickle.load(f)
+    except _corrupt_file_errors() as err:
+        raise CorruptFileError(f'Could not load pickle file: {path}') from err
+    except RuntimeError as err:
+        if suffix == '.lz4' or 'LZ4F_' in str(err):
+            raise CorruptFileError(f'Could not load pickle file: {path}') from err
+        raise
 
     return obj
 
@@ -265,30 +316,31 @@ def get_cached_object(
     -------
     Computed or cached object.
     """
+    logger = logging.getLogger('IO')
     path = None
     if cache_file is not None:
-        if cache_dir is not None:
-            path = Path(cache_dir) / cache_file
-        else:
-            path = Path(cache_file)
+        path = (
+            Path(cache_dir) / cache_file if cache_dir is not None else Path(cache_file)
+        )
 
     if path:
         extensions = ('', '.xz', '.lz4', '.gz', '.zstd', '.zst')
         for ext in extensions:
-            p = path.with_name(path.name + ext) if ext else path
-            if p.is_file():
-                obj = load(p)
-                return obj
+            candidate = path.with_name(path.name + ext) if ext else path
+            if candidate.is_file():
+                try:
+                    return load(candidate)
+                except CorruptFileError:
+                    logger.warning(
+                        'Cache file %s is corrupt; ignoring it and recomputing',
+                        candidate,
+                    )
 
-    # Cached result does not exist, compute it
     fcn_name = getattr(fcn, '__name__', 'callable')
-    logging.info(f'Cached result not found, calling {fcn_name}()')
-
+    logger.info(f'Cached result not found, calling {fcn_name}()')
     obj = fcn(*args, **kwargs)
-
     if path:
         dump(path, obj, compress=compress, overwrite=True)
-
     return obj
 
 
@@ -322,12 +374,9 @@ def get_hash_value(*args: Any, **kwargs: Any) -> str:
     for key, value in kwargs.items():
         for obj in (key, value):
             try:
-                h = hashlib.sha256(obj).hexdigest()  # ty: ignore[invalid-argument-type]
+                h = hashlib.sha256(obj).hexdigest()  # type: ignore
             except TypeError:
                 h = hashlib.sha3_256(f'{obj}'.encode()).hexdigest()
             hashes.append(h)
 
-    s = '_'.join(hashes)
-    h = hashlib.sha256(s.encode())
-
-    return h.hexdigest()
+    return hashlib.sha256('_'.join(hashes).encode()).hexdigest()
