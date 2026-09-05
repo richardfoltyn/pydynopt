@@ -70,13 +70,8 @@ def jit_dummy(
     -------
     The original function or a decorator that returns its function unchanged.
     """
-    if signature_or_function is None or isinstance(signature_or_function, list):
-        pyfunc = None
-    else:
-        pyfunc = signature_or_function
-
-    if pyfunc is not None:
-        return pyfunc
+    if callable(signature_or_function):
+        return signature_or_function
 
     def decorate[F: Callable[..., Any]](func: F) -> F:
         """Return the decorated function unchanged."""
@@ -85,20 +80,35 @@ def jit_dummy(
     return decorate
 
 
-def jitclass_dummy[T](spec: Any) -> Callable[[type[T]], type[T]]:
-    """Create a no-op replacement for Numba's ``jitclass`` decorator.
+@typing_overload
+def jitclass_dummy[T](cls_or_spec: type[T], spec: Any = None) -> type[T]: ...
+
+
+@typing_overload
+def jitclass_dummy[T](
+    cls_or_spec: Any = None, spec: Any = None
+) -> Callable[[type[T]], type[T]]: ...
+
+
+def jitclass_dummy(cls_or_spec: Any = None, spec: Any = None) -> Any:
+    """Return a class unchanged or create a no-op JIT-class decorator.
 
     Parameters
     ----------
+    cls_or_spec
+        Class to return or JIT class specification, which is ignored.
     spec
         JIT class specification, which is ignored.
 
     Returns
     -------
-    A decorator that returns its class unchanged.
+    The original class or a decorator that returns its class unchanged.
     """
 
-    def decorate(cls: type[T]) -> type[T]:
+    if isinstance(cls_or_spec, type):
+        return cls_or_spec
+
+    def decorate[T](cls: type[T]) -> type[T]:
         """Return the decorated class unchanged."""
         return cls
 
@@ -108,7 +118,7 @@ def jitclass_dummy[T](spec: Any) -> Callable[[type[T]], type[T]]:
 def overload_dummy[F: Callable[..., Any]](
     func: Callable[..., Any],
     jit_options: Mapping[str, Any] | None = None,
-    strict: bool = True,
+    strict: bool = False,
     **kwargs: Any,
 ) -> Callable[[F], F]:
     """Create a no-op replacement for Numba's ``overload`` decorator.
@@ -120,7 +130,8 @@ def overload_dummy[F: Callable[..., Any]](
     jit_options
         JIT options, which are ignored.
     strict
-        Strictness flag, which is ignored.
+        Strictness flag, which is ignored and defaults to ``False`` like the
+        active wrapper.
     **kwargs
         Additional overload options, which are ignored.
 
@@ -158,22 +169,17 @@ def register_jitable_dummy(*args: Any, **kwargs: Any) -> Any:
 
     Returns
     -------
-    A decorator that returns its function unchanged.
+    The original function or a decorator that returns it unchanged.
     """
 
-    def wrap[F: Callable[..., Any]](fn: F) -> F:
-        """Register a no-op overload and return the function unchanged."""
+    if args and callable(args[0]):
+        return args[0]
 
-        @overload(fn, jit_options=kwargs, strict=False)
-        def ov_wrap(*args: Any, **kwargs: Any) -> F:
-            """Return the original function as the overload implementation."""
-            return fn
+    def decorate[F: Callable[..., Any]](func: F) -> F:
+        """Return the decorated function unchanged."""
+        return func
 
-        return fn
-
-    if kwargs:
-        return wrap
-    return wrap(*args)
+    return decorate
 
 
 def from_dtype(obj: Any) -> Any:
