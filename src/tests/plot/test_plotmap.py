@@ -5,10 +5,10 @@ Author: Richard Foltyn
 """
 
 import numpy as np
+from plot_common import MockData
 import pytest
 
-from pydynopt.plot.plotmap import PlotMap, PlotDimension
-from common import MockData
+from pydynopt.plot.plotmap import PlotDimension, PlotMap
 
 
 @pytest.fixture(scope='module')
@@ -22,10 +22,10 @@ def data_1d():
 
 
 @pytest.fixture(scope='module')
-def data_2d():
+def data_2d(data_1d):
     x = MockData()
 
-    d1 = data_1d()
+    d1 = data_1d
     g1 = d1.grid[0]
     g2 = np.linspace(10, 20, d1.data.shape[0] + 1)
 
@@ -37,9 +37,9 @@ def data_2d():
 
 
 @pytest.fixture(scope='module')
-def data_3d():
+def data_3d(data_2d):
     x = MockData()
-    d2 = data_2d()
+    d2 = data_2d
 
     g1, g2 = d2.grid
     g3 = np.linspace(-1, 1, d2.data.shape[1] + 1)
@@ -68,7 +68,6 @@ def test_plotdim(request):
     """
     Test PlotDimensions creation
     """
-
     # Check that exception in raised when at_idx and at_val are non-conformable
     idx = np.arange(10)
     val = np.linspace(0, 10, 9)
@@ -241,7 +240,6 @@ def test_3d(request, data_3d):
     """
     Test PlotMap with 3-dimensional data
     """
-
     dd = data_3d.data
 
     # Test 1: Plot everything

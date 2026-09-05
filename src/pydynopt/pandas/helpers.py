@@ -6,11 +6,10 @@ Author: Richard Foltyn
 """
 
 from collections.abc import Iterable, Mapping
+from typing import Any
 
-from typing import Any, Optional
-
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from pydynopt.utils import anything_to_list
 
@@ -18,7 +17,7 @@ __all__ = ["anything_to_dataframe"]
 
 
 def anything_to_dataframe(
-    data: Any, names: Optional[str | Iterable[str]] = None, copy: bool = False
+    data: Any, names: str | Iterable[str] | None = None, copy: bool = False
 ) -> pd.DataFrame:
     """
     Create DataFrame from (almost) any type of data.
@@ -33,7 +32,6 @@ def anything_to_dataframe(
     -------
     pd.DataFrame
     """
-
     names = anything_to_list(names)
 
     if isinstance(data, pd.DataFrame):

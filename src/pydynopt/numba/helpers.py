@@ -7,15 +7,14 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-import sys
-import copy
 from collections.abc import Sequence
-from typing import Optional, Any
+import sys
+from typing import Any
 
 import numpy as np
 
-from . import overload
 from ..utils import anything_to_tuple
+from . import JIT_OPTIONS, overload
 
 
 def to_array(obj, dtype=None):
@@ -31,7 +30,6 @@ def to_array(obj, dtype=None):
     -------
     x : np.ndarray
     """
-
     x = np.array(obj, dtype=dtype)
     return x
 
@@ -49,7 +47,6 @@ def to_array_iterable(obj, dtype=None):
     -------
     x : np.ndarray
     """
-
     n = len(obj)
     if dtype is not None:
         ldtype = dtype
@@ -77,7 +74,6 @@ def to_array_default(obj, dtype=None):
     -------
     x : np.ndarray
     """
-
     if dtype is None:
         ldtype = np.float64
     else:
@@ -87,7 +83,7 @@ def to_array_default(obj, dtype=None):
     return x
 
 
-@overload(to_array, jit_options={'nogil': True, 'parallel': False})
+@overload(to_array, jit_options=JIT_OPTIONS)
 def array_generic(obj, dtype=None):
 
     from numba import types
@@ -101,11 +97,11 @@ def array_generic(obj, dtype=None):
 
 def create_numba_instance(
     obj,
-    attrs: Optional[str | Sequence[str]] = None,
-    exclude: Optional[str | Sequence[str]] = None,
+    attrs: str | Sequence[str] | None = None,
+    exclude: str | Sequence[str] | None = None,
     init: bool = True,
     copy: bool = False,
-    cache: Optional[type] = None,
+    cache: type | None = None,
     return_type: bool = False
 ):
     """
@@ -142,13 +138,14 @@ def create_numba_instance(
     object
         Instance of compiled Numba type.
     """
-
-    from pydynopt.numba import jitclass
-    from pydynopt.numba import has_numba
+    from pydynopt.numba import has_numba, jitclass
 
     # if this already is a compiled instance, return it immediately
     if not has_numba or hasattr(obj, '_numba_type_'):
-        return obj
+        if return_type:
+            return obj, obj.__class__
+        else:
+            return obj
 
     # object is not an instance of a Numba type, we need to build
     # signature for jitclass().
@@ -226,10 +223,9 @@ def _build_signature(obj, attrs: Sequence[str]):
     signature : list
         List of tuples containing (name, type) pairs.
     """
-
-    from pydynopt.numba import boolean, int64, float64
-    from pydynopt.numba import from_dtype
     from numba.types import UniTuple
+
+    from pydynopt.numba import boolean, float64, from_dtype, int64
 
     signature = []
 
@@ -239,7 +235,7 @@ def _build_signature(obj, attrs: Sequence[str]):
         try:
             nbtype = from_dtype(value.dtype)
         except:
-            msg = 'Unsupported Numpy dtype {}'.format(value.dtype)
+            msg = f'Unsupported Numpy dtype {value.dtype}'
             print(msg, file=sys.stderr)
             return
 
@@ -296,7 +292,7 @@ def _build_signature(obj, attrs: Sequence[str]):
 
 
 def copy_attributes(
-    src: Any, dst: Any, attrs: Optional[Sequence[str]] = None, copy: bool = True
+    src: Any, dst: Any, attrs: Sequence[str] | None = None, copy: bool = True
 ) -> Any:
     """
     Copy attributes from src that at also present in dst into dst.
@@ -314,7 +310,6 @@ def copy_attributes(
     -------
     params : NumbaParams
     """
-
     if attrs is None:
         attrs = [k for k in dir(dst) if not k.startswith('_') and hasattr(src, k)]
 

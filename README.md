@@ -8,23 +8,28 @@ and plotting tasks that arise when solving macroeconomic models in Python.
 
 Author: Richard Foltyn
 
-## Requirements
+## Installation
 
-The library should work with the following package versions:
-
-- python: 3.10
-- numpy: 1.24
-- scipy: 1.10
-- matplotlib: 3.7
-- pandas: 1.5
-- numba: 0.57
-
-The environment file [`environment.yml`](environment.yml) can be used to 
-create a compatible [Anaconda](https://www.anaconda.com/) environment:
+To install `pydynopt` with base dependencies:
 
 ```bash
-conda env create -f environment.yml
+pip install .
 ```
+
+The base installation omits optional acceleration and compression packages. You can request optional functionality using the following extras:
+
+- **Numba acceleration**:
+  ```bash
+  pip install "pydynopt[numba]"
+  ```
+  Installs `numba` to accelerate computations. If not installed, `pydynopt` automatically falls back to pure-Python implementations.
+- **Compression**:
+  ```bash
+  pip install "pydynopt[compression]"
+  ```
+  Installs `lz4` and `pyzstd` to support LZ4 and Zstandard formats for compressed pickle persistence. (Note that Python 3.14+ has standard-library Zstandard support).
+
+To set up the development environment, run `uv sync` to install all optional and development packages via the `dev` dependency group.
 
 ## License
 

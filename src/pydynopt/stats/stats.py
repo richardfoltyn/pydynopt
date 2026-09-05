@@ -8,12 +8,10 @@ Author: Richard Foltyn
 """
 
 from collections.abc import Sequence
-from typing import Optional
 
 import numpy as np
 
-from pydynopt.interpolate import interp1d
-from pydynopt.numba import jit, register_jitable, overload
+from pydynopt.numba import jit, overload
 
 
 @jit(nopython=True, nogil=True, parallel=False)
@@ -41,7 +39,6 @@ def gini(states, pmf, assume_sorted=False):
     gini : float
         Gini coefficient for given PMF or histogram
     """
-
     states_arr = np.atleast_1d(states)
     pmf_arr = np.atleast_1d(pmf)
 
@@ -85,7 +82,6 @@ def create_unique_pmf(x, pmf, assume_sorted=False):
     pmf_uniq: np.ndarray
         Probabilities corresponding to unique states
     """
-
     if not assume_sorted:
         iorder = np.argsort(x)
         x = x[iorder]
@@ -129,7 +125,6 @@ def _ppf_nearest(rank, cdf, x, qntl):
     qntl : np.ndarray
         Stores nearest percentile-points.
     """
-
     # Skip over any potential initially flat region without mass
     imin = 0
     for imin in range(cdf.size - 1):
@@ -175,7 +170,6 @@ def _ppf_interp(rank, cdf, x, qntl):
     qntl : np.ndarray
         Array of resulting quantiles
     """
-
     # Skip over any potential initially flat region without mass
     imin = 0
     for imin in range(cdf.size - 1):
@@ -242,7 +236,6 @@ def quantile_array(
     q : np.ndarray
         Quantile corresponding to given quantile ranks.
     """
-
     x1d = np.atleast_1d(x).flatten()
     pmf1d = np.atleast_1d(pmf).flatten()
     qrank1d = np.atleast_1d(qrank).flatten()
@@ -360,7 +353,6 @@ def quantile(
     q : np.ndarray or float
         Quantile corresponding to given quantile ranks.
     """
-
     qrank1d = np.asarray(qrank)
     q = quantile_array(x, pmf, qrank1d, assume_sorted, assume_unique, interpolation)
 
@@ -413,7 +405,6 @@ def percentile_array(
     pctl : np.ndarray
         Percentiles corresponding to given percentile ranks
     """
-
     qrank = np.asarray(prank) / 100.0
     pctl = quantile(x, pmf, qrank, assume_sorted, assume_unique, interpolation)
 
@@ -460,7 +451,6 @@ def percentile(
     pctl : np.ndarray or float
         Percentiles corresponding to given percentile ranks.
     """
-
     qrank = np.asarray(prank) / 100.0
     pctl = quantile_array(x, pmf, qrank, assume_sorted, assume_unique, interpolation)
 
@@ -513,7 +503,6 @@ def quantile_rank(x, pmf, qntl, interpolation='linear'):
     rank : array_like
         Quantile ranks corresponding to given quantiles
     """
-
     is_scalar = np.isscalar(qntl)
     shp_in = np.array(qntl).shape
 
@@ -613,8 +602,8 @@ def percentile_rank(x, pmf, pctl, interpolation='linear'):
 
 def discretize_rv(
     *,
-    n: Optional[int] = None,
-    q: Optional[Sequence | np.ndarray] = None,
+    n: int | None = None,
+    q: Sequence | np.ndarray | None = None,
     dist=None,
     return_edges: bool = False,
     **kwargs
@@ -646,7 +635,6 @@ def discretize_rv(
     pmf : np.ndarray
     edges : np.ndarray, optional
     """
-
     if dist is None:
         from scipy.stats import norm
 

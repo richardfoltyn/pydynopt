@@ -1,38 +1,42 @@
 """
-This work is licensed under CC BY 4.0,
-https://creativecommons.org/licenses/by/4.0/
+Helper functions for parallelization.
+
+This work is licensed under CC BY 4.0, https://creativecommons.org/licenses/by/4.0/.
 
 Author: Richard Foltyn
 """
 
-from pydynopt.numba import register_jitable
 import numpy as np
 
+from pydynopt.numba import JIT_OPTIONS, register_jitable
 
-@register_jitable
-def chunk_sizes(nthreads, ntasks):
+
+@register_jitable(**JIT_OPTIONS)
+def chunk_sizes(
+    nthreads: int, ntasks: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Split a given number of tasks (almost) uniformly across the given number
-    of threads. This function takes care of the case when it is not possible
-    to assign the same number of tasks to each thread.
+    Split a given number of tasks (almost) uniformly across the given number of threads.
+
+    This function takes care of the case when it is not possible to assign the same
+    number of tasks to each thread.
 
     Parameters
     ----------
-    nthreads : int
+    nthreads
         Number of threads
-    ntasks : int
+    ntasks
         Number of task to be divided across threads
 
     Returns
     -------
-    chunks : np.ndarray
+    chunks
         Array containing the number of task for each thread
-    istart : np.ndarray
+    istart
         Start index of the chunk assigned to each thread
-    iend : np.ndarray
+    iend
         (non-inclusive) end index of the chunk assigned to each thread
     """
-
     nthreads = int(nthreads)
     ntasks = int(ntasks)
 
@@ -42,7 +46,7 @@ def chunk_sizes(nthreads, ntasks):
     base = ntasks // nthreads
     rest = ntasks % nthreads
 
-    chunks = np.ones((nthreads, ), dtype=np.int64) * base
+    chunks = np.ones((nthreads,), dtype=np.int64) * base
     chunks[:rest] += 1
 
     assert np.sum(chunks) == ntasks

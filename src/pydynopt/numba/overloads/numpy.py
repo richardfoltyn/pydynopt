@@ -7,13 +7,17 @@ Author: Richard Foltyn
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
 """
-from collections.abc import Mapping
-from typing import Optional, Union
+from collections.abc import Callable, Mapping
 
 import numpy as np
+from numpy import cumsum, insert
+
+from pydynopt.numba import JIT_OPTIONS, jit, overload
+
+__all__ = ['cumsum', 'insert']
 
 
-def cumsum_dispatch(x: np.ndarray, axis: Optional[int] = None) -> Union[callable, None]:
+def cumsum_dispatch(x: np.ndarray, axis: int | None = None) -> Callable | None:
     """
     Overload for numpy.cumsum() with second argument (axis) given, which is not
     supported by Numba.
@@ -27,12 +31,11 @@ def cumsum_dispatch(x: np.ndarray, axis: Optional[int] = None) -> Union[callable
     -------
     callable or None
     """
-
     if axis is None:
         return np.cumsum
     elif x.ndim == 2 and axis is not None:
 
-        def _impl(x: np.ndarray, axis: Optional[int] = None) -> np.ndarray:
+        def _impl(x: np.ndarray, axis: int | None = None) -> np.ndarray:
             xout = np.empty_like(x)
             if axis == 0:
                 xout[0] = x[0]
@@ -50,7 +53,7 @@ def cumsum_dispatch(x: np.ndarray, axis: Optional[int] = None) -> Union[callable
         return _impl
 
 
-def overload_cumsum(jit_options: Optional[Mapping] = None):
+def overload_cumsum(jit_options: Mapping | None = None):
     """
     Overload np.cumsum() for 2d arrays if current version of Numba does not support
     axis argument.
@@ -61,15 +64,12 @@ def overload_cumsum(jit_options: Optional[Mapping] = None):
         JIT options passed to Numba's overload()
 
     """
-    from numba import jit
-    from numba.extending import overload
-
     try:
 
         def f(x, axis):
             return np.cumsum(x, axis=axis)
 
-        kw = dict(jit_options) if jit_options else dict()
+        kw = dict(jit_options) if jit_options else JIT_OPTIONS
         kw["nopython"] = True
 
         fjit = jit(f, **kw)
@@ -82,3 +82,78 @@ def overload_cumsum(jit_options: Optional[Mapping] = None):
         pass
 
     overload(np.cumsum, jit_options=jit_options)(cumsum_dispatch)
+
+
+def _insert(arr, obj, values, axis=None):
+    """
+    Insert values before the given indices.
+
+    Implements mostly Numpy-compatible replacement for np.insert() that can
+    be compiled using Numba.
+
+    Notes
+    -----
+    - This implementation ignores the axis argument.
+    - Only integer-valued index arrays are supported.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Input array.
+    obj : np.ndarray or int
+        Object that defines the index or indices before which values is
+        inserted. Must be integer-valued!
+    values : np.ndarray or numeric
+        Values to insert into `arr`.
+    axis : object
+        Ignored.
+
+    Returns
+    -------
+    out : np.ndarray
+        A copy of arr with values inserted.
+    """
+    lobj = np.asarray(obj)
+    lvalues = np.asarray(values)
+
+    if lobj.ndim > 1:
+        raise ValueError('Unsupported array dimension')
+
+    if (lobj.ndim != lvalues.ndim) or (lobj.size != lvalues.size):
+        raise ValueError('Array dimension or shape mismatch')
+
+    N = arr.shape[0]
+    Nnew = lobj.size
+    Nout = N + Nnew
+    out = np.empty(Nout, dtype=arr.dtype)
+
+    indices = np.empty(Nnew, dtype=np.int64)
+    indices[:] = lobj
+    indices[indices < 0] += N
+
+    # Use stable sorting algorithm such that the sort order of identical
+    # elements in indices is predictably the same as in np.insert()
+    iorder = np.argsort(indices, kind='mergesort')
+    indices[iorder] += np.arange(Nnew)
+
+    mask_old = np.ones(Nout, dtype=np.bool_)
+    mask_old[indices] = False
+
+    out[mask_old] = arr
+    out[indices] = lvalues
+
+    return out
+
+
+@overload(insert, jit_options=JIT_OPTIONS)
+def insert_generic(arr, obj, values, axis=None):
+    from numba import types
+
+    f = None
+    if isinstance(obj, types.Integer) and isinstance(values, types.Number):
+        f = _insert
+    elif isinstance(obj, types.Array) and isinstance(values, types.Array):
+        if obj.ndim <= 1:
+            f = _insert
+
+    return f

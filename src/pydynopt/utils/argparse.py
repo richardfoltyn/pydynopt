@@ -1,27 +1,30 @@
 """
+Helper functions for parsing CLI arguments using the argparse module.
+
 Author: Richard Foltyn
 """
 
 from argparse import ArgumentParser
-from typing import Optional, Any, Sequence
-
+from collections.abc import Sequence
 import re
+from typing import Any
 
 
 def parse_bool(s: Any) -> bool:
     """
-    Parse string as bool, mapping strings that contain a numerical value 0 or 0.0
-    to False. Otherwise, the usual conversion rules apply.
+    Parse a string as a boolean value.
+
+    This maps strings that contain a numerical value 0 or 0.0 to False.
+    Otherwise, the usual conversion rules apply.
 
     Parameters
     ----------
-    s : object
+    s
 
     Returns
     -------
-    value : bool
+    Parsed boolean value.
     """
-
     if isinstance(s, bool):
         return s
 
@@ -34,31 +37,30 @@ def parse_bool(s: Any) -> bool:
 
 
 def add_toggle_arg(
-        parser: ArgumentParser,
-        name: str,
-        dest: Optional[str]=None,
-        default: bool = True,
-        required: bool = False
+    parser: ArgumentParser,
+    name: str,
+    dest: str | None = None,
+    default: bool = True,
+    required: bool = False,
 ) -> ArgumentParser:
     """
-    Add a CLI argument that can toggle a certain feature (ON/OFF) by
-    specifing either --name or --no-name.
+    Add a CLI argument that can toggle a certain feature (ON/OFF).
+
+    This specifies either --name or --no-name.
 
     Parameters
     ----------
-    parser : ArgumentParser
-    name : str
+    parser
+    name
         Name of the option to add.
-    dest : str
+    dest
         Attribute where option value should be stored (default: option name in lower
         case)
-    default : bool
+    default
         Default value
-    required : bool
+    required
         If true, mark as required option.ll
     """
-
-
     # strip initial dashes
     pattern = re.compile('-*(.*)')
     mtch = pattern.match(name)
@@ -80,8 +82,15 @@ def add_toggle_arg(
     # from const is used.
     # If neither --name nor --no-name is given, the default value is used.
     # We use a custom parser as otherwise '0' is set to true with type=bool.
-    grp.add_argument(f'--{name}', action='store', dest=dest, nargs='?',
-                     default=default, const=True, type=parse_bool)
+    grp.add_argument(
+        f'--{name}',
+        action='store',
+        dest=dest,
+        nargs='?',
+        default=default,
+        const=True,
+        type=parse_bool,
+    )
     grp.add_argument(f'--no-{name}', action='store_false', dest=dest)
     kwargs = {dest: default}
     parser.set_defaults(**kwargs)
@@ -95,12 +104,12 @@ def flatten_list_args(value: str | Sequence[str] | None) -> list[str]:
 
     Parameters
     ----------
-    value : str or list of str or None
+    value
         List of (multiple) option arguments
 
     Returns
     -------
-    list
+    Flattened list of string values.
     """
     from itertools import chain
 
@@ -108,9 +117,9 @@ def flatten_list_args(value: str | Sequence[str] | None) -> list[str]:
         return []
 
     if isinstance(value, str):
-        value = list(value.split(","))
+        value = list(value.split(','))
     else:
-        value = list(chain(*tuple(v.split(",") for v in value)))
+        value = list(chain(*tuple(v.split(',') for v in value)))
 
     # Remove any surrounding spaces
     value = [v.strip() for v in value]
@@ -120,24 +129,21 @@ def flatten_list_args(value: str | Sequence[str] | None) -> list[str]:
 
 def strip_quotes(value: str | Sequence[str] | None) -> str | list[str] | None:
     """
-    String any single or double quotes from a string or list of strings
-    option value.
+    Strip any single or double quotes from an option value.
+
+    This handles a string or list of strings.
 
     Parameters
     ----------
-    value : str or Sequence of str, optional
+    value
 
     Returns
     -------
-    str or list of str or None
+    The stripped string or sequence of strings, or None.
     """
-
-    if not value:
-        return value
-
-    if isinstance(value, list):
-        value = [v.strip('"\' ') for v in value]
+    if isinstance(value, str):
+        return value.strip('"\' ') if value else None
+    elif isinstance(value, Sequence):
+        return [v.strip('"\' ') for v in value]
     else:
-        value = value.strip('"\' ') if value else None
-
-    return value
+        return value

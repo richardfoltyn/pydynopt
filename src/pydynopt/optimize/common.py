@@ -7,8 +7,7 @@ Author: Richard Foltyn
 
 import numpy as np
 
-from pydynopt.numba import overload, jitclass, register_jitable
-from pydynopt.numba import int64, float64
+from pydynopt.numba import JIT_OPTIONS, overload, register_jitable
 
 
 class OptimResult:
@@ -29,7 +28,6 @@ class OptimResult:
         -------
         s : str
         """
-
         fmt_float = '{:>20s}: {:g}'
         fmt_int = '{:>20s}: {:d}'
         fmt_default = '{:>20s}: {}'
@@ -52,7 +50,7 @@ class OptimResult:
                     s = fmt_float.format(attr, value)
                 else:
                     x = np.atleast_1d(value)
-                    s = ', '.join('{:g}'.format(xi) for xi in x)
+                    s = ', '.join(f'{xi:g}' for xi in x)
                     s = '[' + s + ']'
             else:
                 s = fmt_default.format(attr, value)
@@ -78,25 +76,24 @@ def _extract_arg(arg, index=0):
         return arg
 
 
-@overload(_extract_arg, jit_options={'nogil': True})
+@overload(_extract_arg, jit_options=JIT_OPTIONS)
 def _extract_arg_generic(arg, index=0):
 
     from numba import types
 
     f = None
-    if isinstance(arg, types.Number):
-        f = _extract_arg_identity
-    elif isinstance(arg, types.Array):
+    if isinstance(arg, types.Number) or isinstance(arg, types.Array):
         f = _extract_arg_identity
     else:
         f = _extract_arg_by_index
     return f
 
 
-@register_jitable(parallel=False, nogil=True)
+@register_jitable(**JIT_OPTIONS)
 def _nderiv_array(func, x, fx=np.nan, eps=1.0e-8, *args):
     """
-    Numerically forward-differentiate function and given point.
+    Numerically forward-differentiate a function which takes an array argument at
+    a given point.
 
     Parameters
     ----------
@@ -110,7 +107,6 @@ def _nderiv_array(func, x, fx=np.nan, eps=1.0e-8, *args):
     -------
     fpx : np.ndarray
     """
-
     n = len(x) + 1
     fx_all = np.empty(n, dtype=x.dtype)
 
@@ -130,6 +126,7 @@ def _nderiv_array(func, x, fx=np.nan, eps=1.0e-8, *args):
     return fpx
 
 
+@register_jitable(**JIT_OPTIONS)
 def _nderiv_scalar(func, x, fx=np.nan, eps=1.0e-8, *args):
     """
 
@@ -145,7 +142,6 @@ def _nderiv_scalar(func, x, fx=np.nan, eps=1.0e-8, *args):
     -------
     fpx : float
     """
-
     xarr = np.array([x])
     fx_all = np.empty(2, dtype=xarr.dtype)
 
@@ -157,38 +153,6 @@ def _nderiv_scalar(func, x, fx=np.nan, eps=1.0e-8, *args):
     dfx = fx_all[0] - fx
     dx = eps
     fpx = dfx / dx
-
-    return fpx
-
-
-@register_jitable(nogil=True, parallel=False)
-def nderiv_multi(func, x, fx=None, eps=1.0e-8, *args):
-    """
-    Compute derivative of scalar function on scalar domain at multiple values
-    at once.
-
-    Parameters
-    ----------
-    func : callable
-    x : np.ndarray
-    fx : np.ndarray
-    eps : float
-    args
-
-    Returns
-    -------
-    fpx : np.ndarray
-    """
-
-    if fx is None:
-        obj = func(x, *args)
-        fx0 = _extract_arg(obj)
-    else:
-        fx0 = fx
-
-    obj = func(x + eps, *args)
-    fx_eps = _extract_arg(obj)
-    fpx = (fx_eps - fx0) / eps
 
     return fpx
 
@@ -209,7 +173,6 @@ def nderiv(func, x, fx=np.nan, eps=1.0e-8, *args):
     -------
     fpx : float or np.ndaray
     """
-
     eps = float(eps)
 
     if np.isscalar(x):
@@ -223,7 +186,7 @@ def nderiv(func, x, fx=np.nan, eps=1.0e-8, *args):
     return fpx
 
 
-@overload(nderiv, jit_options={'parallel': False, 'nogil': True})
+@overload(nderiv, jit_options=JIT_OPTIONS)
 def nderiv_generic(func, x, fx=np.nan, eps=1.0e-8, *args):
 
     from numba import types
