@@ -1,11 +1,9 @@
-"""
-Numba implementations of linear interpolation routines.
+"""Provide unchecked Numba-compatible kernels for linear interpolation.
 
-- 1D and 2D bracket location for scalars and arrays
-- 1D and 2D linear interpolant evaluation for scalars and arrays
-- Combined 1D and 2D interpolation kernels
-
-NOTE: Do not add @jit decorators to functions meant to be overloaded by @overload.
+Callers must supply strictly increasing one-dimensional grids with at least two
+points, valid lower-bound indices, conformable arrays, and writable output buffers
+of an appropriate dtype. Allocation wrappers create int64 indices and float64
+weights or interpolation results.
 
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
@@ -17,7 +15,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from pydynopt.numba import JIT_OPTIONS, jit, register_jitable
+from pydynopt.numba import JIT_OPTIONS, register_jitable
 
 from .search import bsearch_impl
 
@@ -25,16 +23,19 @@ __all__ = [
     'interp1d_array',
     'interp1d_array_impl',
     'interp1d_eval_array',
-    'interp1d_eval_array_alloc',
+    'interp1d_eval_array_impl',
     'interp1d_eval_scalar',
     'interp1d_locate_array',
-    'interp1d_locate_array_alloc',
+    'interp1d_locate_array_impl',
     'interp1d_locate_scalar',
     'interp1d_scalar',
     'interp2d_array',
+    'interp2d_array_impl',
     'interp2d_eval_array',
+    'interp2d_eval_array_impl',
     'interp2d_eval_scalar',
     'interp2d_locate_array',
+    'interp2d_locate_array_impl',
     'interp2d_locate_scalar',
     'interp2d_locate_scalar_impl',
     'interp2d_scalar',
@@ -43,166 +44,97 @@ __all__ = [
 
 @register_jitable(**JIT_OPTIONS)
 def interp1d_locate_scalar(
-    x: float,
+    x: float | np.number,
     xp: np.ndarray,
     ilb: int = 0,
-    index_out: object = None,
-    weight_out: object = None,
 ) -> tuple[int, float]:
+    """Locate a scalar sample and return its lower-grid-point weight.
+
+    ``xp`` must satisfy the module grid preconditions, and ``ilb`` must be in
+    ``[0, len(xp) - 2]``.
     """
-    Compute the interpolation bracketing interval and weight for a scalar value.
+    index = bsearch_impl(x, xp, ilb)
+    weight = (xp[index + 1] - x) / (xp[index + 1] - xp[index])
+    return index, float(weight)
 
-    Parameters
-    ----------
-    x
-        Sample point at which to interpolate.
-    xp
-        Grid points representing domain over which to interpolate.
-    ilb
-        Initial guess for index of the bracketing interval lower bound.
-    index_out
-        Ignored, present for signature compatibility.
-    weight_out
-        Ignored, present for signature compatibility.
 
-    Returns
-    -------
-    ilb
-        Index of lower bound of bracketing interval.
-    weight
-        Weight on lower bound of bracketing interval.
+@register_jitable(**JIT_OPTIONS)
+def interp1d_locate_array_impl(
+    x: np.ndarray,
+    xp: np.ndarray,
+    ilb: int,
+    index_out: np.ndarray,
+    weight_out: np.ndarray,
+) -> None:
+    """Locate array samples into required output buffers.
+
+    ``x``, ``index_out``, and ``weight_out`` must have identical shapes. Grid and
+    lower-bound preconditions match :func:`interp1d_locate_scalar`.
     """
-    ilb = bsearch_impl(x, xp, ilb)
-    weight = (xp[ilb + 1] - x) / (xp[ilb + 1] - xp[ilb])
+    index = ilb
+    for i in range(x.size):
+        index, weight = interp1d_locate_scalar(x.flat[i], xp, index)
+        index_out.flat[i] = index
+        weight_out.flat[i] = weight
 
-    return ilb, float(weight)
 
-
-def interp1d_locate_array_alloc(
+def interp1d_locate_array(
     x: np.ndarray,
     xp: np.ndarray,
     ilb: int = 0,
     index_out: np.ndarray | None = None,
     weight_out: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Compute interpolation bracketing intervals and weights for an array.
-
-    Parameters
-    ----------
-    x
-        Sample points at which to interpolate.
-    xp
-        Grid points representing domain over which to interpolate.
-    ilb
-        Initial guess for index of lower bound of bracketing interval.
-    index_out
-        Optional pre-allocated output array for lower bound indices.
-    weight_out
-        Optional pre-allocated output array for lower bound weights.
-
-    Returns
-    -------
-    index_out
-        Array of lower bound indices.
-    weight_out
-        Array of lower bound weights.
-    """
-    lind_out = np.empty_like(x, dtype=np.int64) if index_out is None else index_out
-    lwgt_out = np.empty_like(x, dtype=x.dtype) if weight_out is None else weight_out
-
-    return interp1d_locate_array(x, xp, ilb, lind_out, lwgt_out)
-
-
-@register_jitable(**JIT_OPTIONS)
-def interp1d_locate_array(
-    x: np.ndarray,
-    xp: np.ndarray,
-    ilb: int,
-    index_out: np.ndarray,
-    weight_out: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Compute interpolation bracketing intervals and weights into pre-allocated arrays.
-
-    Parameters
-    ----------
-    x
-        Sample points at which to interpolate.
-    xp
-        Grid points representing domain over which to interpolate.
-    ilb
-        Initial guess for index of lower bound of bracketing interval.
-    index_out
-        Pre-allocated output array for lower bound indices.
-    weight_out
-        Pre-allocated output array for lower bound weights.
-
-    Returns
-    -------
-    index_out
-        Array of lower bound indices.
-    weight_out
-        Array of lower bound weights.
-    """
-    lind_out_flat = index_out.reshape((-1,))
-    lwgt_out_flat = weight_out.reshape((-1,))
-
-    for i, xi in enumerate(x.flat):
-        ilb = bsearch_impl(xi, xp, ilb)
-        wgt_lb = (xp[ilb + 1] - xi) / (xp[ilb + 1] - xp[ilb])
-        lind_out_flat[i] = ilb
-        lwgt_out_flat[i] = wgt_lb
-
-    return index_out, weight_out
+    """Locate array samples, allocating omitted int64 and float64 buffers."""
+    index = np.empty(x.shape, dtype=np.int64) if index_out is None else index_out
+    weight = np.empty(x.shape, dtype=np.float64) if weight_out is None else weight_out
+    interp1d_locate_array_impl(x, xp, ilb, index, weight)
+    return index, weight
 
 
 @register_jitable(**JIT_OPTIONS)
 def interp1d_eval_scalar(
-    index: int,
-    weight: float,
+    index: int | np.integer,
+    weight: float | np.number,
     fp: np.ndarray,
     extrapolate: bool = True,
     left: float = np.nan,
     right: float = np.nan,
-    out: object = None,
 ) -> float:
-    """
-    Evaluate an interpolant at a single scalar value.
-
-    Parameters
-    ----------
-    index
-        Index of lower bound of bracketing interval.
-    weight
-        Weight on lower bound of bracketing interval.
-    fp
-        Function values defined on original grid points.
-    extrapolate
-        If True, extrapolate values outside of domain.
-    left
-        Value to return if sample point is below the domain lower bound.
-    right
-        Value to return if sample point is above the domain upper bound.
-    out
-        Ignored, present for signature compatibility.
-
-    Returns
-    -------
-    Interpolant evaluated at sample point.
-    """
-    fx = weight * fp[index] + (1.0 - weight) * fp[index + 1]
-
+    """Evaluate one located point using a valid lower-bound index and weight."""
     if not extrapolate:
         if weight > 1.0:
-            fx = left
-        elif weight < 0.0:
-            fx = right
+            return float(left)
+        if weight < 0.0:
+            return float(right)
 
-    return float(fx)
+    value = weight * fp[index] + (1.0 - weight) * fp[index + 1]
+    return float(value)
 
 
-def interp1d_eval_array_alloc(
+@register_jitable(**JIT_OPTIONS)
+def interp1d_eval_array_impl(
+    index: np.ndarray,
+    weight: np.ndarray,
+    fp: np.ndarray,
+    extrapolate: bool,
+    left: float,
+    right: float,
+    out: np.ndarray,
+) -> None:
+    """Evaluate located samples into an output matching index and weight shapes."""
+    for i in range(index.size):
+        out.flat[i] = interp1d_eval_scalar(
+            index.flat[i],
+            weight.flat[i],
+            fp,
+            extrapolate,
+            left,
+            right,
+        )
+
+
+def interp1d_eval_array(
     index: np.ndarray,
     weight: np.ndarray,
     fp: np.ndarray,
@@ -211,129 +143,58 @@ def interp1d_eval_array_alloc(
     right: float = np.nan,
     out: np.ndarray | None = None,
 ) -> np.ndarray:
-    """
-    Evaluate an interpolant at multiple sample points, allocating output if needed.
-
-    Parameters
-    ----------
-    index
-        Indices of lower bounds of bracketing intervals.
-    weight
-        Weights on lower bounds of bracketing intervals.
-    fp
-        Function values defined on original grid points.
-    extrapolate
-        If True, extrapolate values outside of domain.
-    left
-        Value to return if sample point is below the domain lower bound.
-    right
-        Value to return if sample point is above the domain upper bound.
-    out
-        Optional pre-allocated output array.
-
-    Returns
-    -------
-    Interpolant evaluated at sample points.
-    """
-    lout = np.empty_like(weight) if out is None else out
-
-    return interp1d_eval_array(index, weight, fp, extrapolate, left, right, lout)
+    """Evaluate located array samples, allocating a float64 output if omitted."""
+    result = np.empty(index.shape, dtype=np.float64) if out is None else out
+    interp1d_eval_array_impl(
+        index,
+        weight,
+        fp,
+        extrapolate,
+        left,
+        right,
+        result,
+    )
+    return result
 
 
 @register_jitable(**JIT_OPTIONS)
-def interp1d_eval_array(
-    index: np.ndarray,
-    weight: np.ndarray,
-    fp: np.ndarray,
-    extrapolate: bool,
-    left: float,
-    right: float,
-    out: np.ndarray,
-) -> np.ndarray:
-    """
-    Evaluate an interpolant at multiple sample points into pre-allocated array.
-
-    Parameters
-    ----------
-    index
-        Indices of lower bounds of bracketing intervals.
-    weight
-        Weights on lower bounds of bracketing intervals.
-    fp
-        Function values defined on original grid points.
-    extrapolate
-        If True, extrapolate values outside of domain.
-    left
-        Value to return if sample point is below the domain lower bound.
-    right
-        Value to return if sample point is above the domain upper bound.
-    out
-        Pre-allocated output array.
-
-    Returns
-    -------
-    Interpolant evaluated at sample points.
-    """
-    index_flat = index.reshape((-1,))
-    weight_flat = weight.reshape((-1,))
-    out_flat = out.reshape((-1,))
-
-    for i in range(out_flat.size):
-        wgt = weight_flat[i]
-        ilb = index_flat[i]
-        out_flat[i] = wgt * fp[ilb] + (1.0 - wgt) * fp[ilb + 1]
-
-    if not extrapolate:
-        for i in range(out_flat.size):
-            wgt = weight_flat[i]
-            if wgt > 1.0:
-                out_flat[i] = left
-            elif wgt < 0.0:
-                out_flat[i] = right
-
-    return out
-
-
 def interp1d_scalar(
-    x: float,
+    x: float | np.number,
     xp: np.ndarray,
     fp: np.ndarray,
     ilb: int = 0,
     extrapolate: bool = True,
     left: float = np.nan,
     right: float = np.nan,
-    out: object = None,
 ) -> float:
-    """
-    Locate and evaluate linear interpolant at a single sample point.
+    """Interpolate one point on conformable one-dimensional grid and value arrays."""
+    index, weight = interp1d_locate_scalar(x, xp, ilb)
+    return interp1d_eval_scalar(index, weight, fp, extrapolate, left, right)
 
-    Parameters
-    ----------
-    x
-        Sample point at which to interpolate.
-    xp
-        Grid points representing domain over which to interpolate.
-    fp
-        Function values defined on original grid points.
-    ilb
-        Initial guess for index of lower bound of bracketing interval.
-    extrapolate
-        If True, extrapolate values outside of domain.
-    left
-        Value to return if sample point is below the domain lower bound.
-    right
-        Value to return if sample point is above the domain upper bound.
-    out
-        Ignored, present for signature compatibility.
 
-    Returns
-    -------
-    Interpolant evaluated at sample point.
-    """
-    ilb_found, wgt = interp1d_locate_scalar(x, xp, ilb)
-    fx = interp1d_eval_scalar(ilb_found, wgt, fp, extrapolate, left, right, out)
-
-    return fx
+@register_jitable(**JIT_OPTIONS)
+def interp1d_array_impl(
+    x: np.ndarray,
+    xp: np.ndarray,
+    fp: np.ndarray,
+    ilb: int,
+    extrapolate: bool,
+    left: float,
+    right: float,
+    out: np.ndarray,
+) -> None:
+    """Interpolate array samples into an output with the same shape as ``x``."""
+    index = ilb
+    for i in range(x.size):
+        index, weight = interp1d_locate_scalar(x.flat[i], xp, index)
+        out.flat[i] = interp1d_eval_scalar(
+            index,
+            weight,
+            fp,
+            extrapolate,
+            left,
+            right,
+        )
 
 
 def interp1d_array(
@@ -346,166 +207,77 @@ def interp1d_array(
     right: float = np.nan,
     out: np.ndarray | None = None,
 ) -> np.ndarray:
-    """
-    Locate and evaluate linear interpolant at a collection of sample points.
-
-    Parameters
-    ----------
-    x
-        Sample points at which to interpolate.
-    xp
-        Grid points representing domain over which to interpolate.
-    fp
-        Function values defined on original grid points.
-    ilb
-        Initial guess for index of lower bound of bracketing interval.
-    extrapolate
-        If True, extrapolate values outside of domain.
-    left
-        Value to return if sample point is below the domain lower bound.
-    right
-        Value to return if sample point is above the domain upper bound.
-    out
-        Optional pre-allocated output array.
-
-    Returns
-    -------
-    Interpolant evaluated at sample points.
-    """
-    lout = np.empty_like(x, dtype=x.dtype) if out is None else out
-
-    interp1d_array_impl(x, xp, fp, lout, ilb, extrapolate, left, right)
-
-    return lout
+    """Interpolate array samples, allocating a float64 output if omitted."""
+    result = np.empty(x.shape, dtype=np.float64) if out is None else out
+    interp1d_array_impl(x, xp, fp, ilb, extrapolate, left, right, result)
+    return result
 
 
 @register_jitable(**JIT_OPTIONS)
-def interp1d_array_impl(
-    x: np.ndarray,
-    xp: np.ndarray,
-    fp: np.ndarray,
-    out: np.ndarray,
-    ilb: int = 0,
-    extrapolate: bool = True,
-    left: float = np.nan,
-    right: float = np.nan,
+def _initial_indices(
+    ilb: Sequence[int] | np.ndarray | None,
+) -> tuple[int, int]:
+    """Return initial lower-bound indices for two dimensions."""
+    if ilb is None:
+        return 0, 0
+    return int(ilb[0]), int(ilb[1])
+
+
+@register_jitable(**JIT_OPTIONS)
+def interp2d_locate_scalar_impl(
+    x0: float | np.number,
+    x1: float | np.number,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    ilb: Sequence[int] | np.ndarray | None,
+    index_out: np.ndarray,
+    weight_out: np.ndarray,
 ) -> None:
-    """
-    Locate and evaluate linear interpolant into pre-allocated array.
-
-    Parameters
-    ----------
-    x
-        Sample points at which to interpolate.
-    xp
-        Grid points representing domain over which to interpolate.
-    fp
-        Function values defined on original grid points.
-    out
-        Pre-allocated output array.
-    ilb
-        Initial guess for index of lower bound of bracketing interval.
-    extrapolate
-        If True, extrapolate values outside of domain.
-    left
-        Value to return if sample point is below the domain lower bound.
-    right
-        Value to return if sample point is above the domain upper bound.
-    """
-    out_flat = out.reshape((-1, 1))
-
-    for i, xi in enumerate(x.flat):
-        ilb, wgt = interp1d_locate_scalar(xi, xp, ilb)
-        fx = interp1d_eval_scalar(ilb, wgt, fp, extrapolate, left, right)
-
-        out_flat[i] = fx
+    """Locate one point into required index and weight buffers of shape ``(2,)``."""
+    ilb0, ilb1 = _initial_indices(ilb)
+    index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
+    index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
+    index_out[0] = index0
+    index_out[1] = index1
+    weight_out[0] = weight0
+    weight_out[1] = weight1
 
 
 def interp2d_locate_scalar(
-    x0: float,
-    x1: float,
+    x0: float | np.number,
+    x1: float | np.number,
     xp0: np.ndarray,
     xp1: np.ndarray,
     ilb: Sequence[int] | np.ndarray | None = None,
     index_out: np.ndarray | None = None,
     weight_out: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Locate bracketing interval indices and weights for a 2D scalar point.
-
-    Parameters
-    ----------
-    x0
-        Sample point in the first dimension.
-    x1
-        Sample point in the second dimension.
-    xp0
-        Grid points in the first dimension.
-    xp1
-        Grid points in the second dimension.
-    ilb
-        Optional initial guess for indices in each dimension.
-    index_out
-        Optional pre-allocated output array for indices.
-    weight_out
-        Optional pre-allocated output array for weights.
-
-    Returns
-    -------
-    index_out
-        Lower bound indices in each dimension.
-    weight_out
-        Weights on lower bounds in each dimension.
-    """
-    lind_out = np.empty(2, dtype=np.int64) if index_out is None else index_out
-    lwgt_out = np.empty(2, dtype=np.float64) if weight_out is None else weight_out
-
-    lilb = np.zeros(2, dtype=np.int64)
-    if ilb is not None:
-        lilb[:] = ilb
-
-    interp2d_locate_scalar_impl(x0, x1, xp0, xp1, lilb, lind_out, lwgt_out)
-
-    return lind_out, lwgt_out
+    """Locate one point, allocating omitted int64 and float64 buffers."""
+    index = np.empty(2, dtype=np.int64) if index_out is None else index_out
+    weight = np.empty(2, dtype=np.float64) if weight_out is None else weight_out
+    interp2d_locate_scalar_impl(x0, x1, xp0, xp1, ilb, index, weight)
+    return index, weight
 
 
 @register_jitable(**JIT_OPTIONS)
-def interp2d_locate_scalar_impl(
-    x0: float,
-    x1: float,
+def interp2d_locate_array_impl(
+    x0: np.ndarray,
+    x1: np.ndarray,
     xp0: np.ndarray,
     xp1: np.ndarray,
-    ilb: np.ndarray,
+    ilb: Sequence[int] | np.ndarray | None,
     index_out: np.ndarray,
     weight_out: np.ndarray,
 ) -> None:
-    """
-    Locate bracketing interval indices and weights for 2D scalar into output arrays.
-
-    Parameters
-    ----------
-    x0
-        Sample point in the first dimension.
-    x1
-        Sample point in the second dimension.
-    xp0
-        Grid points in the first dimension.
-    xp1
-        Grid points in the second dimension.
-    ilb
-        Initial guess for indices in each dimension.
-    index_out
-        Output array of shape (2,) for lower bound indices.
-    weight_out
-        Output array of shape (2,) for lower bound weights.
-    """
-    ilb0, ilb1 = ilb[0], ilb[1]
-
-    ilb0, wgt0 = interp1d_locate_scalar(x0, xp0, ilb0)
-    ilb1, wgt1 = interp1d_locate_scalar(x1, xp1, ilb1)
-
-    index_out[0], index_out[1] = ilb0, ilb1
-    weight_out[0], weight_out[1] = wgt0, wgt1
+    """Locate equal-shaped coordinate arrays into ``x0.shape + (2,)`` buffers."""
+    ilb0, ilb1 = _initial_indices(ilb)
+    for i in range(x0.size):
+        ilb0, weight0 = interp1d_locate_scalar(x0.flat[i], xp0, ilb0)
+        ilb1, weight1 = interp1d_locate_scalar(x1.flat[i], xp1, ilb1)
+        index_out.flat[2 * i] = ilb0
+        index_out.flat[2 * i + 1] = ilb1
+        weight_out.flat[2 * i] = weight0
+        weight_out.flat[2 * i + 1] = weight1
 
 
 def interp2d_locate_array(
@@ -517,106 +289,66 @@ def interp2d_locate_array(
     index_out: np.ndarray | None = None,
     weight_out: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Locate bracketing interval indices and weights for 2D array sample points.
-
-    Parameters
-    ----------
-    x0
-        Sample points in the first dimension.
-    x1
-        Sample points in the second dimension.
-    xp0
-        Grid points in the first dimension.
-    xp1
-        Grid points in the second dimension.
-    ilb
-        Optional initial guess for indices in each dimension.
-    index_out
-        Optional pre-allocated output array for indices.
-    weight_out
-        Optional pre-allocated output array for weights.
-
-    Returns
-    -------
-    index_out
-        Array of lower bound indices in each dimension.
-    weight_out
-        Array of weights on lower bounds in each dimension.
-    """
-    shp = (*tuple(x0.shape), 2)
-
-    lind_out = np.empty(shp, dtype=np.int64) if index_out is None else index_out
-    lwgt_out = np.empty(shp, dtype=x0.dtype) if weight_out is None else weight_out
-
-    lind_out_flat = lind_out.reshape((-1, 2))
-    lwgt_out_flat = lwgt_out.reshape((-1, 2))
-
-    ilb0 = 0
-    ilb1 = 0
-
-    if ilb is not None:
-        ilb0, ilb1 = ilb[0], ilb[1]
-
-    for i, (x0i, x1i) in enumerate(zip(x0.flat, x1.flat, strict=False)):
-        ilb0 = bsearch_impl(x0i, xp0, ilb0)
-        ilb1 = bsearch_impl(x1i, xp1, ilb1)
-
-        wgt0 = (xp0[ilb0 + 1] - x0i) / (xp0[ilb0 + 1] - xp0[ilb0])
-        wgt1 = (xp1[ilb1 + 1] - x1i) / (xp1[ilb1 + 1] - xp1[ilb1])
-
-        lind_out_flat[i, 0] = ilb0
-        lind_out_flat[i, 1] = ilb1
-
-        lwgt_out_flat[i, 0] = wgt0
-        lwgt_out_flat[i, 1] = wgt1
-
-    return lind_out, lwgt_out
+    """Locate equal-shaped coordinate arrays, allocating omitted output buffers."""
+    shape = (*x0.shape, 2)
+    index = np.empty(shape, dtype=np.int64) if index_out is None else index_out
+    weight = np.empty(shape, dtype=np.float64) if weight_out is None else weight_out
+    interp2d_locate_array_impl(x0, x1, xp0, xp1, ilb, index, weight)
+    return index, weight
 
 
+@register_jitable(**JIT_OPTIONS)
 def interp2d_eval_scalar(
     index: np.ndarray,
     weight: np.ndarray,
     fp: np.ndarray,
     extrapolate: bool = True,
-    out: object = None,
 ) -> float:
-    """
-    Evaluate a 2D interpolant at a single sample point.
-
-    Parameters
-    ----------
-    index
-        Lower bound indices in each dimension.
-    weight
-        Weights on lower bounds in each dimension.
-    fp
-        Function values evaluated on grid points.
-    extrapolate
-        If True, extrapolate values outside of domain.
-    out
-        Ignored, present for signature compatibility.
-
-    Returns
-    -------
-    Interpolant evaluated at sample point.
-    """
-    wgt0, wgt1 = weight[0], weight[1]
-    ilb0, ilb1 = index[0], index[1]
-
-    if not extrapolate and (not np.all(weight >= 0.0) or not np.all(weight <= 1.0)):
+    """Evaluate one point from valid index and weight arrays of shape ``(2,)``."""
+    weight0 = weight[0]
+    weight1 = weight[1]
+    if not extrapolate and (
+        weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
+    ):
         return np.nan
 
-    fx0_lb = wgt0 * fp[ilb0, ilb1] + (1.0 - wgt0) * fp[ilb0 + 1, ilb1]
-    fx0_ub = wgt0 * fp[ilb0, ilb1 + 1] + (1.0 - wgt0) * fp[ilb0 + 1, ilb1 + 1]
+    index0 = index[0]
+    index1 = index[1]
+    value0 = weight0 * fp[index0, index1] + (1.0 - weight0) * fp[index0 + 1, index1]
+    value1 = (
+        weight0 * fp[index0, index1 + 1] + (1.0 - weight0) * fp[index0 + 1, index1 + 1]
+    )
+    value = weight1 * value0 + (1.0 - weight1) * value1
+    return float(value)
 
-    fx = wgt1 * fx0_lb + (1.0 - wgt1) * fx0_ub
 
-    return float(fx)
+@register_jitable(**JIT_OPTIONS)
+def interp2d_eval_array_impl(
+    index: np.ndarray,
+    weight: np.ndarray,
+    fp: np.ndarray,
+    extrapolate: bool,
+    out: np.ndarray,
+) -> None:
+    """Evaluate located samples into an output with the corresponding sample shape."""
+    for i in range(out.size):
+        offset = 2 * i
+        weight0 = weight.flat[offset]
+        weight1 = weight.flat[offset + 1]
+        if not extrapolate and (
+            weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
+        ):
+            out.flat[i] = np.nan
+            continue
 
-
-interp2d_locate_scalar_jit = jit(interp2d_locate_scalar, **JIT_OPTIONS)
-interp2d_eval_scalar_jit = jit(interp2d_eval_scalar, **JIT_OPTIONS)
+        index0 = index.flat[offset]
+        index1 = index.flat[offset + 1]
+        value0 = weight0 * fp[index0, index1] + (1.0 - weight0) * fp[index0 + 1, index1]
+        value1 = (
+            weight0 * fp[index0, index1 + 1]
+            + (1.0 - weight0) * fp[index0 + 1, index1 + 1]
+        )
+        out.flat[i] = weight1 * value0 + (1.0 - weight1) * value1
 
 
 def interp2d_eval_array(
@@ -626,95 +358,66 @@ def interp2d_eval_array(
     extrapolate: bool = True,
     out: np.ndarray | None = None,
 ) -> np.ndarray:
-    """
-    Evaluate a 2D interpolant at multiple sample points.
-
-    Parameters
-    ----------
-    index
-        Lower bound indices in each dimension.
-    weight
-        Weights on lower bounds in each dimension.
-    fp
-        Function values evaluated on grid points.
-    extrapolate
-        If True, extrapolate values outside of domain.
-    out
-        Optional pre-allocated output array.
-
-    Returns
-    -------
-    Interpolant evaluated at sample points.
-    """
-    lout = np.empty_like(weight[..., 0], dtype=fp.dtype) if out is None else out
-
-    index_flat = index.reshape((-1, 2))
-    weight_flat = weight.reshape((-1, 2))
-    lout_flat = lout.reshape((-1,))
-
-    for i in range(lout.size):
-        wgt0, wgt1 = weight_flat[i, 0], weight_flat[i, 1]
-        ilb0, ilb1 = index_flat[i, 0], index_flat[i, 1]
-
-        if not extrapolate and (wgt0 < 0.0 or wgt0 > 1.0 or wgt1 < 0.0 or wgt1 > 1.0):
-            lout_flat[i] = np.nan
-            continue
-
-        # Interpolate in dimension 0
-        fx0_lb = wgt0 * fp[ilb0, ilb1] + (1.0 - wgt0) * fp[ilb0 + 1, ilb1]
-        fx0_ub = wgt0 * fp[ilb0, ilb1 + 1] + (1.0 - wgt0) * fp[ilb0 + 1, ilb1 + 1]
-
-        # Interpolate in dimension 1
-        fx = wgt1 * fx0_lb + (1.0 - wgt1) * fx0_ub
-
-        lout_flat[i] = fx
-
-    return lout
+    """Evaluate located samples, allocating a float64 output if omitted."""
+    result = np.empty(index.shape[:-1], dtype=np.float64) if out is None else out
+    interp2d_eval_array_impl(index, weight, fp, extrapolate, result)
+    return result
 
 
+@register_jitable(**JIT_OPTIONS)
 def interp2d_scalar(
-    x0: float,
-    x1: float,
+    x0: float | np.number,
+    x1: float | np.number,
     xp0: np.ndarray,
     xp1: np.ndarray,
     fp: np.ndarray,
     ilb: Sequence[int] | np.ndarray | None = None,
     extrapolate: bool = True,
-    out: object = None,
 ) -> float:
-    """
-    Locate and evaluate 2D bilinear interpolant at a single sample point.
+    """Interpolate one point on conformable two-dimensional grids and values."""
+    ilb0, ilb1 = _initial_indices(ilb)
+    index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
+    index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
 
-    Parameters
-    ----------
-    x0
-        Sample point in the first dimension.
-    x1
-        Sample point in the second dimension.
-    xp0
-        Grid points in the first dimension.
-    xp1
-        Grid points in the second dimension.
-    fp
-        Function values evaluated on grid points.
-    ilb
-        Optional initial guess for indices in each dimension.
-    extrapolate
-        If True, extrapolate values outside of domain.
-    out
-        Ignored, present for signature compatibility.
+    if not extrapolate and (
+        weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
+    ):
+        return np.nan
 
-    Returns
-    -------
-    Interpolant evaluated at sample point.
-    """
-    index = np.empty(2, dtype=np.int64)
-    weight = np.empty(2, dtype=xp0.dtype)
+    value0 = weight0 * fp[index0, index1] + (1.0 - weight0) * fp[index0 + 1, index1]
+    value1 = (
+        weight0 * fp[index0, index1 + 1] + (1.0 - weight0) * fp[index0 + 1, index1 + 1]
+    )
+    value = weight1 * value0 + (1.0 - weight1) * value1
+    return float(value)
 
-    interp2d_locate_scalar_jit(x0, x1, xp0, xp1, ilb, index, weight)
-    fx = interp2d_eval_scalar_jit(index, weight, fp, extrapolate)
 
-    return float(fx)
+@register_jitable(**JIT_OPTIONS)
+def interp2d_array_impl(
+    x0: np.ndarray,
+    x1: np.ndarray,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    fp: np.ndarray,
+    ilb: Sequence[int] | np.ndarray | None,
+    extrapolate: bool,
+    out: np.ndarray,
+) -> None:
+    """Interpolate equal-shaped coordinates into an output of the same shape."""
+    ilb0, ilb1 = _initial_indices(ilb)
+    for i in range(x0.size):
+        ilb0, weight0 = interp1d_locate_scalar(x0.flat[i], xp0, ilb0)
+        ilb1, weight1 = interp1d_locate_scalar(x1.flat[i], xp1, ilb1)
+
+        if not extrapolate and (
+            weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
+        ):
+            out.flat[i] = np.nan
+            continue
+
+        value0 = weight0 * fp[ilb0, ilb1] + (1.0 - weight0) * fp[ilb0 + 1, ilb1]
+        value1 = weight0 * fp[ilb0, ilb1 + 1] + (1.0 - weight0) * fp[ilb0 + 1, ilb1 + 1]
+        out.flat[i] = weight1 * value0 + (1.0 - weight1) * value1
 
 
 def interp2d_array(
@@ -727,44 +430,7 @@ def interp2d_array(
     extrapolate: bool = True,
     out: np.ndarray | None = None,
 ) -> np.ndarray:
-    """
-    Locate and evaluate 2D bilinear interpolant at multiple sample points.
-
-    Parameters
-    ----------
-    x0
-        Sample points in the first dimension.
-    x1
-        Sample points in the second dimension.
-    xp0
-        Grid points in the first dimension.
-    xp1
-        Grid points in the second dimension.
-    fp
-        Function values evaluated on grid points.
-    ilb
-        Optional initial guess for indices in each dimension.
-    extrapolate
-        If True, extrapolate values outside of domain.
-    out
-        Optional pre-allocated output array.
-
-    Returns
-    -------
-    Interpolant evaluated at sample points.
-    """
-    lout = np.empty_like(x0) if out is None else out
-    lout_flat = lout.reshape((-1, 1))
-
-    lilb = np.zeros(2, dtype=np.int64)
-    wgt = np.zeros(2, dtype=x0.dtype)
-
-    if ilb is not None:
-        lilb[:] = ilb
-
-    for i, (x0i, x1i) in enumerate(zip(x0, x1, strict=False)):
-        interp2d_locate_scalar_jit(x0i, x1i, xp0, xp1, lilb, lilb, wgt)
-        fx = interp2d_eval_scalar_jit(lilb, wgt, fp, extrapolate)
-        lout_flat[i] = fx
-
-    return lout
+    """Interpolate equal-shaped coordinates, allocating float64 output if omitted."""
+    result = np.empty(x0.shape, dtype=np.float64) if out is None else out
+    interp2d_array_impl(x0, x1, xp0, xp1, fp, ilb, extrapolate, result)
+    return result

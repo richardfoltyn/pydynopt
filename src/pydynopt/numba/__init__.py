@@ -133,25 +133,37 @@ def jit(
     return _jit(signature_or_function, *jit_args, **jit_kwargs)
 
 
-def jitclass[T](spec: Any) -> Callable[[type[T]], type[T]]:
-    """Create a JIT class decorator that preserves the static class type.
+@typing_overload
+def jitclass[T](cls_or_spec: type[T], spec: Any = None) -> type[T]: ...
+
+
+@typing_overload
+def jitclass[T](
+    cls_or_spec: Any = None, spec: Any = None
+) -> Callable[[type[T]], type[T]]: ...
+
+
+def jitclass(cls_or_spec: Any = None, spec: Any = None) -> Any:
+    """Apply the active JIT-class decorator without changing static class types.
 
     Parameters
     ----------
+    cls_or_spec
+        Class to decorate or Numba class specification.
     spec
-        Numba class specification.
+        Numba class specification when a class is supplied directly.
 
     Returns
     -------
-    Decorator supplied by the active implementation.
+    Decorated class or decorator supplied by the active implementation.
     """
-    return _jitclass(spec)
+    return _jitclass(cls_or_spec, spec)
 
 
 def overload[F: Callable[..., Any]](
     func: Callable[..., Any],
     jit_options: Mapping[str, Any] | None = None,
-    strict: bool = True,
+    strict: bool = False,
     **kwargs: Any,
 ) -> Callable[[F], F]:
     """Create an overload decorator that preserves the implementation type.
@@ -164,6 +176,8 @@ def overload[F: Callable[..., Any]](
         JIT options passed to the active implementation.
     strict
         Whether argument and implementation signatures must match strictly.
+        Defaults to ``False`` because Python annotations are not Numba dispatch
+        signatures.
     **kwargs
         Additional options passed to the active implementation.
 
@@ -171,9 +185,11 @@ def overload[F: Callable[..., Any]](
     -------
     Decorator supplied by the active implementation.
     """
-    return _overload(
+    active_overload: Any = _overload
+    options = {} if jit_options is None else jit_options
+    return active_overload(
         func,
-        jit_options=jit_options,
+        jit_options=options,
         strict=strict,
         **kwargs,
     )
