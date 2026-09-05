@@ -1,5 +1,7 @@
-"""
-Helper routines to facilitate Python and Numba-compatible code.
+"""Provide helpers for code that supports both Python and Numba execution.
+
+- Convert Python values to arrays through Numba-compatible implementations.
+- Build and initialize dynamic Numba ``jitclass`` instances.
 
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
@@ -7,51 +9,54 @@ https://creativecommons.org/licenses/by/4.0/
 Author: Richard Foltyn
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from copy import copy as shallow_copy
 import sys
 from typing import Any
 
 import numpy as np
+from numpy import typing as npt
 
 from ..utils import anything_to_tuple
 from . import JIT_OPTIONS, overload
 
 
-def to_array(obj, dtype=None):
-    """
-    Wrapper around np.array() to be used in pure-Python code.
+def to_array(obj: Any, dtype: npt.DTypeLike | None = None) -> npt.NDArray[Any]:
+    """Convert an object to a NumPy array in pure-Python code.
 
     Parameters
     ----------
-    obj :
+    obj
+        Object to convert.
     dtype
+        Data type for the resulting array.
 
     Returns
     -------
-    x : np.ndarray
+    Array containing the input data.
     """
     x = np.array(obj, dtype=dtype)
     return x
 
 
-def to_array_iterable(obj, dtype=None):
-    """
-    Helper routine to convert tuples and lists to 1d-arrays.
+def to_array_iterable(
+    obj: Sequence[Any], dtype: npt.DTypeLike | None = None
+) -> npt.NDArray[Any]:
+    """Convert a tuple or list to a one-dimensional array.
 
     Parameters
     ----------
-    obj : tuple or list
+    obj
+        Values to convert.
     dtype
+        Data type for the resulting array.
 
     Returns
     -------
-    x : np.ndarray
+    One-dimensional array containing the input values.
     """
     n = len(obj)
-    if dtype is not None:
-        ldtype = dtype
-    else:
-        ldtype = np.float64
+    ldtype = dtype if dtype is not None else np.float64
 
     x = np.empty((n,), dtype=ldtype)
 
@@ -61,31 +66,41 @@ def to_array_iterable(obj, dtype=None):
     return x
 
 
-def to_array_default(obj, dtype=None):
-    """
-    Helper function to convert objects to Numpy arrays in Numba code.
+def to_array_default(obj: Any, dtype: npt.DTypeLike | None = None) -> npt.NDArray[Any]:
+    """Convert an object to an array using a Numba-compatible default.
 
     Parameters
     ----------
     obj
+        Object to convert.
     dtype
+        Data type for the resulting array. Defaults to ``float64``.
 
     Returns
     -------
-    x : np.ndarray
+    Array containing the input data.
     """
-    if dtype is None:
-        ldtype = np.float64
-    else:
-        ldtype = dtype
+    ldtype = np.float64 if dtype is None else dtype
 
     x = np.array(obj, dtype=ldtype)
     return x
 
 
 @overload(to_array, jit_options=JIT_OPTIONS)
-def array_generic(obj, dtype=None):
+def array_generic(obj: Any, dtype: Any = None) -> Callable[..., npt.NDArray[Any]]:
+    """Select a Numba-compatible implementation of ``to_array``.
 
+    Parameters
+    ----------
+    obj
+        Numba type describing the object to convert.
+    dtype
+        Numba type describing the requested array data type.
+
+    Returns
+    -------
+    Implementation suitable for the supplied Numba types.
+    """
     from numba import types
 
     f = to_array_default
@@ -96,71 +111,58 @@ def array_generic(obj, dtype=None):
 
 
 def create_numba_instance(
-    obj,
+    obj: Any,
     attrs: str | Sequence[str] | None = None,
     exclude: str | Sequence[str] | None = None,
     init: bool = True,
     copy: bool = False,
-    cache: type | None = None,
-    return_type: bool = False
-):
-    """
-    Automatically create numba-fied instance of a given object.
-    The routine attempts to automatically generate a class signature that
-    can be used to instantiate a numba-fied object.
+    cache: type[Any] | None = None,
+    return_type: bool = False,
+) -> Any:
+    """Create a Numba-compatible instance from an object.
 
-    If the given object is already a compiled Numba type, it is immediately
-    returned as-is.
+    The function generates a ``jitclass`` specification from selected attributes.
+    An object that is already compiled is returned unchanged.
 
     Parameters
     ----------
-    obj : object
-    attrs : str or Sequence of str, optional
-        List of attributes of `obj` that should be included in the Numba-fied
-        class definition.
-    exclude : str or Sequence of str, optional
-        List of attributes of `obj` that should be excluded in the Numba-fied
-        class definition.
-    init : bool, optional
-        If true, additionally initialize the attribute values in the Numba
-        instance with values from original objects.
-    copy : bool, optional
-        If true, create copies of container objects such as tuples or Numpy
-        arrays when initializing attributes of Numba instance.
-    cache: type, optional
-        If not None, use given object as Numba-fied instance and optionally update
-        its attributes. Avoids building a signature and creating a new type.
-    return_type : bool
-        If True, return the dynamically constructed type.
+    obj
+        Object to convert.
+    attrs
+        Attributes to include in the Numba class definition.
+    exclude
+        Attributes to exclude from the Numba class definition.
+    init
+        Whether to initialize attributes from the original object.
+    copy
+        Whether to copy container-valued attributes during initialization.
+    cache
+        Existing Numba class to instantiate instead of creating a new class.
+    return_type
+        Whether to return the dynamically constructed type with the instance.
 
     Returns
     -------
-    object
-        Instance of compiled Numba type.
+    Compiled instance, optionally paired with its dynamically constructed type.
     """
     from pydynopt.numba import has_numba, jitclass
 
-    # if this already is a compiled instance, return it immediately
+    # If this already is a compiled instance, return it immediately.
     if not has_numba or hasattr(obj, '_numba_type_'):
         if return_type:
             return obj, obj.__class__
-        else:
-            return obj
+        return obj
 
-    # object is not an instance of a Numba type, we need to build
-    # signature for jitclass().
-    attrs = anything_to_tuple(attrs)
+    # Build a specification for jitclass() when the object is not compiled.
+    attrs = anything_to_tuple(attrs, force=True)
     if not attrs:
-        # Check whether class has NUMBA_ATTRS attribute which contains
-        # the attributes to be included in Numbafied instance.
+        # Prefer an explicit class-level list of attributes when available.
         if attrs := getattr(obj.__class__, 'NUMBA_ATTRS', None):
-            attrs = anything_to_tuple(attrs)
-            # Keep only existing attributes
+            attrs = anything_to_tuple(attrs, force=True)
             present = dir(obj)
             attrs = tuple(attr for attr in attrs if attr in present)
         else:
-            # Assume that all object attributes should be included as long as
-            # they are not for internal use or None or callable
+            # Include public, non-null, non-callable object attributes.
             attrs = tuple(
                 attr
                 for attr in dir(obj)
@@ -169,34 +171,33 @@ def create_numba_instance(
                 and not callable(getattr(obj, attr))
             )
 
-    exclude = anything_to_tuple(exclude)
+    exclude = anything_to_tuple(exclude, force=True)
     if exclude:
         attrs = tuple(attr for attr in attrs if attr not in exclude)
     elif exclude := getattr(obj.__class__, 'NUMBA_ATTRS_EXCLUDE', None):
-        exclude = anything_to_tuple(exclude)
+        exclude = anything_to_tuple(exclude, force=True)
         attrs = tuple(attr for attr in attrs if attr not in exclude)
 
-    # Automatically exclude meta-attributes
+    # Exclude class-level Numba configuration attributes.
     attrs = [attr for attr in attrs if not attr.startswith('NUMBA_ATTRS')]
 
-    # Empty init, expected by Numba jitclass()
-    def __init__(self):
-        pass
+    def __init__(self: Any) -> None:
+        """Initialize an empty dynamically generated class."""
 
     if cache is not None:
         cls_nb = cache
         obj_nb = cls_nb()
     else:
-        __dict__ = {'__init__': __init__, '__module__': obj.__class__.__module__}
+        __dict__: dict[str, Any] = {
+            '__init__': __init__,
+            '__module__': obj.__class__.__module__,
+        }
 
-        # Create class name with Numba suffix
         name = obj.__class__.__name__ + 'Numba'
         cls = type(name, (), __dict__)
 
         signature = _build_signature(obj, attrs)
-
         cls_nb = jitclass(signature)(cls)
-
         obj_nb = cls_nb()
 
     if init:
@@ -204,38 +205,41 @@ def create_numba_instance(
 
     if return_type:
         return obj_nb, cls_nb
-    else:
-        return obj_nb
+    return obj_nb
 
 
-def _build_signature(obj, attrs: Sequence[str]):
-    """
-    Build a signature for numba.jitclass from the list of attributes names
-    and their associated types.
+def _build_signature(obj: Any, attrs: Sequence[str]) -> list[tuple[str, Any]]:
+    """Build a Numba ``jitclass`` specification from object attributes.
 
     Parameters
     ----------
-    obj : object
-    attrs : list of str
+    obj
+        Object whose attributes determine the specification.
+    attrs
+        Attribute names to include.
 
     Returns
     -------
-    signature : list
-        List of tuples containing (name, type) pairs.
+    Pairs containing each attribute name and its Numba type.
     """
-    from numba.types import UniTuple
+    from numba import types
+    from numba.core.errors import NumbaNotImplementedError
 
     from pydynopt.numba import boolean, float64, from_dtype, int64
 
-    signature = []
+    signature: list[tuple[str, Any]] = []
+    types_python: dict[type[Any], Any] = {
+        int: int64,
+        float: float64,
+        bool: boolean,
+    }
 
-    types_python = {int: int64, float: float64, bool: boolean}
-
-    def process_ndarray(value):
+    def process_ndarray(value: Any) -> None:
+        """Append a specification entry for an array or NumPy scalar."""
         try:
             nbtype = from_dtype(value.dtype)
-        except:
-            msg = f'Unsupported Numpy dtype {value.dtype}'
+        except NumbaNotImplementedError:
+            msg = f'Unsupported NumPy dtype {value.dtype}'
             print(msg, file=sys.stderr)
             return
 
@@ -249,66 +253,65 @@ def _build_signature(obj, attrs: Sequence[str]):
                     msg = f'Array {attr} is not C-contiguous'
                     print(msg, file=sys.stderr)
                     signature.append((attr, nbtype[:]))
+            elif value.flags.c_contiguous:
+                dims = (slice(None, None),) * (value.ndim - 1)
+                dims += (slice(None, None, 1),)
+                signature.append((attr, nbtype[dims]))
             else:
-                if value.flags.c_contiguous:
-                    dims = (slice(None, None),) * (value.ndim - 1)
-                    dims += (slice(None, None, 1),)
-                    signature.append((attr, nbtype[dims]))
-                else:
-                    msg = f'Array {attr} is not C-contiguous'
-                    print(msg, file=sys.stderr)
-                    dims = (slice(None, None),) * value.ndim
-                    signature.append((attr, nbtype[dims]))
+                msg = f'Array {attr} is not C-contiguous'
+                print(msg, file=sys.stderr)
+                dims = (slice(None, None),) * value.ndim
+                signature.append((attr, nbtype[dims]))
         else:
-            # scalar type
             signature.append((attr, nbtype))
 
     for attr in attrs:
-        # Note: we excluded None-values attributes above
+        # None-valued attributes were excluded while selecting attributes.
         value = getattr(obj, attr)
         t = type(value)
 
         if hasattr(value, 'dtype'):
             process_ndarray(value)
         elif isinstance(value, list):
-            # Convert to Numpy array in numba instance
-            value = np.asarray(value)
-            process_ndarray(value)
+            process_ndarray(np.asarray(value))
         elif t in types_python:
             nbtype = types_python[t]
             signature.append((attr, nbtype))
         elif isinstance(value, tuple):
-            # Check for uniform types
-            is_unif = all(type(i) == type(value[0]) for i in value)
+            is_unif = all(type(i) is type(value[0]) for i in value)
             if is_unif:
                 value = np.asarray(value)
-                t = UniTuple(from_dtype(value.dtype), len(value))
+                tuple_type = types.UniTuple
+                t = tuple_type(from_dtype(value.dtype), len(value))
+                signature.append((attr, t))
             else:
-                # Store as numpy array instead
                 process_ndarray(np.asarray(value))
-            signature.append((attr, t))
 
     return signature
 
 
 def copy_attributes(
-    src: Any, dst: Any, attrs: Sequence[str] | None = None, copy: bool = True
+    src: Any,
+    dst: Any,
+    attrs: Sequence[str] | None = None,
+    copy: bool = True,
 ) -> Any:
-    """
-    Copy attributes from src that at also present in dst into dst.
+    """Copy attributes shared by a source and destination object.
 
     Parameters
     ----------
-    src : object
-    dst : object
-    attrs : Sequence of str, optional
-    copy : bool
-        If true, copy array-valued attributes instead of referencing the
-        original array.
+    src
+        Object from which attributes are read.
+    dst
+        Object to which attributes are written.
+    attrs
+        Attribute names to copy. Shared public attributes are used by default.
+    copy
+        Whether to copy array- and tuple-valued attributes.
 
     Returns
     -------
-    params : NumbaParams
+    Destination object with the selected attributes assigned.
     """
     if attrs is None:
         attrs = [k for k in dir(dst) if not k.startswith('_') and hasattr(src, k)]
@@ -321,13 +324,11 @@ def copy_attributes(
         if isinstance(x, np.ndarray) and copy:
             x = np.copy(x)
         elif np.isscalar(x):
-            # Assign as is
             pass
         elif isinstance(x, list):
-            # Always creates a copy
             x = np.asarray(x)
         elif isinstance(x, tuple) and copy:
-            x = copy.copy(x)
+            x = shallow_copy(x)
         setattr(dst, attr, x)
 
     return dst

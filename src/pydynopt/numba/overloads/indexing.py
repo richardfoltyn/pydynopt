@@ -1,31 +1,42 @@
-"""
-Overloads for Numpy indexing functions for Numba code.
+"""Provide Numba-compatible overloads for NumPy indexing functions.
+
+- Convert between flat and multidimensional indices.
+- Support the subset of NumPy indexing options required by Numba code.
 """
 
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
-from numpy import ravel_multi_index, unravel_index
+from numpy import ravel_multi_index, typing as npt, unravel_index
 
 from pydynopt.numba import JIT_OPTIONS, overload
 
 __all__ = ['ravel_multi_index', 'unravel_index']
 
 
-def _unravel_index_array(indices, shape, order='C'):
-    """
-    Converts a flat index or array of flat indices into a tuple of coordinate arrays.
+def _unravel_index_array(
+    indices: npt.ArrayLike,
+    shape: Sequence[int],
+    order: str = 'C',
+) -> npt.NDArray[Any]:
+    """Convert flat indices to an array of coordinate arrays.
 
-    Numba-fiable implementation of np.unravel_index() for array-valued arguments
+    This is a Numba-compatible implementation of ``np.unravel_index`` for
+    array-valued indices.
 
     Parameters
     ----------
     indices
+        Flat indices to convert.
     shape
+        Shape of the target array.
     order
+        Index order, either ``'C'`` or ``'F'``.
 
     Returns
     -------
-
+    Coordinate array whose leading axis indexes dimensions.
     """
     order = order.upper()
 
@@ -34,13 +45,14 @@ def _unravel_index_array(indices, shape, order='C'):
 
     unravel_ndim = len(shape)
     unravel_dims = np.empty(unravel_ndim, dtype=np.int64)
-    # Copy over dimensions in a loop, since creating an array with np.array()
-    # with an argument that already is an array seems to fail in Numba mode.
+    # Copy dimensions in a loop because constructing an array from an array
+    # can fail in Numba mode.
     for i in range(unravel_ndim):
         unravel_dims[i] = shape[i]
     unravel_size = int(np.prod(unravel_dims))
 
-    coords_shp = (unravel_ndim,) + tuple(lindices.shape)
+    # Tuple concatenation is supported by Numba; starred unpacking is not.
+    coords_shp = (unravel_ndim,) + tuple(lindices.shape)  # noqa: RUF005
     coords = np.empty(coords_shp, dtype=lindices.dtype)
     coords_flat = coords.reshape((unravel_ndim, -1))
 
@@ -55,7 +67,7 @@ def _unravel_index_array(indices, shape, order='C'):
 
         idx = idx_start
 
-        for j in range(0, unravel_ndim):
+        for _ in range(unravel_ndim):
             tmp = val / unravel_dims[idx]
             coords_flat[idx, i] = val % unravel_dims[idx]
             val = tmp
@@ -64,33 +76,58 @@ def _unravel_index_array(indices, shape, order='C'):
     return coords
 
 
-def _unravel_index_scalar(indices, shape, order='C'):
-    """
-    Converts a flat index or array of flat indices into a tuple of coordinate arrays.
+def _unravel_index_scalar(
+    indices: int,
+    shape: Sequence[int],
+    order: str = 'C',
+) -> npt.NDArray[Any]:
+    """Convert a flat scalar index to a coordinate array.
 
-    Numba-fiable implementation of np.unravel_index() for scalar arguments
+    This Numba-compatible implementation dispatches through the array-valued
+    overload of ``np.unravel_index``.
 
     Parameters
     ----------
     indices
+        Flat index to convert.
     shape
+        Shape of the target array.
     order
+        Index order, either ``'C'`` or ``'F'``.
 
     Returns
     -------
-
+    One-dimensional array containing the coordinate of each dimension.
     """
     indices1d = np.array([indices])
 
-    coords2d = np.unravel_index(indices1d, shape, order)
+    coords2d: Any = np.unravel_index(indices1d, shape, order)  # type: ignore
     coords = coords2d[:, 0]
 
     return coords
 
 
 @overload(unravel_index, jit_options=JIT_OPTIONS)
-def unravel_index_generic(indices, shape, order='C'):
+def unravel_index_generic(
+    indices: Any,
+    shape: Any,
+    order: Any = 'C',
+) -> Callable[..., npt.NDArray[Any]] | None:
+    """Select an ``unravel_index`` implementation for Numba argument types.
 
+    Parameters
+    ----------
+    indices
+        Numba type describing the flat indices.
+    shape
+        Numba type describing the target shape.
+    order
+        Numba type describing the index order.
+
+    Returns
+    -------
+    Matching overload implementation, or ``None`` for unsupported types.
+    """
     from numba import types
 
     f = None
@@ -102,28 +139,32 @@ def unravel_index_generic(indices, shape, order='C'):
     return f
 
 
-def _ravel_multi_index_array(multi_index, dims, mode='raise', order='C'):
-    """
-    Converts a tuple of index arrays into an array of flat indices.
+def _ravel_multi_index_array(
+    multi_index: npt.NDArray[Any],
+    dims: Sequence[int],
+    mode: str = 'raise',
+    order: str = 'C',
+) -> npt.NDArray[Any]:
+    """Convert an array of coordinates to flat indices.
 
-    Numba-fiable partial implementation of np.ravel_multi_index() for array-valued arguments.
+    This Numba-compatible partial implementation of ``np.ravel_multi_index``
+    requires one coordinate dimension per row and supports only ``mode='raise'``.
 
     Parameters
     ----------
-    multi_index : array_like
-        Array of indices where each row represents a dimension.
-        Unlike the NumPy implementation, a tuple of arrays is not supported.
-    dims : array_like of int
-    mode : str
-        Required to be 'raise' but otherwise ignored
-    order : str
-        Ignored, only present to ensure compatible function signatures.
+    multi_index
+        Coordinate array whose leading axis indexes dimensions.
+    dims
+        Size of each dimension.
+    mode
+        Boundary mode. Only ``'raise'`` is supported.
+    order
+        Index order, which is accepted for API compatibility and ignored.
 
     Returns
     -------
-
+    Array of flat indices.
     """
-    # Convert dims which might be any sequence to a numpy array
     ravel_dims = np.empty(len(dims), dtype=np.int64)
     for i, d in enumerate(dims):
         ravel_dims[i] = d
@@ -131,32 +172,22 @@ def _ravel_multi_index_array(multi_index, dims, mode='raise', order='C'):
     ravel_ndim = ravel_dims.size
 
     dtype = multi_index.dtype
-    # Flatten out all remaining axes. Leading axis represents dimensions to be raveled.
+    # Flatten all remaining axes; the leading axis represents dimensions.
     lmulti_index_flat = multi_index.reshape((ravel_ndim, -1))
 
     one = np.ones(1, dtype=ravel_dims.dtype)
     iwork = np.hstack((one, ravel_dims[:0:-1]))
     ravel_strides = np.cumprod(iwork)[::-1]
 
-    if multi_index.ndim >= 2:
-        shp_indices = tuple(multi_index.shape[1:])
-    else:
-        shp_indices = (1,)
+    shp_indices = tuple(multi_index.shape[1:]) if multi_index.ndim >= 2 else (1,)
 
     indices = np.empty(shp_indices, dtype=dtype)
     indices_flat = indices.reshape((-1,))
     N = lmulti_index_flat.shape[-1]
 
     mode = mode.upper()
-
     if mode != 'RAISE':
         raise NotImplementedError("mode='raise' required")
-
-    MODE_RAISE = 0
-    MODE_WRAP = 1
-    MODE_CLIP = 2
-
-    imode = MODE_RAISE
 
     for k in range(N):
         raveled = 0
@@ -165,9 +196,8 @@ def _ravel_multi_index_array(multi_index, dims, mode='raise', order='C'):
             m = ravel_dims[i]
             j = lmulti_index_flat[i, k]
 
-            if imode == MODE_RAISE:
-                if j < 0 or j >= m:
-                    raise ValueError('Invalid multi-index')
+            if j < 0 or j >= m:
+                raise ValueError('Invalid multi-index')
 
             raveled += j * ravel_strides[i]
 
@@ -176,32 +206,96 @@ def _ravel_multi_index_array(multi_index, dims, mode='raise', order='C'):
     return indices
 
 
-def _ravel_multi_index_array1d(multi_index, dims, mode='raise', order='C'):
+def _ravel_multi_index_array1d(
+    multi_index: npt.NDArray[Any],
+    dims: Sequence[int],
+    mode: str = 'raise',
+    order: str = 'C',
+) -> Any:
+    """Convert a one-dimensional coordinate array to a flat index.
 
+    Parameters
+    ----------
+    multi_index
+        One-dimensional coordinate array.
+    dims
+        Size of each dimension.
+    mode
+        Boundary mode. Only ``'raise'`` is supported.
+    order
+        Index order, accepted for API compatibility.
+
+    Returns
+    -------
+    Flat index for the supplied coordinates.
+    """
     lmulti_index = multi_index.reshape((-1, 1))
-    indices = np.ravel_multi_index(lmulti_index, dims, mode, order)
+    indices = np.ravel_multi_index(  # type: ignore
+        lmulti_index, dims, mode, order
+    )
 
     index = indices[0]
-
     return index
 
 
-def _ravel_multi_index(multi_index, dims, mode='raise', order='C'):
+def _ravel_multi_index(
+    multi_index: Any,
+    dims: Sequence[int],
+    mode: str = 'raise',
+    order: str = 'C',
+) -> Any:
+    """Convert a coordinate sequence to a flat index.
 
+    Parameters
+    ----------
+    multi_index
+        Coordinate sequence.
+    dims
+        Size of each dimension.
+    mode
+        Boundary mode. Only ``'raise'`` is supported.
+    order
+        Index order, accepted for API compatibility.
+
+    Returns
+    -------
+    Flat index for the supplied coordinates.
+    """
     lmulti_index = np.array(multi_index)
 
-    # This should call the _array1d implementation above
-    index = np.ravel_multi_index(lmulti_index, dims, mode, order)
-
+    # Dispatch to the one-dimensional array implementation above.
+    index = np.ravel_multi_index(  # type: ignore
+        lmulti_index, dims, mode, order
+    )
     return index
 
 
 @overload(ravel_multi_index, jit_options=JIT_OPTIONS)
-def ravel_multi_index_generic(multi_index, dims, mode='raise', order='C'):
+def ravel_multi_index_generic(
+    multi_index: Any,
+    dims: Any,
+    mode: Any = 'raise',
+    order: Any = 'C',
+) -> Callable[..., Any]:
+    """Select a ``ravel_multi_index`` implementation for Numba types.
 
+    Parameters
+    ----------
+    multi_index
+        Numba type describing the coordinates.
+    dims
+        Numba type describing dimension sizes.
+    mode
+        Numba type describing the boundary mode.
+    order
+        Numba type describing the index order.
+
+    Returns
+    -------
+    Matching overload implementation.
+    """
     from numba import types
 
-    f = None
     if isinstance(multi_index, types.Array) and multi_index.ndim >= 2:
         f = _ravel_multi_index_array
     elif isinstance(multi_index, types.Array) and multi_index.ndim == 1:
