@@ -348,10 +348,36 @@ def get_cached_object(
 
 
 def _frame_hash_value(tag: bytes, value: bytes) -> bytes:
+    """
+    Frame a tagged hash value.
+
+    Parameters
+    ----------
+    tag
+        Type tag for the encoded value.
+    value
+        Encoded value bytes.
+
+    Returns
+    -------
+    Tag and length-prefixed value bytes.
+    """
     return tag + struct.pack('!Q', len(value)) + value
 
 
 def _encode_hash_value(obj: Any) -> bytes:
+    """
+    Encode an object into canonical bytes for hashing.
+
+    Parameters
+    ----------
+    obj
+        Object to encode.
+
+    Returns
+    -------
+    Canonically encoded object bytes.
+    """
     if isinstance(obj, np.ndarray):
         shape = _encode_hash_value(obj.shape)
         if obj.dtype.hasobject:
