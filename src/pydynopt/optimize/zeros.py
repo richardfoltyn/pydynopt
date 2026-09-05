@@ -1,409 +1,385 @@
-"""
+"""Provide checked scalar root-finding functions with Numba support.
+
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
 
 Author: Richard Foltyn
 """
 
+from collections.abc import Callable
+from typing import Any, Literal, overload as typing_overload
+
 import numpy as np
 
-from pydynopt.numba import JIT_OPTIONS, overload, register_jitable
+from pydynopt.numba import JIT_OPTIONS, overload as numba_overload
 
-from ._zeros_scipy import _ECONVERGED, _EMAXITER, _EVALUEERR, RootResult
-from .common import nderiv
+from ._zeros_scipy import (
+    RootResult,
+    _brentq_full,
+    _brentq_simple,
+    _select_brentq_impl,
+    _status_message,
+)
+from .common import (
+    RealScalar,
+    ScalarFunc,
+    ValueJacFunc,
+    _normalize_bool,
+    _normalize_integer,
+    _normalize_real_scalar,
+)
+from .numba.zeros import (
+    newton_bisect_callable_full,
+    newton_bisect_callable_simple,
+    newton_bisect_full,
+    newton_bisect_impl,
+    newton_bisect_simple,
+)
 
-__all__ = ['newton_bisect']
+__all__ = ['brentq', 'newton_bisect']
+
+type JacFunc = Callable[..., RealScalar]
+type JacOption = bool | np.bool_ | JacFunc
+
+_BRENT_XTOL = 2.0e-12
+_BRENT_RTOL = 4.0 * np.finfo(float).eps
+_BRENT_MAXITER = 100
 
 
-@register_jitable(**JIT_OPTIONS)
-def _newton_bisect_impl(
-    func,
-    x0,
-    a=None,
-    b=None,
-    args=(),
-    jac=False,
-    eps=1.0e-8,
-    xtol=1.0e-8,
-    tol=1.0e-8,
-    maxiter=50,
-):
-    """
-    Find the root of a scalar function using a hybrid approach that
-    combines Newton-Raphson and bisection. The idea is to speed up
-    convergence using Newton-Raphson steps, but constrain the function domain
-    to some interval for functions that are not overly well behaved.
+@typing_overload
+def brentq(
+    f: ScalarFunc,
+    a: RealScalar,
+    b: RealScalar,
+    args: tuple[Any, ...] = (),
+    xtol: RealScalar = _BRENT_XTOL,
+    rtol: RealScalar = _BRENT_RTOL,
+    maxiter: int = _BRENT_MAXITER,
+    full_output: Literal[False] = False,
+    disp: bool = True,
+) -> float: ...
 
-    The algorithm accepts an optional initial bracket [a,b] that restricts the
-    step size of any subsequent Newton updates to lie within this bracket.
-    The bracket is updated as more points are sampled.
 
-    If no initial bracket is provided, the algorithm attempts to automatically
-    create one as points are sampled using the initially unrestricted
-    Newton-Raphson updating.
+@typing_overload
+def brentq(
+    f: ScalarFunc,
+    a: RealScalar,
+    b: RealScalar,
+    args: tuple[Any, ...] = (),
+    xtol: RealScalar = _BRENT_XTOL,
+    rtol: RealScalar = _BRENT_RTOL,
+    maxiter: int = _BRENT_MAXITER,
+    full_output: Literal[True] = True,
+    disp: bool = True,
+) -> tuple[float, RootResult]: ...
+
+
+@typing_overload
+def brentq(
+    f: ScalarFunc,
+    a: RealScalar,
+    b: RealScalar,
+    args: tuple[Any, ...] = (),
+    xtol: RealScalar = _BRENT_XTOL,
+    rtol: RealScalar = _BRENT_RTOL,
+    maxiter: int = _BRENT_MAXITER,
+    full_output: bool = False,
+    disp: bool = True,
+) -> float | tuple[float, RootResult]: ...
+
+
+def brentq(
+    f: ScalarFunc,
+    a: RealScalar,
+    b: RealScalar,
+    args: tuple[Any, ...] = (),
+    xtol: RealScalar = _BRENT_XTOL,
+    rtol: RealScalar = _BRENT_RTOL,
+    maxiter: int = _BRENT_MAXITER,
+    full_output: bool = False,
+    disp: bool = True,
+) -> float | tuple[float, RootResult]:
+    """Find a root in a bracketing interval using Brent's method.
 
     Parameters
     ----------
-    func : callable
-        Function whose root should be determined
-    x0 : float
-        Initial guess for root
-    a : float
-        Optional bracket lower bound
-    b : float
-        Optional bracket upper bound
-    args : tuple
-        Optional arguments passed to `func` as func(x, *args)
-    jac : bool or callable
-        If True, `func` is assumed to return the function derivative
-        together with the function value. If False, the derivative
-        is approximated using forward differencing with step size `eps`.
-        If `jac` is a callable, it is called to evaluate derivatives.
-    eps : float
-        Step size use for numerical forward differencing (only for `jac`=False)
-    xtol : float
-        Termination criterion in terms of function domain: if in the n-th
-        iteration |x(n) - x(n-1)| < `xtol`, the algorithm terminates.
-    tol : float
-        Tolerance for termination such that the algorithm exits when
-        |func(x)| < `tol`.
-    maxiter : int
-        Maximum number of iterations
+    f
+        Continuous scalar function whose root is sought.
+    a, b
+        Endpoints with opposite-signed function values.
+    args
+        Additional arguments passed to ``f``.
+    xtol, rtol
+        Absolute and relative root tolerances.
+    maxiter
+        Maximum number of iterations.
+    full_output
+        Whether to return convergence information with the root.
+    disp
+        Whether non-convergence raises ``RuntimeError``.
 
     Returns
     -------
-    x : float
-        Contains root if algorithm terminates successfully
-    fx : float
-        Function value at root x
-    converged : bool
-        True if algorithm converged successfully
-    flag : int
-        Status flag indicating success or failure reason
-    it : int
-        Number of iterations performed
-    nfev : int
-        Number of function evaluations
+    root
+        Estimated root location.
+    result
+        Convergence information, returned only when ``full_output`` is true.
+
+    Raises
+    ------
+    TypeError
+        If a scalar or boolean option has an invalid type.
+    ValueError
+        If an option or endpoint is invalid, the endpoint values have the same
+        sign, or an objective evaluation is NaN.
+    RuntimeError
+        If the routine does not converge and ``disp`` is true.
     """
-    it = 0
-    nfev = 0
+    lower = _normalize_real_scalar(a, 'a', finite=False)
+    upper = _normalize_real_scalar(b, 'b', finite=False)
+    if np.isnan(lower) or np.isnan(upper):
+        raise ValueError('a and b must not be NaN')
 
-    if xtol < 0.0:
-        raise ValueError('xtol >= 0 required')
-    if tol < 0.0:
-        raise ValueError('tol >= 0 required')
-    if eps <= 0.0:
-        raise ValueError('eps > 0 required')
-    if maxiter < 1:
-        raise ValueError('maxiter > 0 required')
+    abs_tol = _normalize_real_scalar(xtol, 'xtol')
+    rel_tol = _normalize_real_scalar(rtol, 'rtol')
+    count = _normalize_integer(maxiter, 'maxiter', 0)
+    return_result = _normalize_bool(full_output, 'full_output')
+    raise_failure = _normalize_bool(disp, 'disp')
 
-    x = x0
-    xstart = x0
-
-    xa = -np.inf if a is None else a
-    xb = np.inf if b is None else b
-
-    xarr = np.array(x)
-    fx_all = np.empty(2, dtype=xarr.dtype)
-
-    fx_all[:] = func(x, *args)
-    fx = fx_all[0]
-    nfev += 1
-    if jac:
-        fpx = fx_all[1]
-    else:
-        if (x + eps) < xb or (x - eps) <= xa:
-            # Compute numerical derivative as (f(x+eps)-f(x)) / eps
-            # either if x+eps < xub, which avoids evaluating the function
-            # outside of the original bounded interval.
-            # If either step takes us out of (xa,xb), then use this as
-            # the fallback and hope for the best.
-            fpx = nderiv(func, x, fx, eps, *args)
-        else:
-            # Evaluate numerical derivative as (f(x-eps) - f(x))/-eps
-            fpx = nderiv(func, x, fx, -eps, *args)
-        nfev += 1
-
-    if np.abs(fx) < tol:
-        converged = True
-        flag = _ECONVERGED
-        return x, fx, converged, flag, it, nfev
-
-    fa = 0.0
-    fb = 0.0
-
-    if np.isfinite(xa):
-        fx_all[:] = func(xa, *args)
-        fa = fx_all[0]
-        nfev += 1
-        slb = np.sign(fa)
-        xlb = xa
-    else:
-        slb = np.sign(fx)
-        xlb = x
-
-    if np.isfinite(xb):
-        fx_all[:] = func(xb, *args)
-        fb = fx_all[0]
-        nfev += 1
-        sub = np.sign(fb)
-        xub = xb
-    else:
-        sub = np.sign(fx)
-        xub = x
-
-    # Check that initial bracket contains a root
-    if np.isfinite(xa) and np.isfinite(xb):
-        s = np.sign(fa) * np.sign(fb)
-        if s > 0.0:
-            msg = 'Invalid initial bracket'
-            raise ValueError(msg)
-
-    if xlb > xub:
-        # Flip values
-        xlb, xub = xub, xlb
-        slb, sub = sub, slb
-
-    has_bracket = slb * sub < 0.0
-
-    for it in range(1, maxiter + 1):
-
-        if np.abs(fx) < tol:
-            converged = True
-            flag = _ECONVERGED
-            return x, fx, converged, flag, it, nfev
-
-        if fpx == 0.0:
-            converged = False
-            flag = _EVALUEERR
-            return x, fx, converged, flag, it, nfev
-
-        # Newton step
-        x = x0 - fx / fpx
-
-        if has_bracket:
-            if x < xlb or x > xub:
-                # First, update bracket with newly computed function value.
-                # This prevents that routine exits immediately if the initial
-                # value is the exact midpoint between initial [a,b] and
-                # the first Newton step is outside of [a,b].
-                # Note: fx contains function value evaluated at what is now
-                # stored in x0.
-                s = slb * np.sign(fx)
-                if s > 0.0:
-                    # f(x) has the same sign as f(xlb)
-                    xlb = x0
-                else:
-                    xub = x0
-
-                # Bisection step: set next candidate to midpoint
-                x = (xlb + xub) / 2.0
-
-        # Compute function value and derivative for the NEXT iteration
-        fx_all[:] = func(x, *args)
-        fx = fx_all[0]
-        nfev += 1
-
-        # Exit if tolerance level on function domain is achieved
-        # We do this AFTER computing fx, which needs to be returned, but
-        # before potentially numerically differentiating, which may no longer
-        # be necessary.
-        if np.abs(x - x0) < xtol:
-            converged = True
-            flag = _ECONVERGED
-            return x, fx, converged, flag, it, nfev
-
-        if jac:
-            fpx = fx_all[1]
-        else:
-            if (x + eps) < xb or (x - eps) <= xa:
-                # Compute numerical derivative as (f(x+eps)-f(x)) / eps
-                # either if x+eps < xub, which avoids evaluating the function
-                # outside of the original bounded interval.
-                # If either step takes us out of (xa,xb), then use this as
-                # the fallback and hope for the best.
-                fpx = nderiv(func, x, fx, eps, *args)
-            else:
-                # Evaluate numerical derivative as (f(x-eps) - f(x))/-eps
-                fpx = nderiv(func, x, fx, -eps, *args)
-            nfev += 1
-
-        s = slb * np.sign(fx)
-        if not has_bracket:
-            if s < 0.0:
-                # Create initial bracket
-                if x > xub:
-                    xlb = xub
-                    xub = x
-                    # SLB remains unchanged
-                    sub = np.sign(fx)
-                elif x < xlb:
-                    xub = xlb
-                    xlb = x
-                    sub = slb
-                    slb = np.sign(fx)
-                else:
-                    dub = abs(xstart - xub)
-                    dlb = abs(xstart - xlb)
-
-                    if dub < dlb:
-                        xlb = x
-                        # xub remains unchanged
-                        sub = slb
-                        slb = np.sign(fx)
-                    else:
-                        xub = x
-                        sub = np.sign(fx)
-                        # xlb, slb remain unchanged
-
-                has_bracket = True
-
-            else:
-                # Note: if s = 0.0 then we must have fx = 0.0 and the algorithm
-                # will terminate in the next iteration, so we can ignore the
-                # case.
-
-                # Update boundaries if sign has not changed
-                xlb = min(xlb, x)
-                xub = max(xub, x)
-
-        else:
-            # Update existing bracket
-            if s > 0.0:
-                # f(x) has same sign as f(xlb)
-                xlb = x
-            else:
-                xub = x
-
-        # Store last result for next iteration
-        x0 = x
-
-    else:
-        # max. number of iterations exceeded
-        converged = False
-        flag = _EMAXITER
-        return x, fx, converged, flag, it, nfev
-
-
-def _newton_bisect_full(
-    func,
-    x0,
-    a=None,
-    b=None,
-    args=(),
-    jac=False,
-    eps=1.0e-8,
-    xtol=1.0e-8,
-    tol=1.0e-8,
-    maxiter=50,
-    full_output=True,
-):
-    """
-    Wrapper function to for newton_bisect that additiopnally returns a RootResult object.
-    """
-    result = RootResult()
-
-    root, fx, converged, flag, it, nfev = _newton_bisect_impl(
-        func, x0, a, b, args, jac, eps, xtol, tol, maxiter
+    if return_result:
+        return _brentq_full(
+            f,
+            lower,
+            upper,
+            args,
+            abs_tol,
+            rel_tol,
+            count,
+            full_output=True,
+            disp=raise_failure,
+        )
+    return _brentq_simple(
+        f,
+        lower,
+        upper,
+        args,
+        abs_tol,
+        rel_tol,
+        count,
+        full_output=False,
+        disp=raise_failure,
     )
 
-    result.root = root
-    result.fx = fx
-    result.converged = converged
-    result.flag = flag
-    result.iterations = it
-    result.function_calls = nfev
 
-    return root, result
+@numba_overload(brentq, jit_options=JIT_OPTIONS)
+def _overload_brentq(
+    f: Any,
+    a: Any,
+    b: Any,
+    args: Any = (),
+    xtol: Any = _BRENT_XTOL,
+    rtol: Any = _BRENT_RTOL,
+    maxiter: Any = _BRENT_MAXITER,
+    full_output: Any = False,
+    disp: Any = True,
+) -> Any:
+    """Select a Numba-compatible implementation of pydynopt's Brent solver."""
+    return _select_brentq_impl(full_output)
 
 
-def _newton_bisect_simple(
-    func,
-    x0,
-    a=None,
-    b=None,
-    args=(),
-    jac=False,
-    eps=1.0e-8,
-    xtol=1.0e-8,
-    tol=1.0e-8,
-    maxiter=50
-):
+@typing_overload
+def newton_bisect(
+    func: ScalarFunc | ValueJacFunc,
+    x0: RealScalar,
+    a: RealScalar | None = None,
+    b: RealScalar | None = None,
+    args: tuple[Any, ...] = (),
+    jac: JacOption = False,
+    eps: RealScalar = 1.0e-8,
+    xtol: RealScalar = 1.0e-8,
+    tol: RealScalar = 1.0e-8,
+    maxiter: int = 50,
+    full_output: Literal[False] = False,
+) -> tuple[float, float]: ...
 
-    root, fx, converged, flag, it, nfev = _newton_bisect_impl(
-        func, x0, a, b, args, jac, eps, xtol, tol, maxiter
-    )
 
-    return root, fx
+@typing_overload
+def newton_bisect(
+    func: ScalarFunc | ValueJacFunc,
+    x0: RealScalar,
+    a: RealScalar | None = None,
+    b: RealScalar | None = None,
+    args: tuple[Any, ...] = (),
+    jac: JacOption = False,
+    eps: RealScalar = 1.0e-8,
+    xtol: RealScalar = 1.0e-8,
+    tol: RealScalar = 1.0e-8,
+    maxiter: int = 50,
+    full_output: Literal[True] = True,
+) -> tuple[float, RootResult]: ...
+
+
+@typing_overload
+def newton_bisect(
+    func: ScalarFunc | ValueJacFunc,
+    x0: RealScalar,
+    a: RealScalar | None = None,
+    b: RealScalar | None = None,
+    args: tuple[Any, ...] = (),
+    jac: JacOption = False,
+    eps: RealScalar = 1.0e-8,
+    xtol: RealScalar = 1.0e-8,
+    tol: RealScalar = 1.0e-8,
+    maxiter: int = 50,
+    full_output: bool = False,
+) -> tuple[float, float] | tuple[float, RootResult]: ...
+
 
 def newton_bisect(
-    func,
-    x0,
-    a=None,
-    b=None,
-    args=(),
-    jac=False,
-    eps=1.0e-8,
-    xtol=1.0e-8,
-    tol=1.0e-8,
-    maxiter=50,
-    full_output=False,
-):
+    func: ScalarFunc | ValueJacFunc,
+    x0: RealScalar,
+    a: RealScalar | None = None,
+    b: RealScalar | None = None,
+    args: tuple[Any, ...] = (),
+    jac: JacOption = False,
+    eps: RealScalar = 1.0e-8,
+    xtol: RealScalar = 1.0e-8,
+    tol: RealScalar = 1.0e-8,
+    maxiter: int = 50,
+    full_output: bool = False,
+) -> tuple[float, float] | tuple[float, RootResult]:
+    """Find a scalar root using Newton steps constrained by bisection.
 
-    xtol = float(xtol)
-    tol = float(tol)
-    maxiter = int(maxiter)
-    eps = float(eps)
+    ``jac=False`` numerically differentiates ``func``. With ``jac=True``,
+    ``func`` returns the residual and derivative. A callable ``jac`` evaluates
+    the derivative separately.
 
-    root, res = _newton_bisect_full(
-        func, x0, a, b, args, jac, eps, xtol, tol, maxiter, full_output=True
-    )
+    Parameters
+    ----------
+    func
+        Scalar residual function, or a function returning the residual and
+        derivative when ``jac`` is true.
+    x0
+        Initial root estimate.
+    a, b
+        Optional lower and upper bounds. Reversed bounds are normalized.
+    args
+        Additional arguments passed to ``func`` and a callable ``jac``.
+    jac
+        Derivative mode or separate derivative function.
+    eps
+        Positive finite-difference step used when ``jac`` is false.
+    xtol
+        Absolute tolerance for changes in the root estimate.
+    tol
+        Absolute tolerance for the residual.
+    maxiter
+        Maximum number of iterations.
+    full_output
+        Whether to return convergence information instead of the residual.
 
-    if full_output:
-        return root, res
+    Returns
+    -------
+    root
+        Estimated root location.
+    result
+        Residual at ``root``, or convergence information when ``full_output``
+        is true.
+
+    Raises
+    ------
+    TypeError
+        If a scalar or boolean option has an invalid type.
+    ValueError
+        If an option, bound, residual, or derivative is invalid, or a supplied
+        two-sided bracket does not contain a sign change.
+    """
+    point = _normalize_real_scalar(x0, 'x0')
+    lower = None if a is None else _normalize_real_scalar(a, 'a', finite=False)
+    upper = None if b is None else _normalize_real_scalar(b, 'b', finite=False)
+    step = _normalize_real_scalar(eps, 'eps')
+    abs_tol = _normalize_real_scalar(xtol, 'xtol')
+    value_tol = _normalize_real_scalar(tol, 'tol')
+    count = _normalize_integer(maxiter, 'maxiter', 1)
+    return_result = _normalize_bool(full_output, 'full_output')
+
+    if not isinstance(jac, (bool, np.bool_)):
+        result = newton_bisect_impl(
+            func,
+            point,
+            lower,
+            upper,
+            args,
+            False,
+            step,
+            abs_tol,
+            value_tol,
+            count,
+            jac,
+        )
     else:
-        return root, res.fx
+        use_combined = _normalize_bool(jac, 'jac')
+        result = newton_bisect_impl(
+            func,
+            point,
+            lower,
+            upper,
+            args,
+            use_combined,
+            step,
+            abs_tol,
+            value_tol,
+            count,
+        )
+
+    root, fx, converged, flag, it, nfev = result
+    if return_result:
+        output = RootResult()
+        output.root = root
+        output.fx = fx
+        output.converged = converged
+        output.flag = _status_message(flag)
+        output.iterations = it
+        output.function_calls = nfev
+        return root, output
+    return root, fx
 
 
-@overload(newton_bisect, jit_options=JIT_OPTIONS)
-def newton_bisect_generic(
-        func,
-        x0,
-        a=None,
-        b=None,
-        args=(),
-        jac=False,
-        eps=1.0e-8,
-        xtol=1.0e-8,
-        tol=1.0e-8,
-        maxiter=50
-):
-    """
-    Overload for tuple of scalar return values.
-    """
-    f = _newton_bisect_simple
+@numba_overload(newton_bisect, jit_options=JIT_OPTIONS)
+def _overload_newton_bisect(
+    func: Any,
+    x0: Any,
+    a: Any = None,
+    b: Any = None,
+    args: Any = (),
+    jac: Any = False,
+    eps: Any = 1.0e-8,
+    xtol: Any = 1.0e-8,
+    tol: Any = 1.0e-8,
+    maxiter: Any = 50,
+    full_output: Any = False,
+) -> Any:
+    """Select a Numba implementation by derivative and result mode."""
+    from numba import types
 
-    return f
+    if full_output is False or isinstance(full_output, types.Omitted):
+        return_result = False
+    elif isinstance(full_output, types.BooleanLiteral):
+        return_result = full_output.literal_value
+    else:
+        return None
 
+    if jac is False or isinstance(jac, (types.Omitted, types.BooleanLiteral)):
+        callable_jac = False
+    elif jac == types.boolean:
+        return None
+    else:
+        callable_jac = True
 
-@overload(newton_bisect, jit_options=JIT_OPTIONS)
-def newton_bisect_generic(
-    func,
-    x0,
-    a=None,
-    b=None,
-    args=(),
-    jac=False,
-    eps=1.0e-8,
-    xtol=1.0e-8,
-    tol=1.0e-8,
-    maxiter=50,
-    full_output=True,
-):
-    """
-    Overload for RootResult return value.
-
-    """
-    f = _newton_bisect_full
-
-    return f
+    if callable_jac:
+        if return_result:
+            return newton_bisect_callable_full
+        return newton_bisect_callable_simple
+    if return_result:
+        return newton_bisect_full
+    return newton_bisect_simple

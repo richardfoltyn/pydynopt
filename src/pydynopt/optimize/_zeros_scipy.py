@@ -1,4 +1,5 @@
-"""
+"""Provide a Numba-compatible implementation of SciPy's Brent root finder.
+
 Copyright (c) 2001-2002 Enthought, Inc. 2003-2023, SciPy Developers.
 All rights reserved.
 
@@ -31,7 +32,11 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
+from scipy.optimize import brentq as scipy_brentq
 
 from pydynopt.numba import (
     JIT_OPTIONS,
@@ -41,9 +46,12 @@ from pydynopt.numba import (
     jitclass,
     overload,
     register_jitable,
+    string,
 )
 
-__all__ = ['RootResult', 'brentq']
+__all__ = ['RootResult']
+
+type ScalarFunc = Callable[..., Any]
 
 _iter = 100
 _xtol = 2.0e-12
@@ -68,8 +76,25 @@ flag_map = {
     _ESIGNERR: SIGNERR,
     _ECONVERR: CONVERR,
     _EVALUEERR: VALUEERR,
+    _EMAXITER: MAXITER,
     _EINPROGRESS: INPROGRESS,
 }
+
+
+@register_jitable(**JIT_OPTIONS)
+def _status_message(flag: int) -> str:
+    """Return the public message for an internal termination status."""
+    if flag == _ECONVERGED:
+        return CONVERGED
+    if flag == _ESIGNERR:
+        return SIGNERR
+    if flag == _ECONVERR:
+        return CONVERR
+    if flag == _EVALUEERR:
+        return VALUEERR
+    if flag == _EMAXITER:
+        return MAXITER
+    return INPROGRESS
 
 
 @jitclass(
@@ -79,107 +104,92 @@ flag_map = {
         ('iterations', int64),
         ('function_calls', int64),
         ('converged', boolean),
-        ('flag', int64),
+        ('flag', string),
     ]
 )
 class RootResult:
-    """
-    Represents the root finding result.
+    """Represent the result of a root-finding operation.
 
     Attributes
     ----------
-    root : float
+    root
         Estimated root location.
-    fx : float
-        Function value at estimated root location.
-    iterations : int
-        Number of iterations needed to find the root.
-    function_calls : int
-        Number of times the function was called.
-    converged : bool
-        True if the routine converged.
-    flag : str
-        Description of the cause of termination.
+    fx
+        Function value at the estimated root.
+    iterations
+        Number of iterations performed.
+    function_calls
+        Number of objective evaluations.
+    converged
+        Whether the routine converged.
+    flag
+        Description of the termination status.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.root = 0.0
         self.fx = 0.0
         self.iterations = 0
         self.function_calls = 0
         self.converged = False
-        self.flag = 0
+        self.flag = ''
 
 
 @register_jitable(**JIT_OPTIONS)
 def _brentq_impl(
-    f,
-    a,
-    b,
-    args=(),
-    xtol=2.0e-12,
-    rtol=_rtol,
-    maxiter=_iter
-):
-    """
+    f: ScalarFunc,
+    a: float,
+    b: float,
+    args: tuple[Any, ...] = (),
+    xtol: float = _xtol,
+    rtol: float = _rtol,
+    maxiter: int = _iter,
+) -> tuple[float, float, bool, int, int, int]:
+    """Find a root in a bracketing interval using Brent's method.
 
-    Find a root of a function in a bracketing interval using Brent's method.
-
-    This function is a Python port of Scipy's C implementation, with the
-    aim of making this implementation compatible with Numba.
-
-    The major difference wo Scipy's version is that a RootResult object
-    is always returned, as Numba cannot handle non-uniform return values.
-
-    NOTE: If not called from Numba-compiled code, there is no reason to
-    call this function instead of Scipy's implementation.
+    This is a Python port of SciPy's C implementation for use from Numba.
 
     Parameters
     ----------
-    f : function
-        Python function returning a number.  The function :math:`f`
-        must be continuous, and :math:`f(a)` and :math:`f(b)` must
-        have opposite signs.
-    a : scalar
-        One end of the bracketing interval :math:`[a, b]`.
-    b : scalar
-        The other end of the bracketing interval :math:`[a, b]`.
-    xtol : number, optional
-        The computed root ``x0`` will satisfy ``np.allclose(x, x0,
-        atol=xtol, rtol=rtol)``, where ``x`` is the exact root. The
-        parameter must be nonnegative. For nice functions, Brent's
-        method will often satisfy the above condition with ``xtol/2``
-        and ``rtol/2``. [Brent1973]_
-    rtol : number, optional
-        The computed root ``x0`` will satisfy ``np.allclose(x, x0,
-        atol=xtol, rtol=rtol)``, where ``x`` is the exact root. The
-        parameter cannot be smaller than its default value of
-        ``4*np.finfo(float).eps``. For nice functions, Brent's
-        method will often satisfy the above condition with ``xtol/2``
-        and ``rtol/2``. [Brent1973]_
-    maxiter : int, optional
-        if convergence is not achieved in `maxiter` iterations, an error is
-        raised.  Must be >= 0.
-    args : tuple, optional
-        containing extra arguments for the function `f`.
-        `f` is called by ``apply(f, (x)+args)``.
+    f
+        Continuous scalar function whose root is sought.
+    a, b
+        Endpoints with opposite-signed function values.
+    args
+        Additional arguments passed to ``f``.
+    xtol, rtol
+        Absolute and relative root tolerances.
+    maxiter
+        Maximum number of iterations.
 
     Returns
     -------
-    x0 : float
-        Zero of `f` between `a` and `b`.
-    fx : float
-        Function value at the found root.
-    converged : bool
-        True if the routine converged.
-    flag : int
-        Integer flag indicating the status of the computation. See flag_map for meanings.
-    it : int
-        Number of iterations needed to find the root.
-    nfev : int
-        Number of function evaluations made.
+    root
+        Estimated root location.
+    fx
+        Function value at ``root``.
+    converged
+        Whether the routine converged.
+    flag
+        Internal termination status.
+    iterations
+        Number of iterations performed.
+    function_calls
+        Number of objective evaluations.
 
+    Raises
+    ------
+    ValueError
+        If a tolerance or iteration limit is invalid, the endpoint values have
+        the same sign, or an objective evaluation is NaN.
     """
+    if xtol <= 0.0:
+        raise ValueError('xtol too small')
+    if rtol < _rtol:
+        raise ValueError('rtol too small')
+    if maxiter < 0:
+        raise ValueError('maxiter must be >= 0')
+
     xpre = a
     xcur = b
     xblk = 0.0
@@ -188,16 +198,15 @@ def _brentq_impl(
     scur = 0.0
 
     fpre = f(xpre, *args)
+    if np.isnan(fpre):
+        raise ValueError('The function value at a is NaN; solver cannot continue')
+
     fcur = f(xcur, *args)
+    if np.isnan(fcur):
+        raise ValueError('The function value at b is NaN; solver cannot continue')
 
     nfev = 2
     it = 0
-
-    if fpre * fcur > 0:
-        flag = _ESIGNERR
-        converged = False
-        root = np.nan
-        return root, np.nan, converged, flag, it, nfev
 
     if fpre == 0.0:
         flag = _ECONVERGED
@@ -209,9 +218,11 @@ def _brentq_impl(
         converged = True
         return xcur, fcur, converged, flag, it, nfev
 
-    for it in range(1, maxiter+1):
+    if np.signbit(fpre) == np.signbit(fcur):
+        raise ValueError('f(a) and f(b) must have different signs')
 
-        if fpre * fcur < 0.0:
+    for it in range(1, maxiter + 1):
+        if np.signbit(fpre) != np.signbit(fcur):
             xblk = xpre
             fblk = fpre
             spre = scur = xcur - xpre
@@ -265,91 +276,92 @@ def _brentq_impl(
             xcur += delta if sbis > 0 else -delta
 
         fcur = f(xcur, *args)
+        if np.isnan(fcur):
+            raise ValueError('The function value is NaN; solver cannot continue')
         nfev += 1
 
-    flag = _ECONVERGED
-    converged = True
+    flag = _ECONVERR
+    converged = False
 
     return xcur, fcur, converged, flag, it, nfev
 
 
 @register_jitable(**JIT_OPTIONS)
 def _brentq_simple(
-    f,
-    a,
-    b,
-    args=(),
-    xtol=2.0e-12,
-    rtol=_rtol,
-    maxiter=_iter,
-):
-
-    root, fx, converged, flag, it, nfev = _brentq_impl(f, a, b, args, xtol, rtol, maxiter)
+    f: ScalarFunc,
+    a: float,
+    b: float,
+    args: tuple[Any, ...] = (),
+    xtol: float = _xtol,
+    rtol: float = _rtol,
+    maxiter: int = _iter,
+    full_output: bool = False,
+    disp: bool = True,
+) -> float:
+    """Return only the root from the Brent kernel."""
+    root, _fx, converged, _flag, _it, _nfev = _brentq_impl(
+        f, a, b, args, xtol, rtol, maxiter
+    )
+    if not converged and disp:
+        raise RuntimeError('Failed to converge')
 
     return root
 
 
 @register_jitable(**JIT_OPTIONS)
 def _brentq_full(
-    f,
-    a,
-    b,
-    args=(),
-    xtol=2.0e-12,
-    rtol=_rtol,
-    maxiter=_iter,
-    full_output=True
-):
+    f: ScalarFunc,
+    a: float,
+    b: float,
+    args: tuple[Any, ...] = (),
+    xtol: float = _xtol,
+    rtol: float = _rtol,
+    maxiter: int = _iter,
+    full_output: bool = False,
+    disp: bool = True,
+) -> tuple[float, RootResult]:
+    """Return the root and convergence information from the Brent kernel."""
+    root, fx, converged, flag, it, nfev = _brentq_impl(
+        f, a, b, args, xtol, rtol, maxiter
+    )
+    if not converged and disp:
+        raise RuntimeError('Failed to converge')
 
     res = RootResult()
-
-    root, fx, converged, flag, it, nfev = _brentq_impl(f, a, b, args, xtol, rtol, maxiter)
-
     res.root = root
     res.fx = fx
     res.converged = converged
-    res.flag = flag
+    res.flag = _status_message(flag)
     res.iterations = it
     res.function_calls = nfev
 
     return root, res
 
 
+def _select_brentq_impl(full_output: Any) -> Any:
+    """Select a Brent implementation from a Numba ``full_output`` type."""
+    from numba import types
 
-try:
-    from scipy.optimize import brentq
-
-    @overload(brentq, jit_options=JIT_OPTIONS)
-    def brentq_generic(
-        f, a, b, args=(), xtol=2.0e-12, rtol=_rtol, maxiter=_iter
-    ):
-        """
-        Returns a Numba-compatible implementation of Brent's method that
-        can be used to override Scipy's implementation.
-        """
-        f = _brentq_simple
-        return f
+    if full_output is False or isinstance(full_output, types.Omitted):
+        return _brentq_simple
+    if isinstance(full_output, types.BooleanLiteral):
+        if full_output.literal_value:
+            return _brentq_full
+        return _brentq_simple
+    return None
 
 
-    @overload(brentq, jit_options=JIT_OPTIONS)
-    def brentq_generic(
-        f,
-        a,
-        b,
-        args=(),
-        xtol=2.0e-12,
-        rtol=_rtol,
-        maxiter=_iter,
-        full_output=True,
-    ):
-        """
-        Returns a Numba-compatible implementation of Brent's method that
-        can be used to override Scipy's implementation.
-        """
-        f = _brentq_full
-        return f
-
-
-except ImportError:
-    brentq = None
-    pass
+@overload(scipy_brentq, jit_options=JIT_OPTIONS)
+def _overload_scipy_brentq(
+    f: Any,
+    a: Any,
+    b: Any,
+    args: Any = (),
+    xtol: Any = _xtol,
+    rtol: Any = _rtol,
+    maxiter: Any = _iter,
+    full_output: Any = False,
+    disp: Any = True,
+) -> Any:
+    """Select a Numba-compatible implementation of SciPy's Brent solver."""
+    return _select_brentq_impl(full_output)
