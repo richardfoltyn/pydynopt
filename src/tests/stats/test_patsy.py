@@ -54,11 +54,11 @@ def test_patsy_formula_to_categorical_treatments():
     formula = "C(x1, Treatment('a'))"
     assert patsy_formula_to_categorical_treatments(formula) == {'x1': "'a'"}
 
-    matrix = patsy.dmatrix(
+    matrix = patsy.dmatrix(  # type: ignore
         formula,
         pd.DataFrame({'x1': ['a', 'b']}),
         return_type='dataframe',
-    )  # type: ignore
+    )
     assert list(matrix.columns) == ['Intercept', "C(x1, Treatment('a'))[T.b]"]
 
 

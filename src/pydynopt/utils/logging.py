@@ -152,7 +152,8 @@ def add_logfile(
     -------
     The added file handler.
     """
-    timestamp = datetime.datetime.now()
+    # Log file names use local wall-clock time by design.
+    timestamp = datetime.datetime.now()  # noqa: DTZ005
     path = Path(file)
 
     if file_timestamp:

@@ -1,11 +1,11 @@
 import numpy as np
 from numpy.polynomial import chebyshev
 
-__all__ = ["chebyshev_polynomial"]
+__all__ = ['chebyshev_polynomial']
 
 
 def chebyshev_polynomial(
-    x, deg: int, intercept: bool = False, return_type: str = "ndarray"
+    x, deg: int, intercept: bool = False, return_type: str = 'ndarray'
 ):
     """
     Compute the Vandermonde matrix for the  Chebyshev polynomial of degree `deg`
@@ -27,8 +27,8 @@ def chebyshev_polynomial(
     np.ndarray or pd.DataFrame
     """
     return_type = return_type.lower()
-    if return_type not in ("ndarray", "dataframe"):
-        raise ValueError("Invalid return_type argument")
+    if return_type not in ('ndarray', 'dataframe'):
+        raise ValueError('Invalid return_type argument')
 
     x = np.atleast_1d(x).flatten()
 
@@ -42,10 +42,10 @@ def chebyshev_polynomial(
     if not intercept:
         vander = np.ascontiguousarray(vander[:, 1:])
 
-    if return_type.lower() == "dataframe":
+    if return_type.lower() == 'dataframe':
         import pandas as pd
 
-        columns = [f"p{i + 1 - int(intercept)}" for i in range(vander.shape[1])]
+        columns = [f'p{i + 1 - int(intercept)}' for i in range(vander.shape[1])]
         df = pd.DataFrame(vander, columns=columns)
         return df
     else:

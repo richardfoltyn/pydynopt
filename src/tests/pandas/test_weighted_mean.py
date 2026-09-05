@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 from pydynopt.pandas import df_weighted_mean
-from pydynopt.utils import anything_to_list
 
 # Dimension sizes to be used for tests
 DIMS = (0, 1, 2, 11)
@@ -38,7 +37,7 @@ def shapes(nlevels) -> np.ndarray:
 
 
 def create_data(
-    shape: tuple[int],
+    shape: tuple[int, ...],
     weights: bool,
     rng,
     na_count: int = 0,
@@ -72,8 +71,8 @@ def create_data(
     else:
         idx = pd.MultiIndex.from_product([np.arange(i) for i in shape], names=levels)
 
-    columns = anything_to_list(columns)
-    df = pd.DataFrame(index=idx, columns=columns, dtype=float)
+    cols = [columns] if isinstance(columns, str) else list(columns)
+    df = pd.DataFrame(index=idx, columns=cols, dtype=float)
     df.iloc[:, :] = rng.normal(size=df.shape)
 
     if na_count > 0 and len(df) > 0:
@@ -100,9 +99,9 @@ def create_data(
     return df
 
 
-def get_groups(data: pd.DataFrame) -> list[list[str]]:
+def get_groups(data: pd.DataFrame) -> list[list[str] | None]:
     """Return all non-trivial index-level combinations for groupby."""
-    levels = list(data.index.names)
+    levels = [str(name) for name in data.index.names]
     nlevels = len(levels)
 
     # List of unique combinations of nlevels - 1 elements
@@ -114,7 +113,9 @@ def get_groups(data: pd.DataFrame) -> list[list[str]]:
     keep = (s > 0) & (s < nlevels)
     ii = ii[keep]
 
-    groups = [[levels[j] for j, flag in enumerate(row) if flag == 1] for row in ii]
+    groups: list[list[str] | None] = [
+        [levels[j] for j, flag in enumerate(row) if flag == 1] for row in ii
+    ]
 
     return groups
 
@@ -321,7 +322,7 @@ def test_nonfinite_weights_are_ignored():
     res = df_weighted_mean(data, weights='weight', varlist=['data'])
     desired = (1.0 * 1.0 + 4.0 * 2.0) / (1.0 + 2.0)
 
-    assert np.isclose(res.loc[0, 'data'], desired)
+    assert np.isclose(res.loc[0, 'data'], desired)  # type: ignore
 
 
 def test_varlist(rng):

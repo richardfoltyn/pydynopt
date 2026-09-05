@@ -1,4 +1,3 @@
-
 import numpy as np
 import pandas as pd
 
@@ -15,7 +14,7 @@ def winsorize(
     varname: str | None = None,
     weights: str | pd.Series | np.ndarray | None = None,
     inplace: bool = False,
-    interpolation: str = "linear",
+    interpolation: str = 'linear',
     **kwargs,
 ) -> pd.DataFrame | pd.Series | np.ndarray:
     """
@@ -45,14 +44,11 @@ def winsorize(
 
     """
     if any(q is not None and not 0 < q < 1 for q in (qlb, qub)):
-        raise ValueError("Invalid quantile argument value")
+        raise ValueError('Invalid quantile argument value')
 
     has_weights = weights is not None
 
-    if isinstance(data, pd.DataFrame):
-        d = data[varname]
-    else:
-        d = data
+    d = data[varname] if isinstance(data, pd.DataFrame) else data
 
     if isinstance(weights, str) and isinstance(data, pd.DataFrame):
         weights = data[weights]
@@ -61,23 +57,22 @@ def winsorize(
     qub = qub if qub is not None else 1.0
 
     if has_weights:
-        d = pd.DataFrame({"value": d, "weight": weights})
+        d = pd.DataFrame({'value': d, 'weight': weights})
         d = d.dropna()
-        if (d["weight"] == 0.0).any():
-            d = d.loc[d["weight"] > 0.0].copy()
+        if (d['weight'] == 0.0).any():
+            d = d.loc[d['weight'] > 0.0].copy()
 
+        ranks = np.array((qlb, qub))
         qntl = quantile(
-            d["value"].to_numpy(),
-            d["weight"].to_numpy(),
-            (qlb, qub),
+            d['value'].to_numpy(),
+            d['weight'].to_numpy(),
+            ranks,
             interpolation=interpolation,
             **kwargs,
         )
     else:
         d = pd.Series(d)
-        qntl = (
-            d.quantile((qlb, qub), interpolation=interpolation).to_numpy()
-        )
+        qntl = d.quantile([qlb, qub], interpolation=interpolation).to_numpy()  # type: ignore
 
     if not inplace:
         if isinstance(data, np.ndarray):
@@ -89,22 +84,26 @@ def winsorize(
 
     if qlb > 0.0:
         lb = qntl[0]
-        mask = data[varname] < lb
-        if isinstance(data, np.ndarray):
-            data[np.asarray(mask)] = lb
-        elif isinstance(data, pd.DataFrame):
+        if isinstance(data, pd.DataFrame):
+            mask = data[varname] < lb
             data.loc[mask, varname] = lb
+        elif isinstance(data, np.ndarray):
+            mask = data < lb
+            data[mask] = lb
         else:
+            mask = data < lb
             data.loc[mask] = lb
 
     if qub < 1:
         ub = qntl[1]
-        mask = data[varname] > ub
-        if isinstance(data, np.ndarray):
-            data[np.asarray(mask)] = ub
-        elif isinstance(data, pd.DataFrame):
+        if isinstance(data, pd.DataFrame):
+            mask = data[varname] > ub
             data.loc[mask, varname] = ub
+        elif isinstance(data, np.ndarray):
+            mask = data > ub
+            data[mask] = ub
         else:
+            mask = data > ub
             data.loc[mask] = ub
 
     return data

@@ -741,10 +741,10 @@ def plot_dataframe(
     has_scatter = any(plot_type_dict[yvar] == 'scatter' for yvar in yvars)
     if has_scatter and isinstance(scatter_color, str) and norm is None:
         color_values = []
-        for yvar in yvars:
+        for yvar_ in yvars:
             if isinstance(df.columns, pd.MultiIndex):
-                if (yvar, scatter_color) in df.columns:
-                    vals = df[(yvar, scatter_color)].to_numpy()
+                if (yvar_, scatter_color) in df.columns:
+                    vals = df[(yvar_, scatter_color)].to_numpy()
                     color_values.append(vals)
                 elif scatter_color in df.columns.levels[0]:
                     vals = df[scatter_color].to_numpy()
@@ -798,7 +798,7 @@ def plot_dataframe(
         # Convert to dict
         styles = dict(zip(yvars, styles_list, strict=False))
     else:
-        raise ValueError('Unsupported style vale')
+        raise TypeError('Unsupported style value')
 
     # Determine number of rows and columns from number of vars to be plotted.
     ncol = ncol if ncol else len(over_order_arr)
@@ -826,10 +826,10 @@ def plot_dataframe(
             over_order_arr[ipanel], level=over_var, axis=0, drop_level=False
         )
 
-        for _ivar, yvar in enumerate(yvars):
+        for _ivar, yvar_ in enumerate(yvars):
             # Variable-specific style
-            style = styles[yvar]
-            data: pd.DataFrame = df_panel[yvar]  # type: ignore
+            style = styles[yvar_]
+            data: pd.DataFrame = df_panel[yvar_]  # type: ignore
 
             mname = moment_name or _find_moment_name(data)
 
@@ -850,12 +850,12 @@ def plot_dataframe(
                 leglbl = None
                 if by_labels_dict and yvar_labels_dict:
                     bylbl = by_labels_dict.get(by_value, by_value)
-                    vlbl = yvar_labels_dict.get(yvar, yvar)
+                    vlbl = yvar_labels_dict.get(yvar_, yvar_)
                     leglbl = f'{vlbl}: {bylbl}'
                 elif by_labels_dict:
                     leglbl = by_labels_dict.get(by_value, by_value)
                 elif yvar_labels_dict:
-                    leglbl = yvar_labels_dict.get(yvar, yvar)
+                    leglbl = yvar_labels_dict.get(yvar_, yvar_)
                 else:
                     # Fallback: use default string representation of -by- value
                     leglbl = f'{by_value}'
@@ -864,7 +864,7 @@ def plot_dataframe(
                     # Disable artificial legend labels when nothing is displayed
                     leglbl = None
 
-                if plot_type_dict[yvar] == 'bar':
+                if plot_type_dict[yvar_] == 'bar':
                     if xvalues.size > 1:
                         dx = np.amin(xvalues[1:] - xvalues[:-1])
                         barwidth = dx / len(by_order_arr) * style.barwidth
@@ -887,7 +887,7 @@ def plot_dataframe(
                 df_by: pd.DataFrame = data.xs(by_value, level=by_var)  # type: ignore
                 yerr = _get_yerr(df_by, mname, yvalues)
 
-                if plot_type_dict[yvar] == 'bar':
+                if plot_type_dict[yvar_] == 'bar':
                     bw = barwidth * (1.0 - 2.0 * style.barmargin)
 
                     ax.bar(
@@ -899,7 +899,7 @@ def plot_dataframe(
                         **style.bar_kwargs[k],
                     )
 
-                elif plot_type_dict[yvar] == 'area' and yerr is not None:
+                elif plot_type_dict[yvar_] == 'area' and yerr is not None:
                     ylb = yvalues - yerr[0]
                     yub = yvalues + yerr[1]
                     isfin = any(np.isfinite(ylb) & np.isfinite(yub))
@@ -918,16 +918,16 @@ def plot_dataframe(
                     kw['zorder'] += 20
                     ax.plot(xvalues, yvalues, label=leglbl, **kw)
 
-                elif plot_type_dict[yvar] == 'scatter':
+                elif plot_type_dict[yvar_] == 'scatter':
                     df_by: pd.DataFrame = df_panel.xs(by_value, level=by_var)  # type: ignore
                     size = _get_scatter_size(
-                        scatter_size, yvar, df_by, style.markersize[k]
+                        scatter_size, yvar_, df_by, style.markersize[k]
                     )
 
                     if style.split_scatter:
                         kw = style.scatter_face_kwargs[k].copy()
                         default = kw.pop('facecolors')
-                        color = _get_scatter_color(scatter_color, yvar, df_by, default)
+                        color = _get_scatter_color(scatter_color, yvar_, df_by, default)
 
                         is_numeric_color = isinstance(
                             color, np.ndarray
@@ -975,7 +975,7 @@ def plot_dataframe(
                         # Default: plot edges and faces in single call
                         kw = style.scatter_kwargs[k].copy()
                         default = kw.pop('facecolors')
-                        color = _get_scatter_color(scatter_color, yvar, df_by, default)
+                        color = _get_scatter_color(scatter_color, yvar_, df_by, default)
 
                         is_numeric_color = isinstance(
                             color, np.ndarray

@@ -606,7 +606,7 @@ def discretize_rv(
     q: Sequence | np.ndarray | None = None,
     dist=None,
     return_edges: bool = False,
-    **kwargs
+    **kwargs,
 ) -> tuple[np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Discretize a continuous random variable onto a finite set of bins,
@@ -647,6 +647,7 @@ def discretize_rv(
         q = np.atleast_1d(q)
         n = len(q) - 1
     else:
+        assert n is not None
         # Create equidistant bins in terms of quantile ranks
         q = np.linspace(0.0, 1.0, n + 1)
 

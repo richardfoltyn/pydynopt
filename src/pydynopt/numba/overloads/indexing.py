@@ -131,7 +131,7 @@ def unravel_index_generic(
     from numba import types
 
     f = None
-    if isinstance(indices, types.Integer):
+    if isinstance(indices, types.Integer):  # type: ignore
         f = _unravel_index_scalar
     elif isinstance(indices, types.Array):
         f = _unravel_index_array

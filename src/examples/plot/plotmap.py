@@ -4,7 +4,6 @@ INSERT MODULE DOCSTRING HERE
 Author: Richard Foltyn
 """
 
-
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -131,16 +130,17 @@ def demo_nd():
     # Use a slice to select only the first half of x-values
     pm.map_xaxis(dim=0, at_idx=slice(len(x0) // 2), values=x0)
     # Show only the first and last element of the row dimension
-    pm.map_rows(dim=1, at_idx=(0, len(x1) - 1),
-                values=x1, label_fmt='x1: {value:-04.2f}')
+    pm.map_rows(
+        dim=1, at_idx=(0, len(x1) - 1), values=x1, label_fmt='x1: {value:-04.2f}'
+    )
     # Plot only for values smaller than 2 in column dimension
     val = x2[x2 < 2]
-    pm.map_columns(dim=2, values=x2, at_val=val,
-                   label_fmt='x2: {value:-04.2f}')
+    pm.map_columns(dim=2, values=x2, at_val=val, label_fmt='x2: {value:-04.2f}')
 
     # Plot only every second value in layer dimension
-    pm.map_layers(dim=3, values=x3, at_idx=slice(0, None, 2),
-                  label_fmt='x3: {value:-04.2f}')
+    pm.map_layers(
+        dim=3, values=x3, at_idx=slice(0, None, 2), label_fmt='x3: {value:-04.2f}'
+    )
     pm.plot(f, style=style)
     plt.waitforbuttonpress()
     plt.close()
@@ -176,10 +176,15 @@ def demo_annotations():
     # substituted if the values= argument was passed to the map_* function.
     pm = PlotMap()
     pm.map_xaxis(dim=0, values=x0)
-    pm.map_rows(dim=1, values=x1, at_val=(x1[0], x1[-1]),
-                label_fmt='i={index:d} v={value: 04.2f}')
-    pm.map_columns(dim=2, values=x2, at_val=(x2[0], x2[-1]),
-                   label_fmt='row={row:d} col={column:d}')
+    pm.map_rows(
+        dim=1,
+        values=x1,
+        at_val=(x1[0], x1[-1]),
+        label_fmt='i={index:d} v={value: 04.2f}',
+    )
+    pm.map_columns(
+        dim=2, values=x2, at_val=(x2[0], x2[-1]), label_fmt='row={row:d} col={column:d}'
+    )
     pm.map_layers(dim=3, values=x3, label_fmt='i={index:d}; v={value: 04.2f}')
     pm.plot(f, style=style)
     plt.waitforbuttonpress()
@@ -191,8 +196,7 @@ def demo_annotations():
     pm = PlotMap()
     pm.map_xaxis(dim=0, values=x0)
     pm.add_fixed(dim=(1, 2), at_idx=(0, 0))
-    pm.map_layers(dim=3, at_idx=(0, f.shape[3] - 1), values=x3,
-                  label=['First', 'Last'])
+    pm.map_layers(dim=3, at_idx=(0, f.shape[3] - 1), values=x3, label=['First', 'Last'])
     pm.plot(f, style=style)
     plt.waitforbuttonpress()
     plt.close()
@@ -206,25 +210,22 @@ def demo_annotations():
     # col). The legend is shown only in a single subplot.
     pm = PlotMap()
     pm.map_xaxis(dim=0, values=x0)
-    pm.map_rows(dim=1, values=x1, at_val=(x1[0], x1[-1]),
-                label_fmt='i={index:d} v={value: 04.2f}')
-    pm.map_columns(dim=2, values=x2, at_val=(x2[0], x2[-1]),
-                   label_fmt='row={row:d} col={column:d}')
+    pm.map_rows(
+        dim=1,
+        values=x1,
+        at_val=(x1[0], x1[-1]),
+        label_fmt='i={index:d} v={value: 04.2f}',
+    )
+    pm.map_columns(
+        dim=2, values=x2, at_val=(x2[0], x2[-1]), label_fmt='row={row:d} col={column:d}'
+    )
     pm.map_layers(dim=3, values=x3, label_fmt='i={index:d}; v={value: 04.2f}')
-    pm.plot(f, style=style, legend=True, legend_loc='upper left',
-            legend_at=(1, 0))
+    pm.plot(f, style=style, legend=True, legend_loc='upper left', legend_at=(1, 0))
     plt.waitforbuttonpress()
     plt.close()
 
-
-def demo_advanced():
-    """
-    To be done...
-    """
-    pass
 
 if __name__ == '__main__':
     # demo_1d()
     demo_nd()
     demo_annotations()
-    demo_advanced()
