@@ -4,11 +4,48 @@ import importlib.util
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import numpy as np
 import pytest
 
 import pydynopt.io.pickle as pickle_io
 
 _OBJECT = {'name': 'test-object', 'values': [1, 2, 3]}
+
+
+def test_get_hash_value_is_invariant_to_mapping_order() -> None:
+    """Produce identical hashes for mappings regardless of their insertion order."""
+    assert pickle_io.get_hash_value({'a': 1, 'b': 2}) == pickle_io.get_hash_value(
+        {'b': 2, 'a': 1}
+    )
+    assert pickle_io.get_hash_value(a=1, b=2) == pickle_io.get_hash_value(b=2, a=1)
+    assert pickle_io.get_hash_value({'a': {'c': 3, 'd': 4}}) == (
+        pickle_io.get_hash_value({'a': {'d': 4, 'c': 3}})
+    )
+
+
+def test_get_hash_value_includes_all_array_elements() -> None:
+    """Distinguish arrays that differ only at an interior element."""
+    arr1 = np.zeros(2_000)
+    arr2 = arr1.copy()
+    arr2[1_000] = 1
+
+    assert pickle_io.get_hash_value(arr1) != pickle_io.get_hash_value(arr2)
+
+
+def test_get_hash_value_preserves_float_precision() -> None:
+    """Distinguish floats that differ beyond their usual display precision."""
+    assert pickle_io.get_hash_value(1.0) != pickle_io.get_hash_value(1.0 + 1e-15)
+
+
+def test_get_hash_value_ignores_array_print_options() -> None:
+    """Produce the same array hash regardless of NumPy display settings."""
+    arr = np.linspace(0, 1, 2_000)
+    expected = pickle_io.get_hash_value(arr)
+
+    with np.printoptions(precision=2, threshold=10):
+        actual = pickle_io.get_hash_value(arr)
+
+    assert actual == expected
 
 
 def test_atomic_dump_preserves_existing_file_on_failure(tmp_path: Path) -> None:

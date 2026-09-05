@@ -6,9 +6,10 @@ This work is licensed under CC BY 4.0, https://creativecommons.org/licenses/by/4
 Author: Richard Foltyn
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 import gzip
 import logging
+import math
 import os
 from pathlib import Path
 import pickle
@@ -16,6 +17,8 @@ import struct
 import tempfile
 from typing import Any
 import zlib
+
+import numpy as np
 
 __all__ = ['CorruptFileError', 'dump', 'get_cached_object', 'get_hash_value', 'load']
 
@@ -344,6 +347,110 @@ def get_cached_object(
     return obj
 
 
+def _frame_hash_value(tag: bytes, value: bytes) -> bytes:
+    """
+    Frame a tagged hash value.
+
+    Parameters
+    ----------
+    tag
+        Type tag for the encoded value.
+    value
+        Encoded value bytes.
+
+    Returns
+    -------
+    Tag and length-prefixed value bytes.
+    """
+    return tag + struct.pack('!Q', len(value)) + value
+
+
+def _encode_hash_value(obj: Any) -> bytes:
+    """
+    Encode an object into canonical bytes for hashing.
+
+    Parameters
+    ----------
+    obj
+        Object to encode.
+
+    Returns
+    -------
+    Canonically encoded object bytes.
+    """
+    if isinstance(obj, np.ndarray):
+        shape = _encode_hash_value(obj.shape)
+        if obj.dtype.hasobject:
+            values = _encode_hash_value(tuple(obj.flat))
+        else:
+            values = np.ascontiguousarray(obj).tobytes()
+        return _frame_hash_value(
+            b'array',
+            _frame_hash_value(b'dtype', obj.dtype.str.encode())
+            + _frame_hash_value(b'shape', shape)
+            + _frame_hash_value(b'values', values),
+        )
+    if isinstance(obj, np.generic):
+        return _frame_hash_value(
+            b'scalar',
+            _frame_hash_value(b'dtype', obj.dtype.str.encode())
+            + _frame_hash_value(b'value', obj.tobytes()),
+        )
+    if obj is None:
+        return b'none'
+    if isinstance(obj, bool):
+        return b'true' if obj else b'false'
+    if isinstance(obj, bytes):
+        return _frame_hash_value(b'bytes', obj)
+    if isinstance(obj, bytearray):
+        return _frame_hash_value(b'bytearray', bytes(obj))
+    if isinstance(obj, memoryview):
+        return _frame_hash_value(b'memoryview', obj.tobytes())
+    if isinstance(obj, str):
+        return _frame_hash_value(b'str', obj.encode())
+    if isinstance(obj, int):
+        return _frame_hash_value(b'int', str(obj).encode())
+    if isinstance(obj, float):
+        value = b'nan' if math.isnan(obj) else struct.pack('<d', obj)
+        return _frame_hash_value(b'float', value)
+    if isinstance(obj, Mapping):
+        items = sorted(
+            (_encode_hash_value(key), _encode_hash_value(value))
+            for key, value in obj.items()
+        )
+        value = b''.join(
+            _frame_hash_value(b'item', _frame_hash_value(b'key', key) + value)
+            for key, value in items
+        )
+        return _frame_hash_value(b'mapping', value)
+    if isinstance(obj, list):
+        return _frame_hash_value(
+            b'list',
+            b''.join(
+                _frame_hash_value(b'item', _encode_hash_value(item)) for item in obj
+            ),
+        )
+    if isinstance(obj, tuple):
+        return _frame_hash_value(
+            b'tuple',
+            b''.join(
+                _frame_hash_value(b'item', _encode_hash_value(item)) for item in obj
+            ),
+        )
+    if isinstance(obj, Sequence):
+        return _frame_hash_value(
+            b'sequence',
+            b''.join(
+                _frame_hash_value(b'item', _encode_hash_value(item)) for item in obj
+            ),
+        )
+    try:
+        value = pickle.dumps(obj, protocol=5)
+    except (pickle.PickleError, TypeError):
+        value = repr(obj).encode()
+    return _frame_hash_value(b'pickle', value)
+
+
 def get_hash_value(*args: Any, **kwargs: Any) -> str:
     """
     Convert sequence of objects to a hash value.
@@ -363,20 +470,6 @@ def get_hash_value(*args: Any, **kwargs: Any) -> str:
     """
     import hashlib
 
-    hashes = []
-    for obj in args:
-        try:
-            h = hashlib.sha256(obj).hexdigest()
-        except TypeError:
-            h = hashlib.sha3_256(f'{obj}'.encode()).hexdigest()
-        hashes.append(h)
-
-    for key, value in kwargs.items():
-        for obj in (key, value):
-            try:
-                h = hashlib.sha256(obj).hexdigest()  # type: ignore
-            except TypeError:
-                h = hashlib.sha3_256(f'{obj}'.encode()).hexdigest()
-            hashes.append(h)
-
-    return hashlib.sha256('_'.join(hashes).encode()).hexdigest()
+    value = _frame_hash_value(b'args', _encode_hash_value(args))
+    value += _frame_hash_value(b'kwargs', _encode_hash_value(kwargs))
+    return hashlib.sha256(value).hexdigest()
