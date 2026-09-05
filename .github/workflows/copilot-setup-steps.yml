@@ -24,10 +24,5 @@ jobs:
       - name: Set up Python 3.13
         run: uv python install 3.13
 
-      - name: Install tools
-        run: |
-          uv tool install ruff
-          uv tool install ty
-
       - name: Install dependencies
         run: uv sync --all-extras --dev
