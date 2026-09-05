@@ -54,7 +54,7 @@ def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
 
     """
     if sigma_cond:
-        sigma_z = np.sqrt(sigma ** 2 / (1 - rho ** 2))
+        sigma_z = np.sqrt(sigma**2 / (1 - rho**2))
         sigma_e = sigma
     else:
         sigma_z = sigma
@@ -62,20 +62,21 @@ def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
 
     if n > 1:
         z = np.linspace(-sigma_z * m, sigma_z * m, n)
-        w2 = (z[1] - z[0])/2
+        w2 = (z[1] - z[0]) / 2
 
         transm = np.empty((n, n), dtype=np.float64)
 
         for j in range(n):
-            for k in range(1, n-1):
+            for k in range(1, n - 1):
                 zjk = z[k] - rho * z[j]
-                transm[j, k] = norm.cdf((zjk + w2) / sigma_e) - \
-                               norm.cdf((zjk - w2) / sigma_e)
+                transm[j, k] = norm.cdf((zjk + w2) / sigma_e) - norm.cdf(
+                    (zjk - w2) / sigma_e
+                )
 
             zj1 = z[0] - rho * z[j]
-            zjn = z[n-1] - rho * z[j]
+            zjn = z[n - 1] - rho * z[j]
             transm[j, 0] = norm.cdf((zj1 + w2) / sigma_e)
-            transm[j, n-1] = 1 - norm.cdf((zjn - w2) / sigma_e)
+            transm[j, n - 1] = 1 - norm.cdf((zjn - w2) / sigma_e)
     elif n == 1:
         transm = np.ones((1, 1))
         z = np.zeros(1)
@@ -89,8 +90,7 @@ def tauchen(rho, sigma, n, m=3, sigma_cond=True, full_output=False):
         # and implied autocorrelation / variance of the discretized process
         ergodic_dist = markov_ergodic_dist(transm)
 
-        rho_impl, sigma_z_impl, sigma_e_impl = \
-            markov_moments(z, transm, ergodic_dist)
+        rho_impl, sigma_z_impl, sigma_e_impl = markov_moments(z, transm, ergodic_dist)
 
         return z, transm, ergodic_dist, rho_impl, sigma_z_impl, sigma_e_impl
     else:

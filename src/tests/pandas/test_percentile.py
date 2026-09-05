@@ -41,7 +41,7 @@ def test_percentile_multi_index_return() -> None:
 
     assert isinstance(result, pd.DataFrame)
     assert result.shape == (1, 1)
-    assert np.isclose(result.iloc[0, 0], 2.0)
+    assert np.isclose(result.iloc[0, 0], 2.0)  # type: ignore
 
 
 def test_percentile_vector_prank_return() -> None:
@@ -52,8 +52,8 @@ def test_percentile_vector_prank_return() -> None:
 
     assert isinstance(result, pd.DataFrame)
     assert result.shape == (2, 1)
-    assert np.isclose(result.iloc[0, 0], 1.0)
-    assert np.isclose(result.iloc[1, 0], 3.0)
+    assert np.isclose(result.iloc[0, 0], 1.0)  # type: ignore
+    assert np.isclose(result.iloc[1, 0], 3.0)  # type: ignore
 
 
 def test_percentile_vector_varlist_return() -> None:
@@ -64,8 +64,8 @@ def test_percentile_vector_varlist_return() -> None:
 
     assert isinstance(result, pd.DataFrame)
     assert result.shape == (1, 2)
-    assert np.isclose(result.loc[50, 'x'], 2.0)
-    assert np.isclose(result.loc[50, 'y'], 20.0)
+    assert np.isclose(result.loc[50, 'x'], 2.0)  # type: ignore
+    assert np.isclose(result.loc[50, 'y'], 20.0)  # type: ignore
 
 
 def test_percentile_default_varlist_return() -> None:
@@ -77,5 +77,5 @@ def test_percentile_default_varlist_return() -> None:
     assert isinstance(result, pd.DataFrame)
     assert 'x' in result.columns
     assert 'y' in result.columns
-    assert np.isclose(result.loc[50, 'x'], 2.0)
-    assert np.isclose(result.loc[50, 'y'], 20.0)
+    assert np.isclose(result.loc[50, 'x'], 2.0)  # type: ignore
+    assert np.isclose(result.loc[50, 'y'], 20.0)  # type: ignore

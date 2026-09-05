@@ -1,14 +1,20 @@
-"""
-INSERT MODULE DOCSTRING HERE
+"""Unit tests for PlotMap and related plotting utilities.
 
 Author: Richard Foltyn
 """
 
+from dataclasses import dataclass, field
+
 import numpy as np
-from plot_common import MockData
 import pytest
 
 from pydynopt.plot.plotmap import PlotDimension, PlotMap
+
+
+@dataclass
+class MockData:
+    data: np.ndarray | None = None
+    grid: list[np.ndarray] = field(default_factory=list)
 
 
 @pytest.fixture(scope='module')
@@ -64,7 +70,7 @@ def data_4d():
     return x1, x2, x3, x4, f
 
 
-def test_plotdim(request):
+def test_plotdim():
     """
     Test PlotDimensions creation
     """
@@ -84,7 +90,7 @@ def test_plotdim(request):
     assert pd.index == 1
 
 
-def test_plotmap(request):
+def test_plotmap():
 
     # Check that detecting duplicate mappings works
     pd1 = PlotDimension(dim=0)
@@ -126,7 +132,7 @@ def assert_data_shape(pm, data, desired):
     return data_a, pm_a
 
 
-def test_1d(request, data_1d):
+def test_1d(data_1d):
 
     # insert default axes for rows, columns, layers
     desired = data_1d.data[None, None, None, :]
@@ -180,7 +186,7 @@ def test_1d(request, data_1d):
     assert_data_shape(pm, values, desired)
 
 
-def test_2d(request, data_2d):
+def test_2d(data_2d):
     # insert default axes for rows and columns
     desired = data_2d.data[None, None, :, :]
 
@@ -211,7 +217,7 @@ def test_2d(request, data_2d):
 
     # Fix dimension 0 at particular value
     idx = data_2d.data.shape[0] // 2
-    desired = data_2d.data[None, None, (idx, ), :]
+    desired = data_2d.data[None, None, (idx,), :]
     pm = PlotMap()
     pm.map_xaxis(dim=1)
     pm.add_fixed(dim=0, at_idx=idx)
@@ -219,8 +225,8 @@ def test_2d(request, data_2d):
 
     # Determine row indices from at_val and values
     values = data_2d.grid[0]
-    at_val = values[:len(values)//2]
-    desired = data_2d.data[:len(values)//2, None, None, :]
+    at_val = values[: len(values) // 2]
+    desired = data_2d.data[: len(values) // 2, None, None, :]
     pm = PlotMap()
     pm.map_xaxis(dim=1)
     pm.map_rows(dim=0, at_val=at_val, values=values)
@@ -228,15 +234,15 @@ def test_2d(request, data_2d):
 
     # Determine row indices and x-axis from at_val and values
     values1 = data_2d.grid[1]
-    at_val1 = values1[len(values1)//2:]
-    desired = data_2d.data[None, :len(values)//2, None, len(values1)//2:]
+    at_val1 = values1[len(values1) // 2 :]
+    desired = data_2d.data[None, : len(values) // 2, None, len(values1) // 2 :]
     pm = PlotMap()
     pm.map_xaxis(dim=1, at_val=at_val1, values=values1)
     pm.map_columns(dim=0, at_val=at_val, values=values)
     assert_data_shape(pm, data_2d.data, desired)
 
 
-def test_3d(request, data_3d):
+def test_3d(data_3d):
     """
     Test PlotMap with 3-dimensional data
     """
@@ -279,7 +285,7 @@ def test_3d(request, data_3d):
     # Test: Fix more than one dimension
     idx0 = dd.shape[0] // 2
     idx1 = dd.shape[1] - 1
-    desired = dd[None, idx0:idx0+1, idx1:idx1+1, :]
+    desired = dd[None, idx0 : idx0 + 1, idx1 : idx1 + 1, :]
 
     pm = PlotMap()
     pm.map_xaxis(dim=2, values=data_3d.grid[2])
@@ -287,7 +293,7 @@ def test_3d(request, data_3d):
     assert_data_shape(pm, dd, desired)
 
 
-def test_4d(request, data_4d):
+def test_4d(data_4d):
 
     x0, x1, x2, x3, f = data_4d
 
@@ -309,10 +315,3 @@ def test_4d(request, data_4d):
     pm.map_layers(dim=3, values=x3, at_idx=i3)
 
     assert_data_shape(pm, f, desired)
-
-
-
-
-
-
-

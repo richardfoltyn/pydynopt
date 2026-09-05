@@ -177,7 +177,7 @@ def insert_generic(
     from numba import types
 
     f = None
-    if (isinstance(obj, types.Integer) and isinstance(values, types.Number)) or (
+    if (isinstance(obj, types.Integer) and isinstance(values, types.Number)) or (  # type: ignore
         isinstance(obj, types.Array)
         and isinstance(values, types.Array)
         and obj.ndim <= 1

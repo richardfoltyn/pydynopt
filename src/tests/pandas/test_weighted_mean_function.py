@@ -96,7 +96,9 @@ def test_multi_index_output() -> None:
     """Verify multi-index output structure for weighted means."""
     df_data = _sample_data()
 
-    result = weighted_mean(df_data, varlist=['x', 'y'], weights='weight', multi_index=True)
+    result = weighted_mean(
+        df_data, varlist=['x', 'y'], weights='weight', multi_index=True
+    )
 
     assert isinstance(result.index, pd.MultiIndex)
     assert result.index.names == ['Variable', 'Moment']
