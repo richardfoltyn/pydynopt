@@ -1,3 +1,19 @@
+"""
+Routines for converting between flat indices and multidimensional coordinates.
+
+- Flat index to coordinates conversion (ind2sub)
+- Coordinates to flat index conversion (sub2ind)
+- JIT-compiled dispatchers and implementations for scalar and array inputs
+
+This work is licensed under CC BY 4.0,
+https://creativecommons.org/licenses/by/4.0/
+
+Author: Richard Foltyn
+"""
+
+from collections.abc import Callable, Sequence
+from typing import Any
+
 import numpy as np
 
 from pydynopt.arrays.numba.indexing import (
@@ -15,6 +31,11 @@ from pydynopt.arrays.numba.indexing import (
 )
 from pydynopt.numba import JIT_OPTIONS, JIT_OPTIONS_INLINE, jit, overload
 
+__all__ = [
+    'ind2sub',
+    'sub2ind',
+]
+
 ind2sub_scalar_jit = jit(ind2sub_scalar, **JIT_OPTIONS)
 ind2sub_array_jit = jit(ind2sub_array, **JIT_OPTIONS)
 ind2sub_scalar_impl_jit = jit(ind2sub_scalar_impl, **JIT_OPTIONS)
@@ -28,31 +49,34 @@ sub2ind_scalar_jit = jit(sub2ind_scalar, **JIT_OPTIONS)
 sub2ind_array_jit = jit(sub2ind_array, **JIT_OPTIONS)
 
 
-def ind2sub(indices, shape, axis=None, out=None):
+def ind2sub(
+    indices: int | Sequence[int] | np.ndarray,
+    shape: Sequence[int],
+    axis: int | None = None,
+    out: np.ndarray | None = None,
+) -> int | np.ndarray:
     """
-    Converts a flat index or array of flat indices into a tuple of coordinate
-    arrays.
+    Convert flat indices into coordinate arrays.
 
-    Equivalent to Numpy's unravel_index(), but with fewer features and thus
-    hopefully faster.
+    Equivalent to NumPy's ``unravel_index()``, but with fewer features and thus
+    potentially faster.
 
     Parameters
     ----------
-    indices : int or array_like
-        An integer or integer array whose elements are indices into the
-        flattened version of an array of dimensions `shape`.
-    axis : int, optional
-        If not None, restricts the return array to contain only the coordinates
-        along `axis`.
-    shape : array_like
-        The shape of the array to use for unraveling indices.
-    out : np.ndarray or None
-        Optional output array (only Numpy arrays supported in Numba mode)
+    indices
+        An integer or integer array whose elements are flat indices into an array
+        of dimensions ``shape``.
+    shape
+        Shape of the array to use for unraveling indices.
+    axis
+        If specified, restricts the return value to contain only the coordinates
+        along ``axis``.
+    out
+        Optional output array.
 
     Returns
     -------
-    coords : int or np.ndarray
-        Array of coordinates
+    Array of coordinates or scalar coordinate along the requested axis.
     """
     if np.isscalar(indices):
         if axis is None:
@@ -62,39 +86,40 @@ def ind2sub(indices, shape, axis=None, out=None):
                 out = np.empty(len(shape), dtype=np.asarray(indices).dtype)
 
             out = ind2sub_scalar_impl_jit(indices, shape, axis, out)
+        elif out is not None:
+            # JIT-able routine writes index into first element of out!
+            out = ind2sub_axis_scalar_jit(indices, shape, axis, out)
         else:
-            if out is not None:
-                # Implementation routine ignores out argument and only returns
-                # a scalar.
-                out = ind2sub_axis_scalar_impl_jit(indices, shape, axis)
-            else:
-                # JIT-able routine writes index into first element of out!
-                out = ind2sub_axis_scalar_jit(indices, shape, axis, out)
+            # Implementation routine ignores out argument and only returns
+            # a scalar.
+            out = ind2sub_axis_scalar_impl_jit(indices, shape, axis)
     else:
+        indices_arr = np.asarray(indices)
         if out is None:
-            shp = (len(indices),)
-            if axis is None:
-                # With axis=None, output will be a 2d-array.
-                shp += (len(shape),)
+            shp = (
+                (len(shape), len(indices_arr)) if axis is None else (len(indices_arr),)
+            )
+            out = np.empty(shp, dtype=indices_arr.dtype)
 
         if axis is None:
-            out = ind2sub_array_impl_jit(indices, shape, axis, out)
+            out = ind2sub_array_impl_jit(indices_arr, shape, axis, out)
         else:
-            out = ind2sub_axis_array_impl_jit(indices, shape, axis, out)
+            out = ind2sub_axis_array_impl_jit(indices_arr, shape, axis, out)
 
     return out
 
 
 @overload(ind2sub, jit_options=JIT_OPTIONS_INLINE)
-def ind2sub_impl_generic(indices, shape, axis, out):
+def ind2sub_impl_generic(
+    indices: Any, shape: Any, axis: Any, out: Any
+) -> Callable[..., Any] | None:
     """
     Return JIT-able function when all arguments are present.
 
-    The routine requires that the `out` argument is not explicitly passed
+    The routine requires that the ``out`` argument is not explicitly passed
     as None, since the JIT-able functions returned here for the most part
-    assume that the `out` array is allocated (except for the scalar case
+    assume that the ``out`` array is allocated (except for the scalar case
     when axis=None).
-
     """
     from numba import types
 
@@ -114,70 +139,69 @@ def ind2sub_impl_generic(indices, shape, axis, out):
 
 
 @overload(ind2sub, jit_options=JIT_OPTIONS_INLINE)
-def ind2sub_generic(indices, shape, axis=None, out=None):
+def ind2sub_generic(
+    indices: Any, shape: Any, axis: Any = None, out: Any = None
+) -> Callable[..., Any] | None:
     """
     Return JIT-able function appropriate for the given arguments.
 
-    If both axis and out are provided, this function will
-    not be called in the first place! We therefore only need to handle
-    the case when one of them is missing.
+    If both axis and out are provided, this function will not be called in
+    the first place! We therefore only need to handle the case when one of
+    them is missing.
     """
     from numba import types
 
     f = None
     if isinstance(indices, types.Integer):
-        if axis is not None:
-            # out missing, will be ignored by implementation
-            f = ind2sub_axis_scalar_impl
-        else:
-            # axis is missing, so implementation will return 1d-array with
-            # all coordinates. out array will be allocated if missing.
-            f = ind2sub_scalar
+        f = ind2sub_axis_scalar_impl if axis is not None else ind2sub_scalar
     elif isinstance(indices, types.Array):
-        if axis is not None:
-            # out missing, will be allocated on demand
-            f = ind2sub_axis_array
-        else:
-            # axis is missing, so implementation will return 2d-array with
-            # all coordinates. out array will be allocated if missing.
-            f = ind2sub_array
+        f = ind2sub_axis_array if axis is not None else ind2sub_array
 
     return f
 
 
-def sub2ind(coords, shape, out=None):
+def sub2ind(
+    coords: Sequence[int] | np.ndarray,
+    shape: Sequence[int],
+    out: np.ndarray | None = None,
+) -> int | np.ndarray:
     """
-    Converts an array of indices (coordinates) into a multi-dimensional array
-    into an array of flat indices.
+    Convert an array of coordinates into flat indices.
 
     Parameters
     ----------
-    coords : array_like
-        Integer array of coordinates. Coordinates for each dimension are
-        arranged along the first axis.
-    shape : array_like
-        Shape of array into which indices from `coords` apply.
-    out : np.ndarray or None
+    coords
+        Integer array or sequence of coordinates. Coordinates for each dimension
+        are arranged along the first axis.
+    shape
+        Shape of array into which indices from ``coords`` apply.
+    out
         Optional output array of flat indices.
 
     Returns
     -------
-    out : np.ndarray
-        Array of indices into flatted array.
+    Array or scalar of indices into the flattened array.
     """
-    coords = np.atleast_1d(coords)
+    coords_arr = np.atleast_1d(coords)
 
-    if coords.ndim == 1:
-        out = sub2ind_scalar_jit(coords, shape, out)
-    elif coords.ndim == 2:
-        out = sub2ind_array_jit(coords, shape, out)
+    if coords_arr.ndim == 1:
+        res = sub2ind_scalar_jit(coords_arr, shape, out)
+    elif coords_arr.ndim == 2:
+        res = sub2ind_array_jit(coords_arr, shape, out)
+    else:
+        msg = f'Invalid coordinates dimension: {coords_arr.ndim}'
+        raise ValueError(msg)
 
-    return out
+    return res
 
 
 @overload(sub2ind, jit_options=JIT_OPTIONS_INLINE)
-def sub2ind_generic(coords, shape, out=None):
-
+def sub2ind_generic(
+    coords: Any, shape: Any, out: Any = None
+) -> Callable[..., Any] | None:
+    """
+    Dispatcher for sub2ind when out argument is not provided.
+    """
     from numba import types
 
     from .numba.indexing import sub2ind_array, sub2ind_scalar
@@ -190,20 +214,23 @@ def sub2ind_generic(coords, shape, out=None):
             elif coords.ndim >= 2:
                 f = sub2ind_array
         else:
-            # probably coords argument is a tuple or some other array-like
-            # object that can be indexed. Assume it's one-dimensional.
+            # Assume one-dimensional sequence or tuple
             f = sub2ind_scalar
 
     return f
 
 
 @overload(sub2ind, jit_options=JIT_OPTIONS_INLINE)
-def sub2ind_impl_generic(coords, shape, out):
+def sub2ind_impl_generic(
+    coords: Any, shape: Any, out: Any
+) -> Callable[..., Any] | None:
+    """
+    Dispatcher for sub2ind when out argument is provided.
+    """
     from numba import types
 
     f = None
-    if isinstance(coords, types.Array) and out is not None:
-        if coords.ndim >= 2:
-            f = sub2ind_array_impl
+    if isinstance(coords, types.Array) and out is not None and coords.ndim >= 2:
+        f = sub2ind_array_impl
 
     return f
