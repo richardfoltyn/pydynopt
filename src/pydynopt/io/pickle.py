@@ -37,9 +37,9 @@ def _corrupt_file_errors() -> tuple[type[BaseException], ...]:
 
     errors.append(lzma.LZMAError)
     try:
-        import lz4.frame
+        from compression import zstd  # type: ignore
 
-        errors.append(lz4.frame.LZ4FrameError)
+        errors.append(zstd.ZstdError)
     except (ImportError, AttributeError):
         pass
     try:
@@ -132,7 +132,7 @@ def dump(
                 ) from None
         elif suffix in ('.zstd', '.zst'):
             try:
-                from compression import zstd  # ty: ignore[unresolved-import]
+                from compression import zstd  # type: ignore
 
                 lopen = zstd.open
                 kw = {
@@ -190,7 +190,7 @@ def dump(
         else:
             write_path = path
 
-        with lopen(write_path, 'wb', **kw) as f:  # ty: ignore[no-matching-overload]
+        with lopen(write_path, 'wb', **kw) as f:  # type: ignore
             pickle.dump(obj, f)
 
         if tmp_path is not None:
@@ -205,7 +205,25 @@ def dump(
 
 
 def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -> Any:
-    """Load a pickled object from a given file, optionally decompressing it."""
+    """
+    Load a pickled object from a given file.
+
+    Optionally decompress the file if required.
+
+    Parameters
+    ----------
+    path
+        File name or path.
+    directory
+        Base directory.
+    kwargs
+        Keyword arguments passed to respective ``open()`` function of the chosen
+        compression library.
+
+    Returns
+    -------
+    Unpickled object.
+    """
     logger = logging.getLogger('IO')
     if not path:
         raise ValueError(f"Invalid path '{path}'")
@@ -235,7 +253,7 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
         lopen = lzma.open
     elif suffix in ('.zstd', '.zst'):
         try:
-            from compression import zstd  # ty: ignore[unresolved-import]
+            from compression import zstd  # type: ignore
 
             lopen = zstd.open
         except ImportError:
@@ -257,6 +275,10 @@ def load(path: Path | str, directory: Path | str | None = None, **kwargs: Any) -
             obj = pickle.load(f)
     except _corrupt_file_errors() as err:
         raise CorruptFileError(f'Could not load pickle file: {path}') from err
+    except RuntimeError as err:
+        if suffix == '.lz4' or 'LZ4F_' in str(err):
+            raise CorruptFileError(f'Could not load pickle file: {path}') from err
+        raise
 
     return obj
 
@@ -269,10 +291,37 @@ def get_cached_object(
     compress: bool = True,
     **kwargs: Any,
 ) -> Any:
-    """Load an object from cache or compute and persist it."""
+    """
+    Load object from cache file, if present.
+
+    Otherwise, call given function to compute object and store it in given
+    cache file.
+
+    Parameters
+    ----------
+    fcn
+        Function used to compute object if cache file is not found.
+    args
+        Positional arguments passed to `fcn`.
+    cache_file
+        Cache file name or path.
+    cache_dir
+        Cache directory.
+    compress
+        Use compression when storing the cache file.
+    kwargs
+        Keyword arguments passed to `fcn`.
+
+    Returns
+    -------
+    Computed or cached object.
+    """
+    logger = logging.getLogger('IO')
     path = None
     if cache_file is not None:
-        path = Path(cache_dir) / cache_file if cache_dir is not None else Path(cache_file)
+        path = (
+            Path(cache_dir) / cache_file if cache_dir is not None else Path(cache_file)
+        )
 
     if path:
         extensions = ('', '.xz', '.lz4', '.gz', '.zstd', '.zst')
@@ -282,13 +331,13 @@ def get_cached_object(
                 try:
                     return load(candidate)
                 except CorruptFileError:
-                    logging.warning(
+                    logger.warning(
                         'Cache file %s is corrupt; ignoring it and recomputing',
                         candidate,
                     )
 
     fcn_name = getattr(fcn, '__name__', 'callable')
-    logging.info(f'Cached result not found, calling {fcn_name}()')
+    logger.info(f'Cached result not found, calling {fcn_name}()')
     obj = fcn(*args, **kwargs)
     if path:
         dump(path, obj, compress=compress, overwrite=True)
@@ -296,7 +345,22 @@ def get_cached_object(
 
 
 def get_hash_value(*args: Any, **kwargs: Any) -> str:
-    """Convert sequence of objects to a hash value."""
+    """
+    Convert sequence of objects to a hash value.
+
+    Can be used as a filename component.
+
+    Parameters
+    ----------
+    args
+        Positional arguments to hash.
+    kwargs
+        Keyword arguments to hash.
+
+    Returns
+    -------
+    Hash value.
+    """
     import hashlib
 
     hashes = []
@@ -310,7 +374,7 @@ def get_hash_value(*args: Any, **kwargs: Any) -> str:
     for key, value in kwargs.items():
         for obj in (key, value):
             try:
-                h = hashlib.sha256(obj).hexdigest()  # ty: ignore[invalid-argument-type]
+                h = hashlib.sha256(obj).hexdigest()  # type: ignore
             except TypeError:
                 h = hashlib.sha3_256(f'{obj}'.encode()).hexdigest()
             hashes.append(h)
