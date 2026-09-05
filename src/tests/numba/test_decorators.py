@@ -55,7 +55,7 @@ def test_overload_forwards_explicit_strict_mode() -> None:
         _call_strict_target(1)
 
 
-def test_no_numba_decorators_arrays_and_interpolation_in_clean_process() -> None:
+def test_no_numba_decorators_packages_in_clean_process() -> None:
     code = """
 import numpy as np
 import pydynopt
@@ -65,6 +65,8 @@ from pydynopt.interpolate import (
     interp1d, interp1d_eval, interp1d_locate,
     interp2d, interp2d_eval, interp2d_locate,
 )
+from pydynopt.optimize import OptimResult, RootResult, brentq, newton_bisect
+from pydynopt.optimize.common import nderiv
 from pydynopt.numba.dummy import (
     jit_dummy, jitclass_dummy, overload_dummy, register_jitable_dummy,
 )
@@ -103,6 +105,18 @@ fp2 = np.array([[0.0, 2.0], [1.0, 3.0]])
 index2, weight2 = interp2d_locate(0.5, 0.5, xp, xp)
 assert interp2d_eval(index2, weight2, fp2) == 1.5
 assert interp2d(0.5, 0.5, xp, xp, fp2) == 1.5
+
+root_func = lambda x: x * x - 2.0
+root_jac = lambda x: (x * x - 2.0, 2.0 * x)
+assert np.isclose(nderiv(root_func, 2), 4.0)
+root, fx = newton_bisect(root_func, 1, 0, 2)
+assert np.isclose(root, np.sqrt(2.0))
+assert abs(fx) < 1.0e-8
+root, result = newton_bisect(root_jac, 1, 0, 2, jac=True, full_output=True)
+assert isinstance(result, RootResult)
+assert result.converged and result.flag == 'converged'
+assert np.isclose(brentq(root_func, 0, 2), np.sqrt(2.0))
+assert repr(OptimResult())
 """
     result = subprocess.run(
         [sys.executable, '-c', code],
