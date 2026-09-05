@@ -1,9 +1,16 @@
-"""
+"""Provide optional Numba integration with pure-Python fallbacks.
+
+- Export Numba decorators and scalar types when Numba is enabled.
+- Export no-op substitutes otherwise.
+
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
 
 Author: Richard Foltyn
 """
+
+from collections.abc import Callable, Mapping
+from typing import Any, overload as typing_overload
 
 from .dummy import (
     boolean,
@@ -14,11 +21,11 @@ from .dummy import (
     int16,
     int32,
     int64,
-    jit,
-    jitclass,
-    overload,
+    jit as _jit,
+    jitclass as _jitclass,
+    overload as _overload,
     prange,
-    register_jitable,
+    register_jitable as _register_jitable,
     string,
     uint8,
     uint16,
@@ -26,50 +33,174 @@ from .dummy import (
     uint64,
 )
 
-has_numba = False
-JIT_OPTIONS = {}
-JIT_OPTIONS_INLINE = {}
+# Numba and fallback implementations have unrelated runtime types.
+_jit: Any
+_jitclass: Any
+_overload: Any
+_register_jitable: Any
+boolean: Any
+float32: Any
+float64: Any
+int8: Any
+int16: Any
+int32: Any
+int64: Any
+string: Any
+uint8: Any
+uint16: Any
+uint32: Any
+uint64: Any
+
+has_numba: bool = False
+JIT_OPTIONS: dict[str, Any] = {}
+JIT_OPTIONS_INLINE: dict[str, Any] = {}
 
 from pydynopt import use_numba
 
 if use_numba:
     try:
-        from numba import jit
-
-        try:
-            # Move to numba.experimental in newer Numba releases, try this first
-            # to avoid warnings
-            from numba.experimental import jitclass
-        except ImportError:
-            from numba import jitclass
-        from numba import from_dtype, prange
-        from numba.extending import overload, register_jitable
-        from numba.types import (
-            boolean,
-            float32,
-            float64,
-            int8,
-            int16,
-            int32,
-            int64,
-            string,
-            uint8,
-            uint16,
-            uint32,
-            uint64,
+        from numba import from_dtype, jit as _jit, prange, types as _types
+        from numba.experimental import jitclass as _jitclass
+        from numba.extending import (
+            overload as _overload,
+            register_jitable as _register_jitable,
         )
+
+        boolean = _types.boolean
+        float32 = _types.float32
+        float64 = _types.float64
+        int8 = _types.int8
+        int16 = _types.int16
+        int32 = _types.int32
+        int64 = _types.int64
+        string = _types.string
+        uint8 = _types.uint8
+        uint16 = _types.uint16
+        uint32 = _types.uint32
+        uint64 = _types.uint64
 
         has_numba = True
 
-        JIT_OPTIONS = {"nopython": True, "nogil": True, "parallel": False}
+        JIT_OPTIONS = {'nopython': True, 'nogil': True, 'parallel': False}
         JIT_OPTIONS_INLINE = {
-            "nopython": True,
-            "nogil": True,
-            "parallel": False,
+            'nopython': True,
+            'nogil': True,
+            'parallel': False,
             'inline': 'always',
         }
 
     except ImportError:
-        # Nothing to do, use the default decorators defined above
+        # Use the default decorators and types imported above.
         pass
 
+
+@typing_overload
+def jit[F: Callable[..., Any]](
+    signature_or_function: F,
+    *jit_args: Any,
+    **jit_kwargs: Any,
+) -> F: ...
+
+
+@typing_overload
+def jit[F: Callable[..., Any]](
+    signature_or_function: Any = None,
+    *jit_args: Any,
+    **jit_kwargs: Any,
+) -> Callable[[F], F]: ...
+
+
+def jit(
+    signature_or_function: Any = None,
+    *jit_args: Any,
+    **jit_kwargs: Any,
+) -> Any:
+    """Apply the active JIT decorator without changing static callable types.
+
+    Parameters
+    ----------
+    signature_or_function
+        Function or Numba signature passed to the active implementation.
+    *jit_args
+        Positional arguments passed to the active implementation.
+    **jit_kwargs
+        Keyword arguments passed to the active implementation.
+
+    Returns
+    -------
+    Decorated callable or decorator returned by the active implementation.
+    """
+    return _jit(signature_or_function, *jit_args, **jit_kwargs)
+
+
+def jitclass[T](spec: Any) -> Callable[[type[T]], type[T]]:
+    """Create a JIT class decorator that preserves the static class type.
+
+    Parameters
+    ----------
+    spec
+        Numba class specification.
+
+    Returns
+    -------
+    Decorator supplied by the active implementation.
+    """
+    return _jitclass(spec)
+
+
+def overload[F: Callable[..., Any]](
+    func: Callable[..., Any],
+    jit_options: Mapping[str, Any] | None = None,
+    strict: bool = True,
+    **kwargs: Any,
+) -> Callable[[F], F]:
+    """Create an overload decorator that preserves the implementation type.
+
+    Parameters
+    ----------
+    func
+        Function for which an overload is registered.
+    jit_options
+        JIT options passed to the active implementation.
+    strict
+        Whether argument and implementation signatures must match strictly.
+    **kwargs
+        Additional options passed to the active implementation.
+
+    Returns
+    -------
+    Decorator supplied by the active implementation.
+    """
+    return _overload(
+        func,
+        jit_options=jit_options,
+        strict=strict,
+        **kwargs,
+    )
+
+
+@typing_overload
+def register_jitable[F: Callable[..., Any]](func: F, /) -> F: ...
+
+
+@typing_overload
+def register_jitable[F: Callable[..., Any]](
+    *args: Any, **kwargs: Any
+) -> Callable[[F], F]: ...
+
+
+def register_jitable(*args: Any, **kwargs: Any) -> Any:
+    """Register a callable while preserving its static type.
+
+    Parameters
+    ----------
+    *args
+        Positional arguments passed to the active implementation.
+    **kwargs
+        Keyword arguments passed to the active implementation.
+
+    Returns
+    -------
+    Registered callable or decorator returned by the active implementation.
+    """
+    return _register_jitable(*args, **kwargs)
