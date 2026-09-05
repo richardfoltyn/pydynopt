@@ -8,28 +8,21 @@ and plotting tasks that arise when solving macroeconomic models in Python.
 
 Author: Richard Foltyn
 
-## Installation
+## Development setup
 
-To install `pydynopt` with base dependencies:
+This repository uses [uv](https://docs.astral.sh/uv/) for environment and dependency management. From a checkout, create the development environment and install all project, development, acceleration, and compression dependencies:
 
 ```bash
-pip install .
+uv sync
 ```
 
-The base installation omits optional acceleration and compression packages. You can request optional functionality using the following extras:
+Run project commands through `uv`:
 
-- **Numba acceleration**:
-  ```bash
-  pip install "pydynopt[numba]"
-  ```
-  Installs `numba` to accelerate computations. If not installed, `pydynopt` automatically falls back to pure-Python implementations.
-- **Compression**:
-  ```bash
-  pip install "pydynopt[compression]"
-  ```
-  Installs `lz4` and `pyzstd` to support LZ4 and Zstandard formats for compressed pickle persistence. (Note that Python 3.14+ has standard-library Zstandard support).
+```bash
+uv run pytest -n auto
+```
 
-To set up the development environment, run `uv sync` to install all optional and development packages via the `dev` dependency group.
+The development dependency group includes `numba` for accelerated implementations and `lz4` and `pyzstd` for compressed pickle persistence.
 
 ## License
 
