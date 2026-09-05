@@ -407,7 +407,7 @@ def patsy_add_levels(formula: str, data: Any) -> tuple[str, list[str]]:
 
     if mdesc.lhs_termlist:
         formula_lhs, factors_lhs = add_levels(mdesc.lhs_termlist)
-        formula_upd = ' ~ '.join((formula_lhs, formula_upd))
+        formula_upd = f'{formula_lhs} ~ {formula_upd}'
         factors.extend(factors_lhs)
 
     factors = list(dict.fromkeys(factors).keys())

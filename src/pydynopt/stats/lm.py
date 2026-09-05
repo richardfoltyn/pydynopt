@@ -188,12 +188,22 @@ def areg(
 
     y_raw: pd.DataFrame | pd.Series
     X: pd.DataFrame
+    retained_rows: np.ndarray | None = None
 
     if endog is not None and exog is not None:
         y_raw = endog.copy()
         X = exog.copy()
     elif formula is not None and data is not None:
-        y_raw, X = patsy.dmatrices(formula, data, return_type='dataframe')
+        # Use a unique positional index to identify rows retained by Patsy. The
+        # absorb index generally contains duplicates and cannot safely align
+        # observations after Patsy drops missing values.
+        formula_data = data.copy(deep=False)
+        formula_data.index = pd.RangeIndex(len(formula_data))
+        y_raw, X = patsy.dmatrices(formula, formula_data, return_type='dataframe')
+        retained_rows = X.index.to_numpy(dtype=np.intp, copy=True)
+        data = data.iloc[retained_rows].copy(deep=False)
+        y_raw.index = data.index
+        X.index = data.index
     else:
         raise ValueError('Either data or endog + exog arguments required')
 
@@ -210,19 +220,18 @@ def areg(
             weights_series = weights
 
         weights_arr = np.array(weights_series, dtype=float, copy=True)
+        if retained_rows is not None and len(weights_arr) != len(X):
+            weights_arr = weights_arr[retained_rows]
+
         sw = pd.Series(weights_arr, name=weights_name, index=X.index, copy=True)
+        keep = np.flatnonzero(sw.to_numpy() > 0.0)
 
-        keep = sw > 0.0
+        if len(keep) != len(sw):
+            y_raw = y_raw.iloc[keep].copy()
+            X = X.iloc[keep].copy()
+            sw = sw.iloc[keep].copy()
 
-        if not keep.all():
-            if isinstance(y_raw, pd.DataFrame):
-                y_raw = y_raw.loc[keep].copy()
-            else:
-                y_raw = y_raw.loc[keep].copy()
-            X = X.loc[keep].copy()
-            sw = sw.loc[keep].copy()
-            if data is not None:
-                data = data.loc[keep].copy()
+        weights_arr = sw.to_numpy(dtype=float, copy=True)
 
         # Weights normalized within FE unit
         sw_sum = sw.groupby(absorb).transform('sum')
@@ -237,12 +246,7 @@ def areg(
     # Detect constant columns (std is NaN for single obs)
     has_const = any(not (v.std() > 0) for name, v in X.items())
 
-    if data is not None:
-        groups = data.index.get_level_values(absorb)
-    elif exog is not None:
-        groups = exog.index.get_level_values(absorb)
-    else:
-        raise ValueError('Either data or exog must be provided')
+    groups = X.index.get_level_values(absorb)
 
     ybar = float(np.average(y, weights=weights_arr))
     Xbar = np.average(X, axis=0, weights=weights_arr)

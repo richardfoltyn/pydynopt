@@ -535,7 +535,7 @@ def percentile_scalar(
     -------
     Percentile corresponding to the given rank.
     """
-    qrank = np.asarray(prank, dtype=np.asarray(x).dtype) / 100.0
+    qrank = np.atleast_1d(np.asarray(prank, dtype=np.asarray(x).dtype)) / 100.0
     pctl1d = quantile(
         x,
         pmf,
