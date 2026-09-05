@@ -5,6 +5,8 @@ This repository uses `uv` for package management and environment isolation. Do n
 ## Running Commands
 
 All commands (tests, formatting, linting, type-checking) must be executed using `uv`.
+Ruff and ty are pinned project development dependencies. Always invoke them with
+`uv run`; do not use system executables or install them with `uv tool install`.
 
 ### Testing
 
