@@ -9,7 +9,6 @@ from pydynopt.plot.plotmap import PlotMap, plot_pm
 
 
 class NDArrayLattice(PlotMap):
-
     def set_fixed_dims(self, dim, at_idx):
         """
         Fix data array dimensions to specific indexes. This is useful for
@@ -69,4 +68,3 @@ class NDArrayLattice(PlotMap):
     @staticmethod
     def plot_arrays(*args, **kwargs):
         plot_pm(*args, **kwargs)
-

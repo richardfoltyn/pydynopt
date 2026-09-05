@@ -115,8 +115,6 @@ def demean_within(
     return x_demean, means
 
 
-
-
 @overload
 def _areg_fix_index(d: pd.DataFrame, absorb: str) -> pd.DataFrame: ...
 

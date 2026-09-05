@@ -20,7 +20,6 @@ class SerialPool:
         """
         No-op method to support context managers.
         """
-        pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """

@@ -56,7 +56,7 @@ def _check_stata_works(path_exe: str | Path) -> bool:
     # Execute Stata
     import subprocess
 
-    result = subprocess.run([str(path_exe), batch, str(do_file)], cwd=str(dtmp))
+    subprocess.run([str(path_exe), batch, str(do_file)], cwd=str(dtmp), check=False)
 
     # Read output file
     works = False
@@ -109,12 +109,12 @@ def find_stata(dirs: str | Path | Sequence[str | Path] | None = None) -> Path:
     user_dirs = dirs
 
     if is_win:
-        sysdrive = os.environ.get('SystemDrive', 'C:')
+        sysdrive = os.environ.get('SYSTEMDRIVE', 'C:')
         if sysdrive.endswith(':'):
             sysdrive += '\\'
         dirs_list = [
             os.environ.get('PROGRAMFILES', 'C:\\Program Files'),
-            os.environ.get('PROGRAMFILES(x86)', 'C:\\Program Files (x86)'),
+            os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)'),
             sysdrive,
         ]
         dirs_list = [os.path.join(d, 'Stata*') for d in dirs_list if d]
@@ -228,8 +228,10 @@ def run_stata(
     # script completed.
     batch = '/e' if sys.platform.lower().startswith('win') else '-b'
 
-    # Execute Stata
-    result = subprocess.run([str(path_exe), batch, str(do_file)], **kw)
+    # Execute Stata. check=True makes subprocess.run raise on a nonzero exit code.
+    # Pop the caller's setting to pass it explicitly; otherwise handle it below.
+    check = kw.pop('check', False)
+    result = subprocess.run([str(path_exe), batch, str(do_file)], check=check, **kw)
 
     if result.returncode:
         raise RuntimeWarning(f'Stata exited with return code {result.returncode}')

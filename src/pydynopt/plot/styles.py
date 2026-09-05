@@ -192,31 +192,21 @@ class Cycler[T]:
 class Colors(Cycler[Any]):
     """Cycler for color sequences."""
 
-    pass
-
 
 class LineStyle(Cycler[str]):
     """Cycler for line style sequences."""
-
-    pass
 
 
 class LineWidth(Cycler[float]):
     """Cycler for line width sequences."""
 
-    pass
-
 
 class Marker(Cycler[Any]):
     """Cycler for marker sequences."""
 
-    pass
-
 
 class Transparency(Cycler[float]):
     """Cycler for transparency/alpha sequences."""
-
-    pass
 
 
 class ConstFillProperty[T]:
@@ -1132,13 +1122,12 @@ class AbstractStyle:
         for k, v in _FIGURE_LAYOUT_MAP.items():
             if self._figure.get(k, False):
                 return v
-        else:
-            return FigureLayout.DEFAULT
+        return FigureLayout.DEFAULT
 
     @figure_layout.setter
     def figure_layout(self, value: FigureLayout) -> None:
         if not isinstance(value, FigureLayout):
-            raise ValueError('Argument must be of FigureLayout type')
+            raise TypeError('Argument must be of FigureLayout type')
 
         # Delete all layout entries, add (back) only the one requested by caller
 

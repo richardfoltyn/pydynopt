@@ -52,23 +52,28 @@ def rouwenhorst(n, mu, rho, sigma):
         Pi = np.ones((1, 1))
         return z, Pi
 
-    p = (1+rho)/2
-    Pi = np.array([[p, 1-p], [1-p, p]])
+    p = (1 + rho) / 2
+    Pi = np.array([[p, 1 - p], [1 - p, p]])
 
-    for i in range(Pi.shape[0], n):
+    for _ in range(Pi.shape[0], n):
         tmp = np.pad(Pi, 1, mode='constant', constant_values=0)
-        Pi = p * tmp[1:, 1:] + (1-p) * tmp[1:, :-1] + \
-             (1-p) * tmp[:-1, 1:] + p * tmp[:-1, :-1]
+        Pi = (
+            p * tmp[1:, 1:]
+            + (1 - p) * tmp[1:, :-1]
+            + (1 - p) * tmp[:-1, 1:]
+            + p * tmp[:-1, :-1]
+        )
         Pi[1:-1, :] /= 2
 
-    fi = np.sqrt(n-1) * sigma / np.sqrt(1 - rho ** 2)
+    fi = np.sqrt(n - 1) * sigma / np.sqrt(1 - rho**2)
     z = np.linspace(-fi, fi, n) + mu
 
     return z, Pi
 
 
-def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
-                        mu0=None, inverse=False):
+def markov_ergodic_dist(
+    transm, tol=1e-12, maxiter=10000, transpose=True, mu0=None, inverse=False
+):
     """
     Compute the ergodic distribution implied by a given Markov chain transition
     matrix.
@@ -105,9 +110,9 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
     if not inverse:
         if mu0 is None:
             # start out with uniform distribution
-            mu0 = np.ones((transm.shape[0], ), dtype=np.float64)/transm.shape[0]
+            mu0 = np.ones((transm.shape[0],), dtype=np.float64) / transm.shape[0]
 
-        for it in range(maxiter):
+        for _it in range(maxiter):
             mu1 = transm.dot(mu0)
 
             dv = np.max(np.abs(mu0 - mu1))
@@ -119,7 +124,7 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
         else:
             msg = f'Failed to converge (delta = {dv:.e})'
             print(msg)
-            raise ConvergenceError(it, dv)
+            raise ConvergenceError(_it, dv)
     else:
         m = transm - np.identity(transm.shape[0])
         m[-1] = 1
@@ -131,8 +136,7 @@ def markov_ergodic_dist(transm, tol=1e-12, maxiter=10000, transpose=True,
     return mu
 
 
-def markov_moments(states, transm, ergodic_dist=None, moments=False,
-                   *args, **kwargs):
+def markov_moments(states, transm, ergodic_dist=None, moments=False, *args, **kwargs):
     """
     Computes (exact) moments implied my a given Markov process, including
     the autocorrelation and the unconditional and conditional standard
@@ -182,7 +186,7 @@ def markov_moments(states, transm, ergodic_dist=None, moments=False,
         # Compute skewness and kurtosis only if requested
         if moments:
             for k in range(3, 5):
-                m[k] = np.dot(np.power(x - m[1], k), ergodic_dist) / m[2] ** (k/2.0)
+                m[k] = np.dot(np.power(x - m[1], k), ergodic_dist) / m[2] ** (k / 2.0)
 
         x_demeaned = x - m[1]
         x_m1 = np.outer(x_demeaned, x_demeaned)
@@ -194,7 +198,7 @@ def markov_moments(states, transm, ergodic_dist=None, moments=False,
         # implied autocorrelation and variance of error term of discretized
         # process
         autocorr = autocov / m[2]
-        sigma_e = np.sqrt((1-autocorr**2) * m[2])
+        sigma_e = np.sqrt((1 - autocorr**2) * m[2])
         sigma_x = np.sqrt(m[2])
     elif n == 1:
         autocorr = 1.0
@@ -236,7 +240,7 @@ def markov_simulate(transm, size, dtype=int, init=None):
         raise ValueError('Invalid transition matrix shape')
 
     x = np.sum(transm, axis=1)
-    if np.any(abs(x-1.0) > 1.0e-12) or np.any(transm < 0.0):
+    if np.any(abs(x - 1.0) > 1.0e-12) or np.any(transm < 0.0):
         raise ValueError('Invalid values in transition matrix')
 
     if init is not None:
@@ -260,11 +264,11 @@ def markov_simulate(transm, size, dtype=int, init=None):
 
     isim[0] = init
 
-    eps = np.random.rand(n-1)
+    eps = np.random.rand(n - 1)
 
     for i in range(1, n):
-        ifrom = isim[i-1]
-        ito = np.sum(tm_cum[ifrom] < eps[i-1]) - 1
+        ifrom = isim[i - 1]
+        ito = np.sum(tm_cum[ifrom] < eps[i - 1]) - 1
         isim[i] = ito
 
     return isim
@@ -301,10 +305,9 @@ def istransm(m, transposed=False, tol=1e-12):
     return valid
 
 
-def discretize_markov(nobs: int,
-                      tm: np.ndarray,
-                      verbose: bool = False,
-                      logger=None) -> tuple[np.ndarray, np.ndarray]:
+def discretize_markov(
+    nobs: int, tm: np.ndarray, verbose: bool = False, logger=None
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Create a discrete approximation for a Markov process for a given number
     of cross-sectional units.
@@ -337,8 +340,7 @@ def discretize_markov(nobs: int,
     inv_dist_approx = pmf_to_histogram(nobs, inv_dist, verbose, logger)
 
     for i in range(nstates):
-        tm_approx[i] = pmf_to_histogram(inv_dist_approx[i], tm[i],
-                                        verbose, logger)
+        tm_approx[i] = pmf_to_histogram(inv_dist_approx[i], tm[i], verbose, logger)
 
     inv_to = np.sum(tm_approx, axis=0)
     while not np.all(inv_dist_approx == inv_to):
@@ -352,9 +354,9 @@ def discretize_markov(nobs: int,
         # exact zeros in columns i, j, as we do not want to artificially
         # introduce transitions that did not exist with non-zero probability
         # in the original process.
-        ridx = (tm[:, i] > 0.0)
+        ridx = tm[:, i] > 0.0
         # Do not subtract from elements in approx. that are already zero!
-        ridx &= (tm_approx[:, j] > 0)
+        ridx &= tm_approx[:, j] > 0
         # Resulting matrix for all candidate rows
         tm_try = np.copy(tm_approx)
         tm_try[:, i] += 1
@@ -391,8 +393,9 @@ def discretize_markov(nobs: int,
 
     tm_smpl_impl = np.empty_like(tm_approx)
     for i in range(nstates):
-        tm_smpl_impl[i] = pmf_to_histogram(inv_dist_approx[i], tm_impl[i],
-                                           verbose=False)
+        tm_smpl_impl[i] = pmf_to_histogram(
+            inv_dist_approx[i], tm_impl[i], verbose=False
+        )
 
     assert np.all(tm_smpl_impl == tm_approx)
 
@@ -409,10 +412,9 @@ def discretize_markov(nobs: int,
     return inv_dist_approx, tm_approx
 
 
-def pmf_to_histogram(nobs: int,
-                     pmf: np.ndarray,
-                     verbose: bool = False,
-                     logger=None) -> np.ndarray:
+def pmf_to_histogram(
+    nobs: int, pmf: np.ndarray, verbose: bool = False, logger=None
+) -> np.ndarray:
     """
     Convert a PMF to an "optimal" histogram for a given number of observations.
 
