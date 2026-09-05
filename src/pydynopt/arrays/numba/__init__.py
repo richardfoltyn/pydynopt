@@ -1,8 +1,6 @@
-"""
-Numba-accelerated implementations for array operations and indexing.
+"""Provide implementation modules for Numba-compatible array kernels.
 
-- Low-level indexing conversions between flat indices and multidimensional coordinates
-- JIT-compiled probability clipping functions
+The subpackage intentionally defines no package-level public re-exports.
 
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/

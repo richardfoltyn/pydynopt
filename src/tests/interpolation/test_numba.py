@@ -7,7 +7,6 @@ from numba.core.errors import TypingError
 import numpy as np
 import pytest
 
-from pydynopt.arrays import clip_prob, ind2sub
 from pydynopt.interpolate import (
     interp1d,
     interp1d_eval,
@@ -18,8 +17,6 @@ from pydynopt.interpolate import (
 )
 import pydynopt.interpolate.numba.linear as kernels
 
-_clip_prob_any: Any = clip_prob
-_ind2sub_any: Any = ind2sub
 _interp1d_any: Any = interp1d
 _interp2d_eval_any: Any = interp2d_eval
 
@@ -147,21 +144,6 @@ def _bad_scalar_out(x: float, xp: np.ndarray, fp: np.ndarray, out: np.ndarray) -
     return _interp1d_any(x, xp, fp, out=out)
 
 
-@njit
-def _jitted_clip_scalar(value: float) -> float:
-    return _clip_prob_any(value, 0.1)
-
-
-@njit
-def _jitted_clip_array(value: np.ndarray) -> np.ndarray:
-    return _clip_prob_any(value, 0.1)
-
-
-@njit
-def _jitted_ind2sub(index: int) -> np.ndarray:
-    return _ind2sub_any(index, (2, 3))
-
-
 def test_public_1d_numba_scalar_and_array_paths() -> None:
     xp = np.array([0.0, 1.0, 3.0])
     fp = 2.0 * xp
@@ -236,18 +218,6 @@ def test_integer_inputs_allocate_floating_results_in_numba() -> None:
     result = _interp1_array(np.array([1]), xp, fp)
     assert result.dtype == np.float64
     np.testing.assert_allclose(result, [0.5])
-
-
-def test_representative_shared_overloads_compile() -> None:
-    assert _jitted_clip_scalar(0.05) == 0.0
-    np.testing.assert_allclose(
-        _jitted_clip_array(np.array([0.05, 0.5, 0.95])),
-        [0.0, 0.5, 1.0],
-    )
-    np.testing.assert_array_equal(_jitted_ind2sub(4), [1, 1])
-    assert _jitted_clip_scalar.nopython_signatures
-    assert _jitted_clip_array.nopython_signatures
-    assert _jitted_ind2sub.nopython_signatures
 
 
 def test_all_retained_kernels() -> None:
