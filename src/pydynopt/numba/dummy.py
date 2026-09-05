@@ -1,10 +1,16 @@
-"""
+"""Define pure-Python substitutes for the optional Numba API.
+
+- Provide no-op decorator replacements.
+- Provide subscriptable stand-ins for Numba scalar types.
+
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
 
 Author: Richard Foltyn
 """
 
+from collections.abc import Callable, Mapping
+from typing import Any, Self, overload as typing_overload
 
 __all__ = [
     'boolean',
@@ -28,10 +34,41 @@ __all__ = [
 ]
 
 
-def jit_dummy(signature_or_function=None, *jit_args, **jit_kwargs):
-    """
-    Default implementation of Numba's @jit decorator when Numba is not
-    available or not desired.
+@typing_overload
+def jit_dummy[F: Callable[..., Any]](
+    signature_or_function: F,
+    *jit_args: Any,
+    **jit_kwargs: Any,
+) -> F: ...
+
+
+@typing_overload
+def jit_dummy[F: Callable[..., Any]](
+    signature_or_function: Any = None,
+    *jit_args: Any,
+    **jit_kwargs: Any,
+) -> Callable[[F], F]: ...
+
+
+def jit_dummy(
+    signature_or_function: Any = None,
+    *jit_args: Any,
+    **jit_kwargs: Any,
+) -> Any:
+    """Return a function unchanged or create a no-op JIT decorator.
+
+    Parameters
+    ----------
+    signature_or_function
+        Function to return or a signature accepted for API compatibility.
+    *jit_args
+        Positional JIT options, which are ignored.
+    **jit_kwargs
+        Keyword JIT options, which are ignored.
+
+    Returns
+    -------
+    The original function or a decorator that returns its function unchanged.
     """
     if signature_or_function is None or isinstance(signature_or_function, list):
         pyfunc = None
@@ -40,75 +77,135 @@ def jit_dummy(signature_or_function=None, *jit_args, **jit_kwargs):
 
     if pyfunc is not None:
         return pyfunc
-    else:
 
-        def decorate(func):
-            return func
-
-        return decorate
-
-
-def jitclass_dummy(spec):
-    """
-    Default implementation of Numba's @jitclass decorator when Numba is
-    not available or not desired.
-    """
-
-    def decorate(func):
+    def decorate[F: Callable[..., Any]](func: F) -> F:
+        """Return the decorated function unchanged."""
         return func
 
     return decorate
 
 
-def overload_dummy(func, jit_options={}, strict=True):
-    """
-    Default implementation of Numba's @overload decorator when Numba is
-    not available or not desired.
+def jitclass_dummy[T](spec: Any) -> Callable[[type[T]], type[T]]:
+    """Create a no-op replacement for Numba's ``jitclass`` decorator.
+
+    Parameters
+    ----------
+    spec
+        JIT class specification, which is ignored.
+
+    Returns
+    -------
+    A decorator that returns its class unchanged.
     """
 
-    def decorate(func):
-        return func
+    def decorate(cls: type[T]) -> type[T]:
+        """Return the decorated class unchanged."""
+        return cls
 
     return decorate
 
 
-def register_jitable_dummy(*args, **kwargs):
-    """
-    Register a regular python function that can be executed by the python
-    interpreter and can be compiled into a nopython function when referenced
-    by other jit'ed functions.  Can be used as::
-        @register_jitable
-        def foo(x, y):
-            return x + y
-    Or, with compiler options::
-        @register_jitable(_nrt=False) # disable runtime allocation
-        def foo(x, y):
-            return x + y
+def overload_dummy[F: Callable[..., Any]](
+    func: Callable[..., Any],
+    jit_options: Mapping[str, Any] | None = None,
+    strict: bool = True,
+    **kwargs: Any,
+) -> Callable[[F], F]:
+    """Create a no-op replacement for Numba's ``overload`` decorator.
+
+    Parameters
+    ----------
+    func
+        Function for which an overload would be registered.
+    jit_options
+        JIT options, which are ignored.
+    strict
+        Strictness flag, which is ignored.
+    **kwargs
+        Additional overload options, which are ignored.
+
+    Returns
+    -------
+    A decorator that returns the overload function unchanged.
     """
 
-    def wrap(fn):
-        # It is just a wrapper for @overload
+    def decorate(overload_func: F) -> F:
+        """Return the overload function unchanged."""
+        return overload_func
+
+    return decorate
+
+
+@typing_overload
+def register_jitable_dummy[F: Callable[..., Any]](func: F, /) -> F: ...
+
+
+@typing_overload
+def register_jitable_dummy[F: Callable[..., Any]](
+    *args: Any, **kwargs: Any
+) -> Callable[[F], F]: ...
+
+
+def register_jitable_dummy(*args: Any, **kwargs: Any) -> Any:
+    """Create a pure-Python replacement for ``register_jitable``.
+
+    Parameters
+    ----------
+    *args
+        Positional registration options, which are ignored.
+    **kwargs
+        Keyword registration options forwarded to ``overload``.
+
+    Returns
+    -------
+    A decorator that returns its function unchanged.
+    """
+
+    def wrap[F: Callable[..., Any]](fn: F) -> F:
+        """Register a no-op overload and return the function unchanged."""
+
         @overload(fn, jit_options=kwargs, strict=False)
-        def ov_wrap(*args, **kwargs):
+        def ov_wrap(*args: Any, **kwargs: Any) -> F:
+            """Return the original function as the overload implementation."""
             return fn
 
         return fn
 
-    return wrap
+    if kwargs:
+        return wrap
+    return wrap(*args)
 
 
-def from_dtype(obj):
+def from_dtype(obj: Any) -> Any:
+    """Return an object unchanged in place of Numba's ``from_dtype``.
+
+    Parameters
+    ----------
+    obj
+        Object to return.
+
+    Returns
+    -------
+    The input object.
+    """
     return obj
 
 
 class SubscriptableType:
-    """
-    Dummy type that serves as the default drop-in for Numba's data types.
-    Note: Needs __getitem__ method so that statements such as float64[::1]
-    are valid.
-    """
+    """Provide a subscriptable stand-in for a Numba scalar type."""
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: Any) -> Self:
+        """Ignore an array layout specification and return this instance.
+
+        Parameters
+        ----------
+        item
+            Layout specification, which is ignored.
+
+        Returns
+        -------
+        This instance.
+        """
         return self
 
 
