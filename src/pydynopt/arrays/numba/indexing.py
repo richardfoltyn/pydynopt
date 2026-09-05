@@ -1,9 +1,8 @@
-"""
-Low-level indexing routines for Numba code.
+"""Provide Numba-compatible kernels for C-order index conversion.
 
-- Conversion of flat indices to multidimensional sub-indices (ind2sub)
-- Conversion of multidimensional coordinates to flat indices (sub2ind)
-- Specialized implementations for scalar and array arguments, with optional axis selection
+The allocation wrappers create int64 outputs. In-place kernels require writable,
+conformable integer output arrays. Shape, axis, index, and coordinate bounds are
+checked because public Numba overloads call these kernels directly.
 
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/
@@ -23,7 +22,6 @@ __all__ = [
     'ind2sub_axis_array',
     'ind2sub_axis_array_impl',
     'ind2sub_axis_scalar',
-    'ind2sub_axis_scalar_impl',
     'ind2sub_scalar',
     'ind2sub_scalar_impl',
     'sub2ind_array',
@@ -32,126 +30,215 @@ __all__ = [
 ]
 
 
-def ind2sub_array(
-    indices: np.ndarray,
+@register_jitable(**JIT_OPTIONS_INLINE)
+def _shape_size(shape: Sequence[int]) -> int:
+    """Validate a shape and return its total size."""
+    ndim = len(shape)
+    if ndim == 0:
+        msg = 'shape must contain at least one dimension'
+        raise ValueError(msg)
+
+    size = 1
+    for j in range(ndim):
+        dim = shape[j]
+        if dim <= 0:
+            msg = 'shape dimensions must be strictly positive'
+            raise ValueError(msg)
+        size *= dim
+    return size
+
+
+@register_jitable(**JIT_OPTIONS_INLINE)
+def _normalize_axis(axis: int, ndim: int) -> int:
+    """Normalize an axis and reject values outside the shape dimensions."""
+    normalized = axis
+    if normalized < 0:
+        normalized += ndim
+    if normalized < 0 or normalized >= ndim:
+        msg = 'axis is outside the shape dimensions'
+        raise ValueError(msg)
+    return normalized
+
+
+@register_jitable(**JIT_OPTIONS_INLINE)
+def ind2sub_scalar_impl(
+    indices: int,
     shape: Sequence[int],
-    axis: int | None = None,
-    out: np.ndarray | None = None,
-) -> np.ndarray:
-    """
-    Convert an array of flat indices into multidimensional coordinates.
+    out: np.ndarray,
+) -> None:
+    """Unravel one flat index into a required output buffer.
 
     Parameters
     ----------
     indices
-        Integer array whose elements are flat indices into an array of dimensions
-        ``shape``.
+        Flat index satisfying ``0 <= indices < prod(shape)``.
     shape
-        Shape of the array to use for unraveling indices.
-    axis
-        Ignored, present to ensure compatible function signatures.
+        Non-empty sequence of positive dimensions.
     out
-        Optional output array.
+        Writable integer buffer with shape ``(len(shape),)``.
+
+    Raises
+    ------
+    ValueError
+        If ``shape`` or ``indices`` is invalid.
+    """
+    size = _shape_size(shape)
+    if indices < 0 or indices >= size:
+        msg = 'flat index is outside the valid range'
+        raise ValueError(msg)
+
+    val = indices
+    for j in range(len(shape) - 1, -1, -1):
+        dim = shape[j]
+        out[j] = val % dim
+        val //= dim
+
+
+@register_jitable(**JIT_OPTIONS_INLINE)
+def ind2sub_scalar(
+    indices: int,
+    shape: Sequence[int],
+    out: np.ndarray | None = None,
+) -> np.ndarray:
+    """Unravel one flat index and optionally allocate its output.
+
+    Parameters
+    ----------
+    indices
+        Flat index satisfying ``0 <= indices < prod(shape)``.
+    shape
+        Non-empty sequence of positive dimensions.
+    out
+        Optional writable integer buffer with shape ``(len(shape),)``.
 
     Returns
     -------
-    Array of coordinates of shape ``(len(shape), len(indices))``.
+    A newly allocated ``int64`` array or the supplied output buffer by identity.
+
+    Raises
+    ------
+    ValueError
+        If ``shape``, ``indices``, or the output shape is invalid.
     """
-    unravel_ndim = len(shape)
-    n = len(indices)
+    expected = (len(shape),)
+    result = np.empty(expected, dtype=np.int64) if out is None else out
+    if result.shape != expected:
+        msg = 'out has an invalid shape'
+        raise ValueError(msg)
+    ind2sub_scalar_impl(indices, shape, result)
+    return result
 
-    coords = (
-        out if out is not None else np.empty((unravel_ndim, n), dtype=indices.dtype)
-    )
 
-    coords = ind2sub_array_impl(indices, shape, 0, coords)
+@register_jitable(**JIT_OPTIONS_INLINE)
+def ind2sub_axis_scalar(
+    indices: int,
+    shape: Sequence[int],
+    axis: int,
+) -> int:
+    """Unravel one flat index along one axis.
 
-    return coords
+    Parameters
+    ----------
+    indices
+        Flat index satisfying ``0 <= indices < prod(shape)``.
+    shape
+        Non-empty sequence of positive dimensions.
+    axis
+        Coordinate axis. Negative values follow NumPy's normalization convention.
+
+    Returns
+    -------
+    The coordinate along ``axis``.
+
+    Raises
+    ------
+    ValueError
+        If ``shape``, ``indices``, or ``axis`` is invalid.
+    """
+    size = _shape_size(shape)
+    if indices < 0 or indices >= size:
+        msg = 'flat index is outside the valid range'
+        raise ValueError(msg)
+
+    laxis = _normalize_axis(axis, len(shape))
+    stride = 1
+    for j in range(len(shape) - 1, laxis, -1):
+        stride *= shape[j]
+    return int((indices // stride) % shape[laxis])
 
 
 @register_jitable(**JIT_OPTIONS_INLINE)
 def ind2sub_array_impl(
     indices: np.ndarray,
     shape: Sequence[int],
-    axis: int | None,
     out: np.ndarray,
-) -> np.ndarray:
-    """
-    Unravel an array of flat indices into coordinates in place.
+) -> None:
+    """Unravel flat indices into a required dimension-first output buffer.
 
     Parameters
     ----------
     indices
-        Integer array whose elements are flat indices into an array of dimensions
-        ``shape``.
+        Flat indices satisfying ``0 <= indices < prod(shape)``.
     shape
-        Shape of the array to use for unraveling indices.
-    axis
-        Ignored, present to ensure compatible function signatures.
+        Non-empty sequence of positive dimensions.
     out
-        Pre-allocated output array to store the coordinates.
+        Writable integer buffer with shape ``(len(shape), *indices.shape)``. Every
+        element is overwritten.
 
-    Returns
-    -------
-    Array of coordinates of shape ``(len(shape), len(indices))``.
+    Raises
+    ------
+    ValueError
+        If ``shape`` or an index is invalid.
     """
-    unravel_ndim = len(shape)
-    unravel_size = 1
-    for i in range(unravel_ndim):
-        unravel_size *= shape[i]
-
-    n = len(indices)
+    size = _shape_size(shape)
+    ndim = len(shape)
+    n = indices.size
 
     for i in range(n):
-        val = indices[i]
-
-        if val < 0 or val >= unravel_size:
-            msg = 'Invalid flat index'
+        val = indices.flat[i]
+        if val < 0 or val >= size:
+            msg = 'flat index is outside the valid range'
             raise ValueError(msg)
-
-        for j in range(unravel_ndim - 1, -1, -1):
-            k = shape[j]
-            tmp = val // k
-            out[j, i] = val % k
-            val = tmp
-
-    return out
+        for j in range(ndim - 1, -1, -1):
+            dim = shape[j]
+            out.flat[j * n + i] = val % dim
+            val //= dim
 
 
-def ind2sub_axis_array(
+@register_jitable(**JIT_OPTIONS_INLINE)
+def ind2sub_array(
     indices: np.ndarray,
     shape: Sequence[int],
-    axis: int | None = None,
     out: np.ndarray | None = None,
 ) -> np.ndarray:
-    """
-    Convert an array of flat indices into coordinates along a specific axis.
+    """Unravel flat indices and optionally allocate their output.
 
     Parameters
     ----------
     indices
-        Integer array whose elements are flat indices into an array of dimensions
-        ``shape``.
+        Flat indices satisfying ``0 <= indices < prod(shape)``.
     shape
-        Shape of the array to use for unraveling indices.
-    axis
-        Axis along which coordinate array should be returned. If None,
-        coordinates for the leading axis (0) are returned.
+        Non-empty sequence of positive dimensions.
     out
-        Optional output array.
+        Optional writable integer buffer with shape
+        ``(len(shape), *indices.shape)``.
 
     Returns
     -------
-    Coordinate array along the requested axis.
+    A newly allocated ``int64`` array or the supplied output buffer by identity.
+
+    Raises
+    ------
+    ValueError
+        If ``shape``, an index, or the output shape is invalid.
     """
-    n = len(indices)
-    laxis = 0 if axis is None else axis
-
-    coords = out if out is not None else np.empty((n,), dtype=indices.dtype)
-
-    coords = ind2sub_axis_array_impl(indices, shape, laxis, coords)
-
-    return coords
+    expected = (len(shape), *indices.shape)
+    result = np.empty(expected, dtype=np.int64) if out is None else out
+    if result.shape != expected:
+        msg = 'out has an invalid shape'
+        raise ValueError(msg)
+    ind2sub_array_impl(indices, shape, result)
+    return result
 
 
 @register_jitable(**JIT_OPTIONS_INLINE)
@@ -160,242 +247,114 @@ def ind2sub_axis_array_impl(
     shape: Sequence[int],
     axis: int,
     out: np.ndarray,
-) -> np.ndarray:
-    """
-    Unravel an array of flat indices along a specific axis in place.
+) -> None:
+    """Unravel flat indices along one axis into a required output buffer.
 
     Parameters
     ----------
     indices
-        Integer array whose elements are flat indices into an array of dimensions
-        ``shape``.
+        Flat indices satisfying ``0 <= indices < prod(shape)``.
     shape
-        Shape of the array to use for unraveling indices.
+        Non-empty sequence of positive dimensions.
     axis
-        Axis along which coordinates are extracted.
+        Coordinate axis. Negative values follow NumPy's normalization convention.
     out
-        Pre-allocated output array to store the coordinates.
+        Writable integer buffer with the same shape as ``indices``. Every element
+        is overwritten.
 
-    Returns
-    -------
-    Coordinate array along the requested axis.
+    Raises
+    ------
+    ValueError
+        If ``shape``, an index, or ``axis`` is invalid.
     """
-    unravel_ndim = len(shape)
-    unravel_size = 1
-    for i in range(unravel_ndim):
-        unravel_size *= shape[i]
+    size = _shape_size(shape)
+    laxis = _normalize_axis(axis, len(shape))
+    stride = 1
+    for j in range(len(shape) - 1, laxis, -1):
+        stride *= shape[j]
 
-    n = len(indices)
-
-    for i in range(n):
-        val = indices[i]
-
-        if val < 0 or val >= unravel_size:
-            msg = 'Invalid flat index'
+    for i in range(indices.size):
+        val = indices.flat[i]
+        if val < 0 or val >= size:
+            msg = 'flat index is outside the valid range'
             raise ValueError(msg)
-
-        for j in range(unravel_ndim - 1, -1, -1):
-            k = shape[j]
-            tmp = val // k
-            if j == axis:
-                out[i] = val % k
-                break
-            val = tmp
-
-    return out
-
-
-def ind2sub_scalar(
-    indices: int,
-    shape: Sequence[int],
-    axis: int | None = None,
-    out: np.ndarray | None = None,
-) -> np.ndarray:
-    """
-    Convert a scalar flat index into coordinates across all dimensions.
-
-    Parameters
-    ----------
-    indices
-        Index into the flattened version of an array of dimensions ``shape``.
-    shape
-        Shape of the array to use for unraveling indices.
-    axis
-        Ignored, present to ensure compatible function signatures.
-    out
-        Optional output array.
-
-    Returns
-    -------
-    Coordinate array containing coordinates along all dimensions.
-    """
-    unravel_ndim = len(shape)
-
-    coords = (
-        out
-        if out is not None
-        else np.empty((unravel_ndim,), dtype=np.asarray(indices).dtype)
-    )
-
-    coords = ind2sub_scalar_impl(indices, shape, 0, coords)
-
-    return coords
+        out.flat[i] = (val // stride) % shape[laxis]
 
 
 @register_jitable(**JIT_OPTIONS_INLINE)
-def ind2sub_scalar_impl(
-    indices: int,
+def ind2sub_axis_array(
+    indices: np.ndarray,
     shape: Sequence[int],
-    axis: int | None,
-    out: np.ndarray,
+    axis: int,
+    out: np.ndarray | None = None,
 ) -> np.ndarray:
-    """
-    Unravel a scalar flat index into coordinates in place.
+    """Unravel flat indices along one axis and optionally allocate output.
 
     Parameters
     ----------
     indices
-        Index into the flattened version of an array of dimensions ``shape``.
+        Flat indices satisfying ``0 <= indices < prod(shape)``.
     shape
-        Shape of the array to use for unraveling indices.
+        Non-empty sequence of positive dimensions.
     axis
-        Ignored, present to ensure compatible function signatures.
+        Coordinate axis. Negative values follow NumPy's normalization convention.
     out
-        Pre-allocated output array to store coordinates.
+        Optional writable integer buffer with the same shape as ``indices``.
 
     Returns
     -------
-    Coordinate array containing coordinates along all dimensions.
+    A newly allocated ``int64`` array or the supplied output buffer by identity.
+
+    Raises
+    ------
+    ValueError
+        If ``shape``, an index, ``axis``, or the output shape is invalid.
     """
-    unravel_ndim = len(shape)
-    val = indices
-
-    for j in range(unravel_ndim - 1, -1, -1):
-        k = shape[j]
-        tmp = val // k
-        out[j] = val % k
-        val = tmp
-
-    if val >= shape[0]:
-        msg = 'Invalid flat index'
+    result = np.empty(indices.shape, dtype=np.int64) if out is None else out
+    if result.shape != indices.shape:
+        msg = 'out has an invalid shape'
         raise ValueError(msg)
-
-    return out
-
-
-@register_jitable(**JIT_OPTIONS_INLINE)
-def ind2sub_axis_scalar(
-    indices: int,
-    shape: Sequence[int],
-    axis: int | None,
-    out: np.ndarray,
-) -> int:
-    """
-    Convert a flat index into a coordinate for the given axis, writing into output.
-
-    Parameters
-    ----------
-    indices
-        Index into the flattened version of an array of dimensions ``shape``.
-    shape
-        Shape of the array to use for unraveling indices.
-    axis
-        Axis along which coordinate should be returned. If None,
-        coordinates for the leading axis (0) are returned.
-    out
-        Array to store coordinate along requested axis as its first element.
-
-    Returns
-    -------
-    Coordinate along the requested axis.
-    """
-    lout = ind2sub_axis_scalar_impl(indices, shape, axis)
-    out[0] = lout
-    return lout
+    ind2sub_axis_array_impl(indices, shape, axis, result)
+    return result
 
 
 @register_jitable(**JIT_OPTIONS_INLINE)
-def ind2sub_axis_scalar_impl(
-    indices: int,
+def sub2ind_scalar(
+    coords: Sequence[int] | np.ndarray,
     shape: Sequence[int],
-    axis: int | None = None,
-    out: np.ndarray | None = None,
 ) -> int:
-    """
-    Convert a flat index into a coordinate for the given axis.
-
-    Parameters
-    ----------
-    indices
-        Index into the flattened version of an array of dimensions ``shape``.
-    shape
-        Shape of the array to use for unraveling indices.
-    axis
-        Axis along which coordinate should be returned. If None,
-        coordinates for the leading axis (0) are returned.
-    out
-        Ignored, present to ensure compatible function signatures.
-
-    Returns
-    -------
-    Coordinate along the requested axis.
-    """
-    laxis = 0 if axis is None else axis
-
-    unravel_ndim = len(shape)
-    unravel_size = 1
-    for i in range(unravel_ndim):
-        unravel_size *= shape[i]
-
-    val = indices
-
-    if val < 0 or val >= unravel_size:
-        msg = 'Invalid flat index'
-        raise ValueError(msg)
-
-    lout = 0
-
-    for j in range(unravel_ndim - 1, -1, -1):
-        k = shape[j]
-        tmp = val // k
-        if j == laxis:
-            lout = val % k
-            break
-        val = tmp
-
-    return lout
-
-
-def sub2ind_array(
-    coords: np.ndarray,
-    shape: Sequence[int],
-    out: np.ndarray | None = None,
-) -> np.ndarray:
-    """
-    Convert a 2D array of coordinates into an array of flat indices.
+    """Ravel one coordinate sequence into a C-order flat index.
 
     Parameters
     ----------
     coords
-        Two-dimensional integer array of coordinates. Each row contains
-        the coordinates for one dimension.
+        One coordinate per dimension, each within the corresponding bound.
     shape
-        Shape of array into which indices from ``coords`` apply.
-    out
-        Optional output array of flat indices.
+        Non-empty sequence of positive dimensions.
 
     Returns
     -------
-    Array of indices into the flattened array.
-    """
-    if out is not None:
-        sub2ind_array_impl(coords, shape, out)
-        return out
+    The C-order flat index.
 
-    shp = coords.shape[1:]
-    lout = np.empty(shp, dtype=coords.dtype)
-    sub2ind_array_impl(coords, shape, lout)
-    return lout
+    Raises
+    ------
+    ValueError
+        If ``shape``, the coordinate count, or a coordinate is invalid.
+    """
+    _shape_size(shape)
+    ndim = len(shape)
+    if len(coords) != ndim:
+        msg = 'coordinate count must equal the number of dimensions'
+        raise ValueError(msg)
+
+    index = 0
+    for j in range(ndim):
+        coord = coords[j]
+        if coord < 0 or coord >= shape[j]:
+            msg = 'coordinate is outside the valid range'
+            raise ValueError(msg)
+        index = index * shape[j] + coord
+    return int(index)
 
 
 @register_jitable(**JIT_OPTIONS_INLINE)
@@ -404,74 +363,74 @@ def sub2ind_array_impl(
     shape: Sequence[int],
     out: np.ndarray,
 ) -> None:
-    """
-    Compute flat indices from a 2D coordinate array in place.
+    """Ravel dimension-first coordinate batches into a required output buffer.
 
     Parameters
     ----------
     coords
-        Two-dimensional integer array of coordinates. Each row contains
-        the coordinates for one dimension.
+        Coordinates with shape ``(len(shape), *S)`` and valid bounds.
     shape
-        Shape of array into which indices from ``coords`` apply.
+        Non-empty sequence of positive dimensions.
     out
-        Array to store flat indices in place.
+        Writable integer buffer with sample shape ``S``. Every element is
+        overwritten.
+
+    Raises
+    ------
+    ValueError
+        If ``shape``, the leading coordinate dimension, or a coordinate is invalid.
     """
+    _shape_size(shape)
     ndim = len(shape)
-    stride = np.empty(ndim, dtype=np.int64)
-    stride[-1] = 1
+    if coords.ndim < 2 or coords.shape[0] != ndim:
+        msg = 'leading coordinate dimension must equal the number of dimensions'
+        raise ValueError(msg)
 
-    for j in range(1, ndim):
-        stride[ndim - j - 1] = shape[ndim - j] * stride[ndim - j]
-
-    out[...] = 0
-    out_flat = out.reshape((-1,))
-    coords_flat = coords.reshape((-1, ndim))
-
-    n = coords_flat.shape[0]
-
+    n = coords.size // ndim
     for i in range(n):
+        index = 0
         for j in range(ndim):
-            stride_j = stride[j]
-
-            k = coords_flat[i, j]
-            if k < 0 or k >= shape[j]:
-                msg = 'Invalid coordinates'
+            coord = coords.flat[j * n + i]
+            if coord < 0 or coord >= shape[j]:
+                msg = 'coordinate is outside the valid range'
                 raise ValueError(msg)
-            out_flat[i] += k * stride_j
+            index = index * shape[j] + coord
+        out.flat[i] = index
 
 
 @register_jitable(**JIT_OPTIONS_INLINE)
-def sub2ind_scalar(
-    coords: Sequence[int] | np.ndarray,
+def sub2ind_array(
+    coords: np.ndarray,
     shape: Sequence[int],
-    out: object = None,
-) -> int:
-    """
-    Convert a sequence of coordinates into an index into a flat array.
+    out: np.ndarray | None = None,
+) -> np.ndarray:
+    """Ravel coordinate batches and optionally allocate their output.
 
     Parameters
     ----------
     coords
-        One-dimensional array or sequence of coordinates into a multidimensional array.
+        Coordinates with shape ``(len(shape), *S)`` and valid bounds.
     shape
-        Shape of array into which indices from ``coords`` apply.
+        Non-empty sequence of positive dimensions.
     out
-        Ignored, present for API compatibility.
+        Optional writable integer buffer with sample shape ``S``.
 
     Returns
     -------
-    Index into the flattened array.
+    A newly allocated ``int64`` array or the supplied output buffer by identity.
+
+    Raises
+    ------
+    ValueError
+        If ``coords``, ``shape``, a coordinate, or the output shape is invalid.
     """
-    ndim = len(shape)
-    if len(coords) != ndim:
-        msg = 'Incompatible coordinate array size'
+    if coords.ndim < 2:
+        msg = 'batched coordinates must have at least two dimensions'
         raise ValueError(msg)
-
-    lidx = 0
-    stride_ = 1
-    for j in range(ndim - 1, -1, -1):
-        lidx += int(coords[j]) * stride_
-        stride_ *= shape[j]
-
-    return lidx
+    expected = coords.shape[1:]
+    result = np.empty(expected, dtype=np.int64) if out is None else out
+    if result.shape != expected:
+        msg = 'out has an invalid shape'
+        raise ValueError(msg)
+    sub2ind_array_impl(coords, shape, result)
+    return result

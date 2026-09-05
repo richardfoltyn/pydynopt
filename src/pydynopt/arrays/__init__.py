@@ -1,9 +1,12 @@
-"""
-Routines for creating, transforming, and indexing multidimensional arrays.
+"""Provide checked array utilities for ordinary Python and Numba.
 
-- Grid generation functions (power-spaced, log-spaced)
-- Coordinate and linear index conversion (ind2sub, sub2ind)
-- Probability clipping routines
+- ``clip_prob``, ``powerspace``, ``ind2sub``, and ``sub2ind`` share low-level
+  kernels between Python and Numba-compiled callers.
+- ``logspace`` remains Python-only because it uses SciPy root finding and dynamic
+  insertion.
+- Index conversion follows C order and uses dimension-first coordinates.
+
+Low-level kernels remain in ``pydynopt.arrays.numba`` implementation modules.
 
 This work is licensed under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/

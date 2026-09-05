@@ -55,11 +55,12 @@ def test_overload_forwards_explicit_strict_mode() -> None:
         _call_strict_target(1)
 
 
-def test_no_numba_decorators_and_interpolation_in_clean_process() -> None:
+def test_no_numba_decorators_arrays_and_interpolation_in_clean_process() -> None:
     code = """
 import numpy as np
 import pydynopt
 pydynopt.use_numba = False
+from pydynopt.arrays import clip_prob, ind2sub, logspace, powerspace, sub2ind
 from pydynopt.interpolate import (
     interp1d, interp1d_eval, interp1d_locate,
     interp2d, interp2d_eval, interp2d_locate,
@@ -85,6 +86,13 @@ assert overload_dummy(func, strict=False)(func) is func
 assert register_jitable_dummy(func) is func
 assert register_jitable_dummy()(func) is func
 assert register_jitable_dummy(inline='always')(func) is func
+
+assert clip_prob(0.05, 0.1) == 0.0
+assert np.allclose(clip_prob([0.05, 0.5, 0.95], 0.1), [0.0, 0.5, 1.0])
+assert np.allclose(powerspace(0.0, 1.0, 3, 2.0), [0.0, 0.25, 1.0])
+coords = ind2sub(np.arange(6), (2, 3))
+assert np.array_equal(sub2ind(coords, (2, 3)), np.arange(6))
+assert np.allclose(logspace(1.0, 100.0, 3), [1.0, 10.0, 100.0])
 
 xp = np.array([0.0, 1.0])
 fp = np.array([0.0, 2.0])
