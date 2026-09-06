@@ -204,7 +204,7 @@ def _apply_profile(profile: MplFontRenderConfig, usetex: bool) -> None:
     elif profile.mathtext:
         rc.update(dict(profile.mathtext))
 
-    mpl.rcParams.update(rc)
+    mpl.rcParams.update(rc)  # type: ignore
 
 
 def configure_mpl_fonts(
