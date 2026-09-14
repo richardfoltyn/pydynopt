@@ -84,4 +84,17 @@ benchmark-specific shortcuts.
 
 ## What's Been Tried
 
-No optimization experiments yet. Establish and retain the frozen baseline first.
+- Frozen baseline established in run 3 at `geomean_ns=17.711749` (the dashboard's
+  baseline includes two earlier benchmark-check failures).
+- Run 4 added one-interval upward/downward fast paths to `bsearch_impl`. This was a
+  clear win for local and array queries, with a small random-query cost.
+- Run 5 forced all small helpers inline and reached `11.747198` ns, but Numba hit
+  SSA-scope failures in public 2D tests. Do not retry this exact nested-inline
+  structure.
+- Runs 6-8 isolated safe inline boundaries: evaluation helpers and fused scalar
+  kernels use `JIT_OPTIONS_INLINE`; `interp1d_locate_scalar` is forced inline, but
+  `bsearch_impl` deliberately is not. Run 8 passes all checks at `11.975886` ns.
+  This structure captures most of run 5's speed without the compiler bug.
+- Repeated 2D field evaluation remains about 6.9-7.0 ns per state component and has
+  changed little. Current larger costs are 2D locate/combined paths and random
+  searches.

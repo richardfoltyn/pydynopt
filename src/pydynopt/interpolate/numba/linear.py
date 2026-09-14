@@ -12,10 +12,16 @@ Author: Richard Foltyn
 """
 
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
-from pydynopt.numba import JIT_OPTIONS, JIT_OPTIONS_INLINE, register_jitable
+from pydynopt.numba import (
+    JIT_OPTIONS,
+    JIT_OPTIONS_INLINE,
+    overload as numba_overload,
+    register_jitable,
+)
 
 from .search import bsearch_impl
 
@@ -213,7 +219,6 @@ def interp1d_array(
     return result
 
 
-@register_jitable(**JIT_OPTIONS)
 def _initial_indices(
     ilb: Sequence[int] | np.ndarray | None,
 ) -> tuple[int, int]:
@@ -221,6 +226,23 @@ def _initial_indices(
     if ilb is None:
         return 0, 0
     return int(ilb[0]), int(ilb[1])
+
+
+@numba_overload(_initial_indices, jit_options=JIT_OPTIONS, inline='always')
+def _overload_initial_indices(ilb: Any) -> Any:
+    from numba import types
+
+    if isinstance(ilb, types.NoneType):
+
+        def impl(ilb):
+            return 0, 0
+
+    else:
+
+        def impl(ilb):
+            return int(ilb[0]), int(ilb[1])
+
+    return impl
 
 
 @register_jitable(**JIT_OPTIONS)
