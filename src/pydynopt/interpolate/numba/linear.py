@@ -222,13 +222,20 @@ def interp1d_array_impl(
 ) -> None:
     """Interpolate array samples into an output with the same shape as ``x``."""
     index = ilb
+    if extrapolate:
+        for i in range(x.size):
+            index, weight = interp1d_locate_scalar(x.flat[i], xp, index)
+            value = weight * fp[index] + (1.0 - weight) * fp[index + 1]
+            out.flat[i] = float(value)
+        return
+
     for i in range(x.size):
         index, weight = interp1d_locate_scalar(x.flat[i], xp, index)
         out.flat[i] = interp1d_eval_scalar(
             index,
             weight,
             fp,
-            extrapolate,
+            False,
             left,
             right,
         )
