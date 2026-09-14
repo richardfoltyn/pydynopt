@@ -60,6 +60,11 @@ benchmark-specific shortcuts.
 ## Constraints
 
 - Stop after logging experiment 100 and settle on the best kept run.
+- After run 100, create `src/pydynopt/interpolate/PERFORMANCE.md` as an agent-facing
+  guide to the successful 1D/2D optimization principles and implementation details.
+  Add concise line comments to modified performance-sensitive functions explaining
+  ordering/inlining decisions that future developers must preserve, then run final
+  formatting, lint, type, and full-test validation without starting run 101.
 - Benchmark processes must have exact CPU affinity 0-7.
 - No `fastmath`, reduced precision, hard-coded benchmark values, skipped work, or
   benchmark-specific branches.
