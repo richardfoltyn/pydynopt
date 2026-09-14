@@ -19,6 +19,7 @@ from numpy.typing import NDArray
 from pydynopt.numba import JIT_OPTIONS, jit, overload as numba_overload
 
 from .numba.linear import (
+    _interp2d_eval_scalar_c,
     interp1d_array,
     interp1d_array_impl,
     interp1d_eval_array,
@@ -1068,8 +1069,15 @@ def _overload_interp2d_eval(
         if getattr(fp, 'layout', None) == 'A' or not _numba_none(out):
             return None
 
-        def impl(index, weight, fp, extrapolate=True, out=None):
-            return interp2d_eval_scalar(index, weight, fp, extrapolate)
+        if getattr(fp, 'layout', None) == 'C':
+
+            def impl(index, weight, fp, extrapolate=True, out=None):
+                return _interp2d_eval_scalar_c(index, weight, fp, extrapolate)
+
+        else:
+
+            def impl(index, weight, fp, extrapolate=True, out=None):
+                return interp2d_eval_scalar(index, weight, fp, extrapolate)
 
         return impl
     if isinstance(index, types.Array) and index.ndim > 1:

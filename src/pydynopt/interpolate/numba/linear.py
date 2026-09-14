@@ -349,6 +349,34 @@ def interp2d_eval_scalar(
     return float(value)
 
 
+@register_jitable(**JIT_OPTIONS_INLINE)
+def _interp2d_eval_scalar_c(
+    index: np.ndarray,
+    weight: np.ndarray,
+    fp: np.ndarray,
+    extrapolate: bool = True,
+) -> float:
+    """Evaluate one point with C-contiguous two-dimensional values."""
+    weight0 = weight[0]
+    weight1 = weight[1]
+    if not extrapolate and (
+        weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
+    ):
+        return np.nan
+
+    n1 = fp.shape[1]
+    offset = index[0] * n1 + index[1]
+    lower0 = fp.flat[offset]
+    lower1 = fp.flat[offset + 1]
+    upper0 = fp.flat[offset + n1]
+    upper1 = fp.flat[offset + n1 + 1]
+    upper_weight0 = 1.0 - weight0
+    value0 = weight0 * lower0 + upper_weight0 * upper0
+    value1 = weight0 * lower1 + upper_weight0 * upper1
+    value = weight1 * value0 + (1.0 - weight1) * value1
+    return float(value)
+
+
 @register_jitable(**JIT_OPTIONS)
 def interp2d_eval_array_impl(
     index: np.ndarray,
