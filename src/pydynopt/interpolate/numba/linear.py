@@ -23,7 +23,7 @@ from pydynopt.numba import (
     register_jitable,
 )
 
-from .search import bsearch_impl
+from .search import _bsearch_range
 
 __all__ = [
     'interp1d_array',
@@ -68,7 +68,7 @@ def interp1d_locate_scalar(
             lower = upper
             upper = xp[index + 1]
             if upper <= x and index != xp.shape[0] - 2:
-                index = bsearch_impl(x, xp, index)
+                index = _bsearch_range(x, xp, index, xp.shape[0] - 1)
                 lower = xp[index]
                 upper = xp[index + 1]
     elif index > 0:
@@ -78,7 +78,7 @@ def interp1d_locate_scalar(
             upper = lower
             lower = previous
         else:
-            index = bsearch_impl(x, xp, index)
+            index = _bsearch_range(x, xp, 0, index - 1)
             lower = xp[index]
             upper = xp[index + 1]
 

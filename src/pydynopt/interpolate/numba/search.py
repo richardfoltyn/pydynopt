@@ -58,6 +58,24 @@ def bsearch(needle: float | np.number, haystack: np.ndarray, ilb: int = 0) -> in
 
 
 @jit(**JIT_OPTIONS)
+def _bsearch_range(
+    needle: float | np.number,
+    haystack: np.ndarray,
+    ilb: int,
+    iub: int,
+) -> int:
+    """Search known lower and upper bounds for a bracketing interval."""
+    while iub > (ilb + 1):
+        imid = (iub + ilb) // 2
+        if haystack[imid] > needle:
+            iub = imid
+        else:
+            ilb = imid
+
+    return ilb
+
+
+@jit(**JIT_OPTIONS)
 def bsearch_impl(needle: float | np.number, haystack: np.ndarray, ilb: int = 0) -> int:
     """Locate an interval without validating inputs.
 
