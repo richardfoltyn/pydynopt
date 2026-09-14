@@ -1013,7 +1013,7 @@ def _overload_interp1d(
     return None
 
 
-@numba_overload(interp2d_locate, jit_options=JIT_OPTIONS)
+@numba_overload(interp2d_locate, jit_options=JIT_OPTIONS, inline='always')
 def _overload_interp2d_locate(
     x0: Any,
     x1: Any,
