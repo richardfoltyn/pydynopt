@@ -15,7 +15,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from pydynopt.numba import JIT_OPTIONS, register_jitable
+from pydynopt.numba import JIT_OPTIONS, JIT_OPTIONS_INLINE, register_jitable
 
 from .search import bsearch_impl
 
@@ -92,7 +92,7 @@ def interp1d_locate_array(
     return index, weight
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp1d_eval_scalar(
     index: int | np.integer,
     weight: float | np.number,
@@ -297,7 +297,7 @@ def interp2d_locate_array(
     return index, weight
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp2d_eval_scalar(
     index: np.ndarray,
     weight: np.ndarray,
