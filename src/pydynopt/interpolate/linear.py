@@ -1086,6 +1086,40 @@ def _overload_interp2d_eval(
     return None
 
 
+@numba_overload(interp2d, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp2d_scalar_c(
+    x0: Any,
+    x1: Any,
+    xp0: Any,
+    xp1: Any,
+    fp: Any,
+    ilb: Any = None,
+    extrapolate: Any = True,
+    out: Any = None,
+) -> Any:
+    if (
+        _numba_real_scalar(x0)
+        and _numba_real_scalar(x1)
+        and getattr(fp, 'layout', None) == 'C'
+        and _numba_none(out)
+    ):
+
+        def impl(
+            x0,
+            x1,
+            xp0,
+            xp1,
+            fp,
+            ilb=None,
+            extrapolate=True,
+            out=None,
+        ):
+            return _interp2d_scalar_c(x0, x1, xp0, xp1, fp, ilb, extrapolate)
+
+        return impl
+    return None
+
+
 @numba_overload(interp2d, jit_options=JIT_OPTIONS)
 def _overload_interp2d(
     x0: Any,
@@ -1098,44 +1132,20 @@ def _overload_interp2d(
     out: Any = None,
 ) -> Any:
     if _numba_real_scalar(x0) and _numba_real_scalar(x1):
-        if not _numba_none(out):
+        if getattr(fp, 'layout', None) == 'C' or not _numba_none(out):
             return None
 
-        if getattr(fp, 'layout', None) == 'C':
-
-            def impl(
-                x0,
-                x1,
-                xp0,
-                xp1,
-                fp,
-                ilb=None,
-                extrapolate=True,
-                out=None,
-            ):
-                return _interp2d_scalar_c(
-                    x0,
-                    x1,
-                    xp0,
-                    xp1,
-                    fp,
-                    ilb,
-                    extrapolate,
-                )
-
-        else:
-
-            def impl(
-                x0,
-                x1,
-                xp0,
-                xp1,
-                fp,
-                ilb=None,
-                extrapolate=True,
-                out=None,
-            ):
-                return interp2d_scalar(x0, x1, xp0, xp1, fp, ilb, extrapolate)
+        def impl(
+            x0,
+            x1,
+            xp0,
+            xp1,
+            fp,
+            ilb=None,
+            extrapolate=True,
+            out=None,
+        ):
+            return interp2d_scalar(x0, x1, xp0, xp1, fp, ilb, extrapolate)
 
         return impl
     if _numba_real_array(x0) and _numba_real_array(x1):
