@@ -1030,7 +1030,7 @@ def _overload_interp2d_locate(
     return None
 
 
-@numba_overload(interp2d_eval, jit_options=JIT_OPTIONS)
+@numba_overload(interp2d_eval, jit_options=JIT_OPTIONS, inline='always')
 def _overload_interp2d_eval(
     index: Any,
     weight: Any,
