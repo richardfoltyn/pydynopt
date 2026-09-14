@@ -118,10 +118,17 @@ benchmark-specific shortcuts.
 - Run 52 fused same/adjacent interval search and endpoint reuse into
   `interp1d_locate_scalar`, producing large local and array gains but initially
   hurting distant queries. Run 53 added the current cold `_bsearch_range` helper
-  with known bounds, recovering most random performance. Current best is
-  `geomean_ns=7.967495`; local 1D locate is about 4.45 ns, buffered 2D locate about
-  14.6 ns, and grouped JMP-style 2D eval about 4.43 ns.
+  with known bounds, recovering most random performance.
+- Run 57 rewrote fused locate with branch-local early returns, avoiding Numba SSA
+  merges and improving every 1D case, random 2D, and arrays. It also eliminated
+  all `NumbaIRAssumptionWarning` output in the interpolation suite. Run 59 then
+  located fast-moving dimension 1 before dimension 0 only in C-layout fused 2D
+  scalar interpolation. Current best is `geomean_ns=7.333094`; local 1D locate is
+  about 3.78 ns, buffered 2D locate about 13.6 ns, and grouped JMP-style 2D eval
+  about 4.36 ns.
 - Difference-form 1D arithmetic (run 13), dimension-1-first bilinear arithmetic
   (runs 10-11), full array-loop inlining (run 16), flat-iterator caching (runs 33
   and 47), and C-layout array specialization (runs 44-45) regressed or failed to
-  reproduce. Keep their current implementations.
+  reproduce. Dimension-1-first search should remain limited to fused C scalar
+  interpolation: it worsened standalone locate (run 60), and its array gain did
+  not improve the balanced primary in two runs (61-62).

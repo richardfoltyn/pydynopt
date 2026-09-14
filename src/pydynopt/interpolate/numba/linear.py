@@ -88,7 +88,7 @@ def interp1d_locate_scalar(
         weight = (lower - x) / (lower - previous)
         return index - 1, float(weight)
 
-    range_index = _bsearch_range(x, xp, 0, index - 1)
+    range_index = _bsearch_range(x, xp, 0, index)
     range_lower = xp[range_index]
     range_upper = xp[range_index + 1]
     weight = (range_upper - x) / (range_upper - range_lower)
