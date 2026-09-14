@@ -59,9 +59,29 @@ def interp1d_locate_scalar(
     ``xp`` must satisfy the module grid preconditions, and ``ilb`` must be in
     ``[0, len(xp) - 2]``.
     """
-    index = bsearch_impl(x, xp, ilb)
+    index = ilb
     lower = xp[index]
     upper = xp[index + 1]
+    if lower <= x:
+        if upper <= x and index != xp.shape[0] - 2:
+            index += 1
+            lower = upper
+            upper = xp[index + 1]
+            if upper <= x and index != xp.shape[0] - 2:
+                index = bsearch_impl(x, xp, index)
+                lower = xp[index]
+                upper = xp[index + 1]
+    elif index > 0:
+        previous = xp[index - 1]
+        if previous <= x:
+            index -= 1
+            upper = lower
+            lower = previous
+        else:
+            index = bsearch_impl(x, xp, index)
+            lower = xp[index]
+            upper = xp[index + 1]
+
     weight = (upper - x) / (upper - lower)
     return index, float(weight)
 
