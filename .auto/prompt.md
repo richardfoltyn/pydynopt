@@ -106,10 +106,22 @@ benchmark-specific shortcuts.
 - Runs 19-20 forced only public 1D/2D locate overloads inline, removing tuple/call
   overhead. Public eval (run 18) and combined interpolation (run 21) overloads
   should remain at default policy.
-- Run 22 cached lower/upper grid endpoint loads in the locate helper. Current best
-  is `geomean_ns=10.677580`; local 1D locate is about 5.6 ns and buffered 2D locate
-  about 21.4 ns.
-- Difference-form 1D arithmetic (run 13) and dimension-1-first bilinear arithmetic
-  (runs 10-11) regressed the broad suite. Keep the weighted-sum formulations.
-- Repeated 2D field evaluation remains about 6.9-7.1 ns per state component and has
-  changed little.
+- Run 22 cached lower/upper grid endpoint loads in the locate helper.
+- Runs 23, 31, and 37 optimized scalar 2D evaluation with explicit corner loads,
+  a dedicated always-inline overload for arbitrary-strided values, and contiguous
+  source load order. Callable Numba inline policies failed on keyword/default
+  folding in runs 26-30; use mutually exclusive overload templates instead.
+- Runs 42-43 added C-layout scalar evaluation and combined interpolation kernels
+  using flat row-major offsets. Run 48 then made only the C-layout combined public
+  overload always-inline; run 49 confirmed 17-19 ns combined calls. Do not inline
+  the C-layout eval overload (run 50).
+- Run 52 fused same/adjacent interval search and endpoint reuse into
+  `interp1d_locate_scalar`, producing large local and array gains but initially
+  hurting distant queries. Run 53 added the current cold `_bsearch_range` helper
+  with known bounds, recovering most random performance. Current best is
+  `geomean_ns=7.967495`; local 1D locate is about 4.45 ns, buffered 2D locate about
+  14.6 ns, and grouped JMP-style 2D eval about 4.43 ns.
+- Difference-form 1D arithmetic (run 13), dimension-1-first bilinear arithmetic
+  (runs 10-11), full array-loop inlining (run 16), flat-iterator caching (runs 33
+  and 47), and C-layout array specialization (runs 44-45) regressed or failed to
+  reproduce. Keep their current implementations.

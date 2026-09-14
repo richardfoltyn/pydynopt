@@ -63,27 +63,36 @@ def interp1d_locate_scalar(
     lower = xp[index]
     upper = xp[index + 1]
     if lower <= x:
-        if upper <= x and index != xp.shape[0] - 2:
-            index += 1
-            lower = upper
-            upper = xp[index + 1]
-            if upper <= x and index != xp.shape[0] - 2:
-                index = _bsearch_range(x, xp, index, xp.shape[0] - 1)
-                lower = xp[index]
-                upper = xp[index + 1]
-    elif index > 0:
-        previous = xp[index - 1]
-        if previous <= x:
-            index -= 1
-            upper = lower
-            lower = previous
-        else:
-            index = _bsearch_range(x, xp, 0, index - 1)
-            lower = xp[index]
-            upper = xp[index + 1]
+        if upper > x or index == xp.shape[0] - 2:
+            weight = (upper - x) / (upper - lower)
+            return index, float(weight)
 
-    weight = (upper - x) / (upper - lower)
-    return index, float(weight)
+        next_index = index + 1
+        next_upper = xp[next_index + 1]
+        if next_upper > x or next_index == xp.shape[0] - 2:
+            weight = (next_upper - x) / (next_upper - upper)
+            return next_index, float(weight)
+
+        range_index = _bsearch_range(x, xp, next_index, xp.shape[0] - 1)
+        range_lower = xp[range_index]
+        range_upper = xp[range_index + 1]
+        weight = (range_upper - x) / (range_upper - range_lower)
+        return range_index, float(weight)
+
+    if index == 0:
+        weight = (upper - x) / (upper - lower)
+        return index, float(weight)
+
+    previous = xp[index - 1]
+    if previous <= x:
+        weight = (lower - x) / (lower - previous)
+        return index - 1, float(weight)
+
+    range_index = _bsearch_range(x, xp, 0, index - 1)
+    range_lower = xp[range_index]
+    range_upper = xp[range_index + 1]
+    weight = (range_upper - x) / (range_upper - range_lower)
+    return range_index, float(weight)
 
 
 @register_jitable(**JIT_OPTIONS)
