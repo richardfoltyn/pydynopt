@@ -524,13 +524,23 @@ def interp2d_array_impl(
 ) -> None:
     """Interpolate equal-shaped coordinates into an output of the same shape."""
     ilb0, ilb1 = _initial_indices(ilb)
+    if extrapolate:
+        for i in range(x0.size):
+            ilb0, weight0 = interp1d_locate_scalar(x0.flat[i], xp0, ilb0)
+            ilb1, weight1 = interp1d_locate_scalar(x1.flat[i], xp1, ilb1)
+
+            value0 = weight0 * fp[ilb0, ilb1] + (1.0 - weight0) * fp[ilb0 + 1, ilb1]
+            value1 = (
+                weight0 * fp[ilb0, ilb1 + 1] + (1.0 - weight0) * fp[ilb0 + 1, ilb1 + 1]
+            )
+            out.flat[i] = weight1 * value0 + (1.0 - weight1) * value1
+        return
+
     for i in range(x0.size):
         ilb0, weight0 = interp1d_locate_scalar(x0.flat[i], xp0, ilb0)
         ilb1, weight1 = interp1d_locate_scalar(x1.flat[i], xp1, ilb1)
 
-        if not extrapolate and (
-            weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
-        ):
+        if weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0:
             out.flat[i] = np.nan
             continue
 
