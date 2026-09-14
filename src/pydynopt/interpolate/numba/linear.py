@@ -60,7 +60,9 @@ def interp1d_locate_scalar(
     ``[0, len(xp) - 2]``.
     """
     index = bsearch_impl(x, xp, ilb)
-    weight = (xp[index + 1] - x) / (xp[index + 1] - xp[index])
+    lower = xp[index]
+    upper = xp[index + 1]
+    weight = (upper - x) / (upper - lower)
     return index, float(weight)
 
 
