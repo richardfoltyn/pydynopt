@@ -447,6 +447,34 @@ def interp2d_scalar(
     return float(value)
 
 
+@register_jitable(**JIT_OPTIONS_INLINE)
+def _interp2d_scalar_c(
+    x0: float | np.number,
+    x1: float | np.number,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    fp: np.ndarray,
+    ilb: Sequence[int] | np.ndarray | None = None,
+    extrapolate: bool = True,
+) -> float:
+    """Interpolate one point with C-contiguous two-dimensional values."""
+    ilb0, ilb1 = _initial_indices(ilb)
+    index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
+    index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
+
+    if not extrapolate and (
+        weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
+    ):
+        return np.nan
+
+    n1 = fp.shape[1]
+    offset = index0 * n1 + index1
+    value0 = weight0 * fp.flat[offset] + (1.0 - weight0) * fp.flat[offset + n1]
+    value1 = weight0 * fp.flat[offset + 1] + (1.0 - weight0) * fp.flat[offset + n1 + 1]
+    value = weight1 * value0 + (1.0 - weight1) * value1
+    return float(value)
+
+
 @register_jitable(**JIT_OPTIONS)
 def interp2d_array_impl(
     x0: np.ndarray,

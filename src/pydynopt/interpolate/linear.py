@@ -20,6 +20,7 @@ from pydynopt.numba import JIT_OPTIONS, jit, overload as numba_overload
 
 from .numba.linear import (
     _interp2d_eval_scalar_c,
+    _interp2d_scalar_c,
     interp1d_array,
     interp1d_array_impl,
     interp1d_eval_array,
@@ -1100,17 +1101,41 @@ def _overload_interp2d(
         if not _numba_none(out):
             return None
 
-        def impl(
-            x0,
-            x1,
-            xp0,
-            xp1,
-            fp,
-            ilb=None,
-            extrapolate=True,
-            out=None,
-        ):
-            return interp2d_scalar(x0, x1, xp0, xp1, fp, ilb, extrapolate)
+        if getattr(fp, 'layout', None) == 'C':
+
+            def impl(
+                x0,
+                x1,
+                xp0,
+                xp1,
+                fp,
+                ilb=None,
+                extrapolate=True,
+                out=None,
+            ):
+                return _interp2d_scalar_c(
+                    x0,
+                    x1,
+                    xp0,
+                    xp1,
+                    fp,
+                    ilb,
+                    extrapolate,
+                )
+
+        else:
+
+            def impl(
+                x0,
+                x1,
+                xp0,
+                xp1,
+                fp,
+                ilb=None,
+                extrapolate=True,
+                out=None,
+            ):
+                return interp2d_scalar(x0, x1, xp0, xp1, fp, ilb, extrapolate)
 
         return impl
     if _numba_real_array(x0) and _numba_real_array(x1):
