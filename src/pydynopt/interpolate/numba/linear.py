@@ -338,10 +338,13 @@ def interp2d_eval_scalar(
 
     index0 = index[0]
     index1 = index[1]
-    value0 = weight0 * fp[index0, index1] + (1.0 - weight0) * fp[index0 + 1, index1]
-    value1 = (
-        weight0 * fp[index0, index1 + 1] + (1.0 - weight0) * fp[index0 + 1, index1 + 1]
-    )
+    lower0 = fp[index0, index1]
+    upper0 = fp[index0 + 1, index1]
+    lower1 = fp[index0, index1 + 1]
+    upper1 = fp[index0 + 1, index1 + 1]
+    upper_weight0 = 1.0 - weight0
+    value0 = weight0 * lower0 + upper_weight0 * upper0
+    value1 = weight0 * lower1 + upper_weight0 * upper1
     value = weight1 * value0 + (1.0 - weight1) * value1
     return float(value)
 

@@ -95,6 +95,21 @@ benchmark-specific shortcuts.
   kernels use `JIT_OPTIONS_INLINE`; `interp1d_locate_scalar` is forced inline, but
   `bsearch_impl` deliberately is not. Run 8 passes all checks at `11.975886` ns.
   This structure captures most of run 5's speed without the compiler bug.
-- Repeated 2D field evaluation remains about 6.9-7.0 ns per state component and has
-  changed little. Current larger costs are 2D locate/combined paths and random
-  searches.
+- Run 12 safely inlined `_initial_indices` through separate compile-time overloads
+  for `None` and indexable inputs. Directly forcing the polymorphic helper inline
+  failed in run 9 because Numba typed the invalid dead branch.
+- Run 15 forced only `interp2d_locate_scalar_impl` inline and cut buffered 2D
+  locate from about 38 to 27 ns. Inlining its allocation wrapper (run 14) or full
+  array loops (run 16) did not help.
+- Run 17 confirmed that forcing `bsearch_impl` inline only expands array code; keep
+  the current non-forced boundary below the forced-inline locate helper.
+- Runs 19-20 forced only public 1D/2D locate overloads inline, removing tuple/call
+  overhead. Public eval (run 18) and combined interpolation (run 21) overloads
+  should remain at default policy.
+- Run 22 cached lower/upper grid endpoint loads in the locate helper. Current best
+  is `geomean_ns=10.677580`; local 1D locate is about 5.6 ns and buffered 2D locate
+  about 21.4 ns.
+- Difference-form 1D arithmetic (run 13) and dimension-1-first bilinear arithmetic
+  (runs 10-11) regressed the broad suite. Keep the weighted-sum formulations.
+- Repeated 2D field evaluation remains about 6.9-7.1 ns per state component and has
+  changed little.
