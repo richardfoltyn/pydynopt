@@ -919,7 +919,7 @@ def _numba_real_array(value: Any) -> bool:
     )
 
 
-@numba_overload(interp1d_locate, jit_options=JIT_OPTIONS)
+@numba_overload(interp1d_locate, jit_options=JIT_OPTIONS, inline='always')
 def _overload_interp1d_locate(
     x: Any,
     xp: Any,
