@@ -488,8 +488,8 @@ def _interp2d_scalar_c(
 ) -> float:
     """Interpolate one point with C-contiguous two-dimensional values."""
     ilb0, ilb1 = _initial_indices(ilb)
-    index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
     index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
+    index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
 
     if not extrapolate and (
         weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
