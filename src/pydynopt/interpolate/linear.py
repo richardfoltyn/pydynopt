@@ -1031,6 +1031,30 @@ def _overload_interp2d_locate(
 
 
 @numba_overload(interp2d_eval, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp2d_eval_strided(
+    index: Any,
+    weight: Any,
+    fp: Any,
+    extrapolate: Any = True,
+    out: Any = None,
+) -> Any:
+    from numba import types
+
+    if (
+        isinstance(index, types.Array)
+        and index.ndim == 1
+        and getattr(fp, 'layout', None) == 'A'
+        and _numba_none(out)
+    ):
+
+        def impl(index, weight, fp, extrapolate=True, out=None):
+            return interp2d_eval_scalar(index, weight, fp, extrapolate)
+
+        return impl
+    return None
+
+
+@numba_overload(interp2d_eval, jit_options=JIT_OPTIONS)
 def _overload_interp2d_eval(
     index: Any,
     weight: Any,
@@ -1041,7 +1065,7 @@ def _overload_interp2d_eval(
     from numba import types
 
     if isinstance(index, types.Array) and index.ndim == 1:
-        if not _numba_none(out):
+        if getattr(fp, 'layout', None) == 'A' or not _numba_none(out):
             return None
 
         def impl(index, weight, fp, extrapolate=True, out=None):
