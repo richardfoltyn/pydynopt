@@ -57,7 +57,7 @@ def bsearch(needle: float | np.number, haystack: np.ndarray, ilb: int = 0) -> in
     return bsearch_impl(needle, haystack, ilb_start)
 
 
-@jit(inline='always', **JIT_OPTIONS)
+@jit(**JIT_OPTIONS)
 def bsearch_impl(needle: float | np.number, haystack: np.ndarray, ilb: int = 0) -> int:
     """Locate an interval without validating inputs.
 

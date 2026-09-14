@@ -42,7 +42,7 @@ __all__ = [
 ]
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp1d_locate_scalar(
     x: float | np.number,
     xp: np.ndarray,
