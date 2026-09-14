@@ -70,7 +70,12 @@ def bsearch_impl(needle: float | np.number, haystack: np.ndarray, ilb: int = 0) 
     if haystack[ilb] <= needle:
         if haystack[ilb + 1] > needle or ilb == (n - 2):
             return ilb
+        ilb += 1
+        if haystack[ilb + 1] > needle or ilb == (n - 2):
+            return ilb
     else:
+        if ilb > 0 and haystack[ilb - 1] <= needle:
+            return ilb - 1
         ilb, iub = 0, ilb
 
     while iub > (ilb + 1):
