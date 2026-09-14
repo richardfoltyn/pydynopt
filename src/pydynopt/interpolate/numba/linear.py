@@ -245,7 +245,7 @@ def _overload_initial_indices(ilb: Any) -> Any:
     return impl
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp2d_locate_scalar_impl(
     x0: float | np.number,
     x1: float | np.number,
