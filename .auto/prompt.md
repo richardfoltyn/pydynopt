@@ -59,6 +59,7 @@ benchmark-specific shortcuts.
 
 ## Constraints
 
+- Stop after logging experiment 100 and settle on the best kept run.
 - Benchmark processes must have exact CPU affinity 0-7.
 - No `fastmath`, reduced precision, hard-coded benchmark values, skipped work, or
   benchmark-specific branches.

@@ -529,10 +529,12 @@ def interp2d_array_impl(
             ilb0, weight0 = interp1d_locate_scalar(x0.flat[i], xp0, ilb0)
             ilb1, weight1 = interp1d_locate_scalar(x1.flat[i], xp1, ilb1)
 
-            value0 = weight0 * fp[ilb0, ilb1] + (1.0 - weight0) * fp[ilb0 + 1, ilb1]
-            value1 = (
-                weight0 * fp[ilb0, ilb1 + 1] + (1.0 - weight0) * fp[ilb0 + 1, ilb1 + 1]
-            )
+            lower0 = fp[ilb0, ilb1]
+            lower1 = fp[ilb0, ilb1 + 1]
+            upper0 = fp[ilb0 + 1, ilb1]
+            upper1 = fp[ilb0 + 1, ilb1 + 1]
+            value0 = weight0 * lower0 + (1.0 - weight0) * upper0
+            value1 = weight0 * lower1 + (1.0 - weight0) * upper1
             out.flat[i] = weight1 * value0 + (1.0 - weight1) * value1
         return
 
