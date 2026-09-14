@@ -982,8 +982,8 @@ def _overload_interp1d_eval(
     return None
 
 
-@numba_overload(interp1d, jit_options=JIT_OPTIONS)
-def _overload_interp1d(
+@numba_overload(interp1d, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp1d_scalar_inline(
     x: Any,
     xp: Any,
     fp: Any,
@@ -993,9 +993,7 @@ def _overload_interp1d(
     right: Any = np.nan,
     out: Any = None,
 ) -> Any:
-    if _numba_real_scalar(x):
-        if not _numba_none(out):
-            return None
+    if _numba_real_scalar(x) and _numba_none(out):
 
         def impl(
             x,
@@ -1010,6 +1008,22 @@ def _overload_interp1d(
             return interp1d_scalar(x, xp, fp, ilb, extrapolate, left, right)
 
         return impl
+    return None
+
+
+@numba_overload(interp1d, jit_options=JIT_OPTIONS)
+def _overload_interp1d(
+    x: Any,
+    xp: Any,
+    fp: Any,
+    ilb: Any = 0,
+    extrapolate: Any = True,
+    left: Any = np.nan,
+    right: Any = np.nan,
+    out: Any = None,
+) -> Any:
+    if _numba_real_scalar(x):
+        return None
     if _numba_real_array(x):
         return interp1d_array
     return None
