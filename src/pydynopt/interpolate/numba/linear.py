@@ -157,7 +157,7 @@ def interp1d_eval_array(
     return result
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp1d_scalar(
     x: float | np.number,
     xp: np.ndarray,
@@ -364,7 +364,7 @@ def interp2d_eval_array(
     return result
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp2d_scalar(
     x0: float | np.number,
     x1: float | np.number,
