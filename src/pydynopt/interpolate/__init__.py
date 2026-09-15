@@ -4,14 +4,15 @@
   and ``fp`` arrays.
 - Scalar 1D queries return floats; array and sequence queries return arrays and
   support validated output buffers.
-- Two-dimensional coordinates follow NumPy broadcasting in Python, and ``fp``
-  must have shape ``(len(xp0), len(xp1))``.
+- Multi-dimensional coordinates follow NumPy broadcasting in Python, and ``fp``
+  must conform to the corresponding interpolation grids.
 - Locate and evaluate operations are available separately from combined
   interpolation.
-- Length-two tuple inputs to ``interp2d_eval`` avoid temporary index and weight
-  arrays when a Numba kernel evaluates several fields at the same coordinates.
+- Length-two and length-three tuple inputs to ``interp2d_eval`` and
+  ``interp3d_eval`` avoid temporary index and weight arrays when a Numba kernel
+  evaluates several fields at the same coordinates.
 
-The same six functions can be called from ordinary Python and Numba-compiled code.
+The same public functions can be called from ordinary Python and Numba-compiled code.
 Low-level kernels live in the ``pydynopt.interpolate.numba`` submodules.
 
 This work is licensed under CC BY 4.0,
@@ -27,6 +28,9 @@ from .linear import (
     interp2d,
     interp2d_eval,
     interp2d_locate,
+    interp3d,
+    interp3d_eval,
+    interp3d_locate,
 )
 
 __all__ = [
@@ -36,4 +40,7 @@ __all__ = [
     'interp2d',
     'interp2d_eval',
     'interp2d_locate',
+    'interp3d',
+    'interp3d_eval',
+    'interp3d_locate',
 ]

@@ -1,7 +1,7 @@
 # Optimizing Numba linear interpolation
 
-This guide records the principles behind the optimized one- and two-dimensional
-linear interpolation kernels. It is intended for agents or developers optimizing a
+This guide records the principles behind the optimized one-, two-, and
+three-dimensional linear interpolation kernels. It is intended for agents or developers optimizing a
 similar code base, not as a promise that every choice is optimal on every CPU or
 Numba release.
 
@@ -23,7 +23,7 @@ that guided these changes has the following important properties:
 - A previous lower-bound index is reused as the next search hint.
 - Several function arrays are evaluated at the same located coordinates.
 - Local and random query movement both matter.
-- 2D values may be C-contiguous or arbitrary-strided.
+- 2D and 3D values may be C-contiguous or arbitrary-strided.
 - Array calls may reuse caller-provided output buffers.
 
 Use a frozen, balanced suite. Include same/adjacent and distant searches, scalar and
@@ -179,6 +179,29 @@ loads materially slowed strided arrays.
 Keep the explicit shared dimension-0 complement in this evaluator. Writing
 `1.0 - weight0` twice regressed the strided path even though a compiler might appear
 able to eliminate it.
+
+## Extend the arithmetic tree to 3D
+
+The 3D kernels apply the established interpolation tree one axis at a time: first
+axis 0 at four pairs of corners, then axis 1 at the two remaining pairs, and
+finally axis 2. Retain that order rather than replacing it with an algebraically
+equivalent formulation.
+
+`_interp3d_eval_point_c` and `_interp3d_point_c` calculate one row-major base
+offset:
+
+```text
+offset = index0 * (size1 * size2) + index1 * size2 + index2
+```
+
+The eight corners are loaded as four adjacent pairs from the two neighboring
+planes. The arbitrary-strided evaluator instead retains plane and row views before
+loading the same corners. Length-three index and weight tuples provide the same
+allocation-free repeated-field path as the 2D tuple API.
+
+The 3D benchmark group covers point location, fused point interpolation, C and
+strided repeated-field evaluation, array calls with and without output reuse,
+extrapolation, and Python broadcasting.
 
 ### Search order is caller-specific
 

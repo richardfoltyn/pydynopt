@@ -55,7 +55,7 @@ improvement that hides a common-case regression.
 
 ## Scope
 
-The interpolation suite covers:
+The interpolation suite covers 1D, 2D, and 3D workloads, including:
 
 - local, same-interval, and distant search patterns;
 - scalar and array calls from Numba-compiled kernels;
@@ -63,7 +63,8 @@ The interpolation suite covers:
 - caller-provided and internally allocated output arrays;
 - actual out-of-grid extrapolation;
 - direct Python/NumPy array calls;
-- downstream-style pipelines that locate once and evaluate several fields.
+- downstream-style pipelines that locate once and evaluate several 1D, 2D, or 3D
+  fields.
 
 Benchmarks are deliberately not collected by pytest and should not run in ordinary
 shared CI. A dedicated benchmark host can archive the JSON output and apply

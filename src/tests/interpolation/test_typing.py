@@ -12,6 +12,9 @@ from pydynopt.interpolate import (
     interp2d,
     interp2d_eval,
     interp2d_locate,
+    interp3d,
+    interp3d_eval,
+    interp3d_locate,
 )
 
 
@@ -66,3 +69,27 @@ def test_consumer_return_types() -> None:
     )
     assert_type(interp2d(0.5, 0.5, xp, xp, fp[:, None] + fp), float)
     assert_type(interp2d(x, 0.5, xp, xp, fp[:, None] + fp), NDArray[np.float64])
+
+    fp3 = fp[:, None, None] + fp[None, :, None] + fp[None, None, :]
+    assert_type(
+        interp3d_locate(0.5, 0.5, 0.5, xp, xp, xp),
+        tuple[NDArray[np.int64], NDArray[np.float64]],
+    )
+    index_point3 = np.array([0, 0, 0], dtype=np.int64)
+    weight_point3 = np.array([0.5, 0.5, 0.5])
+    index3, weight3 = interp3d_locate(x, x, x, xp, xp, xp)
+    assert_type(
+        interp3d_eval(index_point3, weight_point3, fp3),
+        float | NDArray[np.float64],
+    )
+    assert_type(interp3d_eval(index3, weight3, fp3), float | NDArray[np.float64])
+    assert_type(
+        interp3d_eval(
+            (0, np.int64(0), 0),
+            (0.5, np.float32(0.5), 0.5),
+            fp3,
+        ),
+        float,
+    )
+    assert_type(interp3d(0.5, 0.5, 0.5, xp, xp, xp, fp3), float)
+    assert_type(interp3d(x, 0.5, 0.5, xp, xp, xp, fp3), NDArray[np.float64])

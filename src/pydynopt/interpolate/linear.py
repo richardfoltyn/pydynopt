@@ -1,4 +1,4 @@
-"""Provide checked one- and two-dimensional linear interpolation.
+"""Provide checked one-, two-, and three-dimensional linear interpolation.
 
 - Normalize and validate Python inputs before entering numerical kernels.
 - Register Numba overloads that dispatch public calls to the same kernels.
@@ -21,6 +21,8 @@ from pydynopt.numba import JIT_OPTIONS, jit, overload as numba_overload
 from .numba.linear import (
     _interp2d_eval_point_c,
     _interp2d_scalar_c,
+    _interp3d_eval_point_c,
+    _interp3d_point_c,
     interp1d_array,
     interp1d_array_impl,
     interp1d_eval_array,
@@ -40,6 +42,16 @@ from .numba.linear import (
     interp2d_locate_scalar,
     interp2d_locate_scalar_impl,
     interp2d_scalar,
+    interp3d_array,
+    interp3d_array_impl,
+    interp3d_eval_array,
+    interp3d_eval_array_impl,
+    interp3d_eval_point as _interp3d_eval_point,
+    interp3d_locate_array,
+    interp3d_locate_array_impl,
+    interp3d_locate_point,
+    interp3d_locate_point_impl,
+    interp3d_point,
 )
 
 __all__ = [
@@ -49,6 +61,9 @@ __all__ = [
     'interp2d',
     'interp2d_eval',
     'interp2d_locate',
+    'interp3d',
+    'interp3d_eval',
+    'interp3d_locate',
 ]
 
 type RealScalar = int | float | np.integer[Any] | np.floating[Any]
@@ -57,8 +72,11 @@ type ArrayQuery = Sequence[RealScalar] | np.ndarray
 type FloatArray = NDArray[np.float64]
 type IndexArray = NDArray[np.int64]
 type InitialIndex2D = Sequence[IntegerScalar] | np.ndarray | None
+type InitialIndex3D = Sequence[IntegerScalar] | np.ndarray | None
 type ScalarIndex2D = tuple[IntegerScalar, IntegerScalar]
+type ScalarIndex3D = tuple[IntegerScalar, IntegerScalar, IntegerScalar]
 type ScalarWeight2D = tuple[RealScalar, RealScalar]
+type ScalarWeight3D = tuple[RealScalar, RealScalar, RealScalar]
 
 _interp1d_locate_scalar_jit = jit(interp1d_locate_scalar, **JIT_OPTIONS)
 _interp1d_locate_array_jit = jit(interp1d_locate_array_impl, **JIT_OPTIONS)
@@ -73,6 +91,14 @@ _interp2d_eval_point_c_jit = jit(_interp2d_eval_point_c, **JIT_OPTIONS)
 _interp2d_eval_array_jit = jit(interp2d_eval_array_impl, **JIT_OPTIONS)
 _interp2d_scalar_jit = jit(interp2d_scalar, **JIT_OPTIONS)
 _interp2d_array_jit = jit(interp2d_array_impl, **JIT_OPTIONS)
+_interp3d_locate_point_jit = jit(interp3d_locate_point_impl, **JIT_OPTIONS)
+_interp3d_locate_array_jit = jit(interp3d_locate_array_impl, **JIT_OPTIONS)
+_interp3d_eval_point_jit = jit(_interp3d_eval_point, **JIT_OPTIONS)
+_interp3d_eval_point_c_jit = jit(_interp3d_eval_point_c, **JIT_OPTIONS)
+_interp3d_eval_array_jit = jit(interp3d_eval_array_impl, **JIT_OPTIONS)
+_interp3d_point_jit = jit(interp3d_point, **JIT_OPTIONS)
+_interp3d_point_c_jit = jit(_interp3d_point_c, **JIT_OPTIONS)
+_interp3d_array_jit = jit(interp3d_array_impl, **JIT_OPTIONS)
 
 
 def _is_supported_real_dtype(dtype: np.dtype[Any]) -> bool:
@@ -169,6 +195,32 @@ def _normalize_indices_2d(
     index = np.empty(2, dtype=np.int64)
     index[0] = max(0, min(operator_index(array[0]), size0 - 2))
     index[1] = max(0, min(operator_index(array[1]), size1 - 2))
+    return index
+
+
+def _normalize_indices_3d(
+    ilb: InitialIndex3D,
+    size0: int,
+    size1: int,
+    size2: int,
+) -> IndexArray:
+    """Prepare three search hints for the checked Python entry points.
+
+    Missing hints start at the first interval. Supplied hints must be an integer
+    triple and are clamped independently because they guide the search rather than
+    identify corners that will be evaluated directly.
+    """
+    if ilb is None:
+        return np.zeros(3, dtype=np.int64)
+
+    array = np.asarray(ilb)
+    if array.shape != (3,) or array.dtype.kind not in 'iu':
+        msg = 'ilb must contain exactly three integer indices'
+        raise ValueError(msg)
+    index = np.empty(3, dtype=np.int64)
+    index[0] = max(0, min(operator_index(array[0]), size0 - 2))
+    index[1] = max(0, min(operator_index(array[1]), size1 - 2))
+    index[2] = max(0, min(operator_index(array[2]), size2 - 2))
     return index
 
 
@@ -955,6 +1007,495 @@ def interp2d(
     return result
 
 
+@typing_overload
+def interp3d_locate(
+    x0: RealScalar,
+    x1: RealScalar,
+    x2: RealScalar,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    xp2: np.ndarray,
+    ilb: InitialIndex3D = None,
+    index_out: IndexArray | None = None,
+    weight_out: FloatArray | None = None,
+) -> tuple[IndexArray, FloatArray]: ...
+
+
+@typing_overload
+def interp3d_locate(
+    x0: RealScalar | ArrayQuery,
+    x1: RealScalar | ArrayQuery,
+    x2: RealScalar | ArrayQuery,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    xp2: np.ndarray,
+    ilb: InitialIndex3D = None,
+    index_out: IndexArray | None = None,
+    weight_out: FloatArray | None = None,
+) -> tuple[IndexArray, FloatArray]: ...
+
+
+def interp3d_locate(
+    x0: RealScalar | ArrayQuery,
+    x1: RealScalar | ArrayQuery,
+    x2: RealScalar | ArrayQuery,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    xp2: np.ndarray,
+    ilb: InitialIndex3D = None,
+    index_out: IndexArray | None = None,
+    weight_out: FloatArray | None = None,
+) -> tuple[IndexArray, FloatArray]:
+    """Locate three-dimensional samples and lower-point weights.
+
+    Each coordinate is located independently with the optimized 1D search. Python
+    coordinate inputs are broadcast to a common sample shape before entering the
+    point or array kernel. Returned indices and weights have shape
+    ``sample_shape + (3,)``; supplied output buffers are returned by identity.
+
+    The weights select the lower grid point: one selects the lower endpoint, zero
+    selects the upper endpoint, and values outside ``[0, 1]`` indicate
+    extrapolation. ``ilb`` values are search hints, so valid integer triples are
+    clamped instead of rejected when they lie outside the grids.
+
+    Parameters
+    ----------
+    x0
+        Coordinates along the first axis.
+    x1
+        Coordinates along the second axis.
+    x2
+        Coordinates along the third axis.
+    xp0
+        Strictly increasing grid for the first axis.
+    xp1
+        Strictly increasing grid for the second axis.
+    xp2
+        Strictly increasing grid for the third axis.
+    ilb
+        Optional three initial lower-bound guesses, clamped independently.
+    index_out
+        Optional writable int64 buffer with shape ``sample_shape + (3,)``.
+    weight_out
+        Optional writable float64 buffer with shape ``sample_shape + (3,)``.
+
+    Returns
+    -------
+    index
+        Lower-bound indices for every coordinate.
+    weight
+        Corresponding lower-grid-point weights.
+
+    Raises
+    ------
+    TypeError
+        If a coordinate, grid, or output buffer has an unsupported dtype.
+    ValueError
+        If a grid is invalid, coordinates cannot be broadcast, a hint is not an
+        integer triple, or an output buffer is not conformable and writable.
+
+    Notes
+    -----
+    Numba array calls use the unchecked equal-shaped path and do not perform
+    broadcasting. Point calls may reuse caller-provided length-three buffers.
+    """
+    _validate_grid(xp0, 'xp0')
+    _validate_grid(xp1, 'xp1')
+    _validate_grid(xp2, 'xp2')
+    scalar0, xx0 = _normalize_query(x0, 'x0')
+    scalar1, xx1 = _normalize_query(x1, 'x1')
+    scalar2, xx2 = _normalize_query(x2, 'x2')
+    try:
+        xx0, xx1, xx2 = np.broadcast_arrays(xx0, xx1, xx2)
+    except ValueError as exc:
+        msg = 'x0, x1, and x2 cannot be broadcast to a common shape'
+        raise ValueError(msg) from exc
+    xx0 = _as_contiguous(xx0)
+    xx1 = _as_contiguous(xx1)
+    xx2 = _as_contiguous(xx2)
+
+    shape = (*xx0.shape, 3)
+    dtype = _result_dtype(xx0, xx1, xx2, xp0, xp1, xp2)
+    index = _prepare_index_output(index_out, shape)
+    weight = _prepare_float_output(weight_out, shape, dtype, 'weight_out')
+    index0 = _normalize_indices_3d(ilb, xp0.size, xp1.size, xp2.size)
+
+    if scalar0 and scalar1 and scalar2:
+        _interp3d_locate_point_jit(
+            xx0.item(),
+            xx1.item(),
+            xx2.item(),
+            xp0,
+            xp1,
+            xp2,
+            index0,
+            index,
+            weight,
+        )
+    else:
+        _interp3d_locate_array_jit(xx0, xx1, xx2, xp0, xp1, xp2, index0, index, weight)
+    return index, weight
+
+
+@typing_overload
+def interp3d_eval(
+    index: ScalarIndex3D,
+    weight: ScalarWeight3D,
+    fp: np.ndarray,
+    extrapolate: bool = True,
+    out: None = None,
+) -> float: ...
+
+
+@typing_overload
+def interp3d_eval(
+    index: np.ndarray,
+    weight: np.ndarray,
+    fp: np.ndarray,
+    extrapolate: bool = True,
+    out: FloatArray | None = None,
+) -> float | FloatArray: ...
+
+
+def interp3d_eval(
+    index: ScalarIndex3D | np.ndarray,
+    weight: ScalarWeight3D | np.ndarray,
+    fp: np.ndarray,
+    extrapolate: bool = True,
+    out: FloatArray | None = None,
+) -> float | FloatArray:
+    """Evaluate a trilinear interpolant from indices and weights.
+
+    Evaluation follows a fixed arithmetic tree: interpolate axis 0 at four corner
+    pairs, axis 1 at the resulting two pairs, and axis 2 last. This order matches
+    the lower-point weight convention and is retained across C-contiguous and
+    arbitrary-strided kernels.
+
+    Length-three tuples provide an allocation-free point representation for Numba
+    callers that reuse one location across several fields. C-contiguous point
+    values use a single flattened base offset; arbitrary-strided values retain
+    explicit plane and row addressing.
+
+    Parameters
+    ----------
+    index
+        A length-three tuple for one point, or an integer array with shape
+        ``sample_shape + (3,)``.
+    weight
+        Lower-grid-point weights with the same category and shape as ``index``.
+    fp
+        Three-dimensional function values with at least two values per axis.
+    extrapolate
+        Whether to evaluate the trilinear extrapolant outside any grid. If false,
+        an exterior point receives ``NaN``.
+    out
+        Optional writable float64 buffer with ``sample_shape``. Not supported for
+        a single point.
+
+    Returns
+    -------
+    A Python float for one point, an allocated float64 array for multiple points,
+    or the supplied output buffer by identity.
+
+    Raises
+    ------
+    TypeError
+        If indices and weights use incompatible representations or unsupported
+        dtypes, or a point call receives an output buffer.
+    ValueError
+        If the arrays have incompatible shapes, ``fp`` is not three-dimensional,
+        or an output buffer is not conformable and writable.
+    IndexError
+        If any lower-bound index is outside its valid grid interval range.
+
+    Notes
+    -----
+    When ``extrapolate`` is false, a weight outside ``[0, 1]`` produces ``NaN``.
+    Non-finite weights otherwise propagate through the interpolation arithmetic.
+    """
+    _validate_real_array(fp, 'fp', ndim=3)
+    if fp.shape[0] < 2 or fp.shape[1] < 2 or fp.shape[2] < 2:
+        msg = 'fp must have at least two values on each axis'
+        raise ValueError(msg)
+
+    if isinstance(index, tuple):
+        if not isinstance(weight, tuple):
+            msg = 'index and weight must both be arrays or both be length-three tuples'
+            raise TypeError(msg)
+        if len(index) != 3 or len(weight) != 3:
+            msg = 'tuple index and weight inputs must have length three'
+            raise ValueError(msg)
+        if out is not None:
+            msg = 'single-point interp3d_eval calls do not accept an output buffer'
+            raise TypeError(msg)
+
+        try:
+            index0 = operator_index(index[0])
+            index1 = operator_index(index[1])
+            index2 = operator_index(index[2])
+        except TypeError as exc:
+            msg = 'tuple index inputs must contain integer scalars'
+            raise TypeError(msg) from exc
+        _validate_real_scalar(weight[0], 'weight[0]')
+        _validate_real_scalar(weight[1], 'weight[1]')
+        _validate_real_scalar(weight[2], 'weight[2]')
+        if (
+            index0 < 0
+            or index0 >= fp.shape[0] - 1
+            or index1 < 0
+            or index1 >= fp.shape[1] - 1
+            or index2 < 0
+            or index2 >= fp.shape[2] - 1
+        ):
+            msg = 'index values are outside the valid lower-bound ranges'
+            raise IndexError(msg)
+
+        if fp.flags.c_contiguous:
+            value = _interp3d_eval_point_c_jit(index, weight, fp, extrapolate)
+        else:
+            value = _interp3d_eval_point_jit(index, weight, fp, extrapolate)
+        return float(value)
+
+    if not isinstance(index, np.ndarray) or not isinstance(weight, np.ndarray):
+        msg = 'index and weight must both be arrays or both be length-three tuples'
+        raise TypeError(msg)
+    if index.dtype.kind not in 'iu':
+        msg = 'index must have an integer dtype'
+        raise TypeError(msg)
+    _validate_real_array(weight, 'weight')
+    if index.shape != weight.shape:
+        msg = 'index and weight must have equal shapes'
+        raise ValueError(msg)
+    if index.ndim < 1 or index.shape[-1] != 3:
+        msg = 'index and weight must end in a coordinate dimension of length three'
+        raise ValueError(msg)
+    if (
+        np.any(index[..., 0] < 0)
+        or np.any(index[..., 0] >= fp.shape[0] - 1)
+        or np.any(index[..., 1] < 0)
+        or np.any(index[..., 1] >= fp.shape[1] - 1)
+        or np.any(index[..., 2] < 0)
+        or np.any(index[..., 2] >= fp.shape[2] - 1)
+    ):
+        msg = 'index values are outside the valid lower-bound ranges'
+        raise IndexError(msg)
+
+    index_work = np.ascontiguousarray(index)
+    weight_work = np.ascontiguousarray(weight)
+    if index.ndim == 1:
+        if out is not None:
+            msg = 'single-point interp3d_eval calls do not accept an output buffer'
+            raise TypeError(msg)
+        if fp.flags.c_contiguous:
+            value = _interp3d_eval_point_c_jit(index_work, weight_work, fp, extrapolate)
+        else:
+            value = _interp3d_eval_point_jit(index_work, weight_work, fp, extrapolate)
+        return float(value)
+
+    shape = index.shape[:-1]
+    dtype = _result_dtype(weight_work, fp)
+    result = _prepare_float_output(out, shape, dtype)
+    _interp3d_eval_array_jit(index_work, weight_work, fp, extrapolate, result)
+    return result
+
+
+@typing_overload
+def interp3d(
+    x0: RealScalar,
+    x1: RealScalar,
+    x2: RealScalar,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    xp2: np.ndarray,
+    fp: np.ndarray,
+    ilb: InitialIndex3D = None,
+    extrapolate: bool = True,
+    out: None = None,
+) -> float: ...
+
+
+@typing_overload
+def interp3d(
+    x0: ArrayQuery,
+    x1: RealScalar | ArrayQuery,
+    x2: RealScalar | ArrayQuery,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    xp2: np.ndarray,
+    fp: np.ndarray,
+    ilb: InitialIndex3D = None,
+    extrapolate: bool = True,
+    out: FloatArray | None = None,
+) -> FloatArray: ...
+
+
+@typing_overload
+def interp3d(
+    x0: RealScalar,
+    x1: ArrayQuery,
+    x2: RealScalar | ArrayQuery,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    xp2: np.ndarray,
+    fp: np.ndarray,
+    ilb: InitialIndex3D = None,
+    extrapolate: bool = True,
+    out: FloatArray | None = None,
+) -> FloatArray: ...
+
+
+@typing_overload
+def interp3d(
+    x0: RealScalar,
+    x1: RealScalar,
+    x2: ArrayQuery,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    xp2: np.ndarray,
+    fp: np.ndarray,
+    ilb: InitialIndex3D = None,
+    extrapolate: bool = True,
+    out: FloatArray | None = None,
+) -> FloatArray: ...
+
+
+def interp3d(
+    x0: RealScalar | ArrayQuery,
+    x1: RealScalar | ArrayQuery,
+    x2: RealScalar | ArrayQuery,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    xp2: np.ndarray,
+    fp: np.ndarray,
+    ilb: InitialIndex3D = None,
+    extrapolate: bool = True,
+    out: FloatArray | None = None,
+) -> float | FloatArray:
+    """Perform trilinear interpolation at three-dimensional coordinates.
+
+    This fused entry point locates each coordinate and evaluates the eight
+    surrounding values without materializing intermediate index and weight arrays.
+    It uses the same axis-0, axis-1, then axis-2 arithmetic tree as
+    :func:`interp3d_eval`.
+
+    Python inputs are broadcast before dispatch. Numba point calls select a
+    C-contiguous flat-offset kernel or a correct arbitrary-strided kernel at typing
+    time; Numba array calls require equal-shaped coordinates and keep the large
+    loop out of line.
+
+    Parameters
+    ----------
+    x0
+        Coordinates along the first axis.
+    x1
+        Coordinates along the second axis.
+    x2
+        Coordinates along the third axis. Python calls broadcast all coordinates.
+    xp0
+        Strictly increasing grid for the first axis.
+    xp1
+        Strictly increasing grid for the second axis.
+    xp2
+        Strictly increasing grid for the third axis.
+    fp
+        Function values with shape ``(len(xp0), len(xp1), len(xp2))``.
+    ilb
+        Optional three initial lower-bound guesses, clamped independently.
+    extrapolate
+        Whether to evaluate outside the grids. If false, exterior points receive
+        ``NaN``.
+    out
+        Optional writable float64 buffer with the broadcast coordinate shape. Only
+        supported when at least one coordinate follows the array path.
+
+    Returns
+    -------
+    A Python float for scalar coordinates, an allocated float64 array for array
+    coordinates, or the supplied output buffer by identity.
+
+    Raises
+    ------
+    TypeError
+        If an input or output buffer has an unsupported dtype, or a point call
+        receives an output buffer.
+    ValueError
+        If a grid or ``fp`` is invalid, coordinates cannot be broadcast, or an
+        output buffer is not conformable and writable.
+
+    Notes
+    -----
+    Search hints are clamped independently. With extrapolation disabled, any
+    coordinate outside its grid produces ``NaN``.
+    """
+    _validate_grid(xp0, 'xp0')
+    _validate_grid(xp1, 'xp1')
+    _validate_grid(xp2, 'xp2')
+    _validate_real_array(fp, 'fp', ndim=3)
+    expected = (xp0.size, xp1.size, xp2.size)
+    if fp.shape != expected:
+        msg = f'fp must have shape {expected}, got {fp.shape}'
+        raise ValueError(msg)
+
+    scalar0, xx0 = _normalize_query(x0, 'x0')
+    scalar1, xx1 = _normalize_query(x1, 'x1')
+    scalar2, xx2 = _normalize_query(x2, 'x2')
+    try:
+        xx0, xx1, xx2 = np.broadcast_arrays(xx0, xx1, xx2)
+    except ValueError as exc:
+        msg = 'x0, x1, and x2 cannot be broadcast to a common shape'
+        raise ValueError(msg) from exc
+    xx0 = _as_contiguous(xx0)
+    xx1 = _as_contiguous(xx1)
+    xx2 = _as_contiguous(xx2)
+    index0 = _normalize_indices_3d(ilb, xp0.size, xp1.size, xp2.size)
+
+    if scalar0 and scalar1 and scalar2:
+        if out is not None:
+            msg = 'single-point interp3d calls do not accept an output buffer'
+            raise TypeError(msg)
+        if fp.flags.c_contiguous:
+            value = _interp3d_point_c_jit(
+                xx0.item(),
+                xx1.item(),
+                xx2.item(),
+                xp0,
+                xp1,
+                xp2,
+                fp,
+                index0,
+                extrapolate,
+            )
+        else:
+            value = _interp3d_point_jit(
+                xx0.item(),
+                xx1.item(),
+                xx2.item(),
+                xp0,
+                xp1,
+                xp2,
+                fp,
+                index0,
+                extrapolate,
+            )
+        return float(value)
+
+    dtype = _result_dtype(xx0, xx1, xx2, xp0, xp1, xp2, fp)
+    result = _prepare_float_output(out, xx0.shape, dtype)
+    _interp3d_array_jit(
+        xx0,
+        xx1,
+        xx2,
+        xp0,
+        xp1,
+        xp2,
+        fp,
+        index0,
+        extrapolate,
+        result,
+    )
+    return result
+
+
 def _numba_none(value: Any) -> bool:
     """Return whether a Numba overload argument represents ``None``."""
     from numba import types
@@ -996,6 +1537,36 @@ def _numba_real_pair(value: Any) -> bool:
     return (
         isinstance(value, types.BaseTuple)
         and len(value) == 2
+        and all(_numba_real_scalar(item) for item in value.types)
+    )
+
+
+def _numba_integer_triplet(value: Any) -> bool:
+    """Identify the allocation-free index representation for one 3D point.
+
+    Both homogeneous and heterogeneous Numba tuples are accepted, but every
+    component must belong to Numba's integer domain.
+    """
+    from numba import types
+
+    return (
+        isinstance(value, types.BaseTuple)
+        and len(value) == 3
+        and all(item in types.integer_domain for item in value.types)
+    )
+
+
+def _numba_real_triplet(value: Any) -> bool:
+    """Identify the allocation-free weight representation for one 3D point.
+
+    Fixed-size tuples let outer compiled kernels retain the three weights as scalar
+    values instead of constructing a temporary NumPy array.
+    """
+    from numba import types
+
+    return (
+        isinstance(value, types.BaseTuple)
+        and len(value) == 3
         and all(_numba_real_scalar(item) for item in value.types)
     )
 
@@ -1265,4 +1836,195 @@ def _overload_interp2d(
         return impl
     if _numba_real_array(x0) and _numba_real_array(x1):
         return interp2d_array
+    return None
+
+
+@numba_overload(interp3d_locate, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp3d_locate(
+    x0: Any,
+    x1: Any,
+    x2: Any,
+    xp0: Any,
+    xp1: Any,
+    xp2: Any,
+    ilb: Any = None,
+    index_out: Any = None,
+    weight_out: Any = None,
+) -> Any:
+    """Select point or array location at Numba typing time.
+
+    The point wrapper is always inlined so its three-element output buffers can be
+    scalarized when the caller supplies them. The array loop remains in its
+    separately compiled implementation.
+    """
+    if _numba_real_scalar(x0) and _numba_real_scalar(x1) and _numba_real_scalar(x2):
+        return interp3d_locate_point
+    if _numba_real_array(x0) and _numba_real_array(x1) and _numba_real_array(x2):
+        return interp3d_locate_array
+    return None
+
+
+@numba_overload(interp3d_eval, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp3d_eval_strided(
+    index: Any,
+    weight: Any,
+    fp: Any,
+    extrapolate: Any = True,
+    out: Any = None,
+) -> Any:
+    """Claim arbitrary-strided point evaluation for forced caller inlining.
+
+    Inlining this layout-specific boundary lets Numba scalarize point-sized index
+    and weight views. C-contiguous calls are deliberately left for the compact,
+    normally compiled overload below.
+    """
+    from numba import types
+
+    tuple_input = (
+        _numba_integer_triplet(index)
+        and _numba_real_triplet(weight)
+        and _numba_real_array(fp)
+        and fp.ndim == 3
+    )
+    array_input = isinstance(index, types.Array) and index.ndim == 1
+    if (
+        (tuple_input or array_input)
+        and getattr(fp, 'layout', None) == 'A'
+        and _numba_none(out)
+    ):
+
+        def impl(index, weight, fp, extrapolate=True, out=None):
+            return _interp3d_eval_point(index, weight, fp, extrapolate)
+
+        return impl
+    return None
+
+
+@numba_overload(interp3d_eval, jit_options=JIT_OPTIONS)
+def _overload_interp3d_eval(
+    index: Any,
+    weight: Any,
+    fp: Any,
+    extrapolate: Any = True,
+    out: Any = None,
+) -> Any:
+    """Select compact point leaves or the out-of-line array evaluator.
+
+    Keeping the public C-layout point boundary out of line avoids expanding
+    repeated-field callers; only the flattened corner-load leaf is inlined there.
+    Arbitrary-strided points were claimed by the preceding overload.
+    """
+    from numba import types
+
+    tuple_input = (
+        _numba_integer_triplet(index)
+        and _numba_real_triplet(weight)
+        and _numba_real_array(fp)
+        and fp.ndim == 3
+    )
+    array_input = isinstance(index, types.Array) and index.ndim == 1
+    if tuple_input or array_input:
+        if getattr(fp, 'layout', None) == 'A' or not _numba_none(out):
+            return None
+
+        if getattr(fp, 'layout', None) == 'C':
+
+            def impl(index, weight, fp, extrapolate=True, out=None):
+                return _interp3d_eval_point_c(index, weight, fp, extrapolate)
+
+        else:
+
+            def impl(index, weight, fp, extrapolate=True, out=None):
+                return _interp3d_eval_point(index, weight, fp, extrapolate)
+
+        return impl
+    if isinstance(index, types.Array) and index.ndim > 1:
+        return interp3d_eval_array
+    return None
+
+
+@numba_overload(interp3d, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp3d_point_c(
+    x0: Any,
+    x1: Any,
+    x2: Any,
+    xp0: Any,
+    xp1: Any,
+    xp2: Any,
+    fp: Any,
+    ilb: Any = None,
+    extrapolate: Any = True,
+    out: Any = None,
+) -> Any:
+    """Claim fused C-contiguous point interpolation for forced inlining.
+
+    Isolating this signature prevents the large array implementation and generic
+    stride handling from being copied into compact point callers.
+    """
+    if (
+        _numba_real_scalar(x0)
+        and _numba_real_scalar(x1)
+        and _numba_real_scalar(x2)
+        and getattr(fp, 'layout', None) == 'C'
+        and _numba_none(out)
+    ):
+
+        def impl(
+            x0,
+            x1,
+            x2,
+            xp0,
+            xp1,
+            xp2,
+            fp,
+            ilb=None,
+            extrapolate=True,
+            out=None,
+        ):
+            return _interp3d_point_c(x0, x1, x2, xp0, xp1, xp2, fp, ilb, extrapolate)
+
+        return impl
+    return None
+
+
+@numba_overload(interp3d, jit_options=JIT_OPTIONS)
+def _overload_interp3d(
+    x0: Any,
+    x1: Any,
+    x2: Any,
+    xp0: Any,
+    xp1: Any,
+    xp2: Any,
+    fp: Any,
+    ilb: Any = None,
+    extrapolate: Any = True,
+    out: Any = None,
+) -> Any:
+    """Handle generic-layout points and equal-shaped coordinate arrays.
+
+    C-contiguous points are owned by the forced-inline overload above. Keeping this
+    fallback normally compiled avoids duplicating generic addressing and array
+    loops in every caller.
+    """
+    if _numba_real_scalar(x0) and _numba_real_scalar(x1) and _numba_real_scalar(x2):
+        if getattr(fp, 'layout', None) == 'C' or not _numba_none(out):
+            return None
+
+        def impl(
+            x0,
+            x1,
+            x2,
+            xp0,
+            xp1,
+            xp2,
+            fp,
+            ilb=None,
+            extrapolate=True,
+            out=None,
+        ):
+            return interp3d_point(x0, x1, x2, xp0, xp1, xp2, fp, ilb, extrapolate)
+
+        return impl
+    if _numba_real_array(x0) and _numba_real_array(x1) and _numba_real_array(x2):
+        return interp3d_array
     return None
