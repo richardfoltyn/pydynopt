@@ -65,6 +65,7 @@ def _bsearch_range(
     iub: int,
 ) -> int:
     """Search known lower and upper bounds for a bracketing interval."""
+    # Keep this cold loop out of line: inlining expands every array and 2D caller.
     while iub > (ilb + 1):
         imid = (iub + ilb) // 2
         if haystack[imid] > needle:
@@ -85,6 +86,7 @@ def bsearch_impl(needle: float | np.number, haystack: np.ndarray, ilb: int = 0) 
     n = haystack.shape[0]
     iub = n - 1
 
+    # Reused hints usually hit the same or an adjacent interval before this fallback.
     if haystack[ilb] <= needle:
         if haystack[ilb + 1] > needle or ilb == (n - 2):
             return ilb

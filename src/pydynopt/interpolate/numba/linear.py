@@ -59,6 +59,8 @@ def interp1d_locate_scalar(
     ``xp`` must satisfy the module grid preconditions, and ``ilb`` must be in
     ``[0, len(xp) - 2]``.
     """
+    # Preserve branch-local early returns: merged endpoints produce poor Numba SSA.
+    # Reuse loaded grid endpoints through weighting on the same/adjacent hot paths.
     index = ilb
     lower = xp[index]
     upper = xp[index + 1]
@@ -73,6 +75,7 @@ def interp1d_locate_scalar(
             weight = (next_upper - x) / (next_upper - upper)
             return next_index, float(weight)
 
+        # Keep distant search out of line so local callers do not absorb its loop.
         range_index = _bsearch_range(x, xp, next_index, xp.shape[0] - 1)
         range_lower = xp[range_index]
         range_upper = xp[range_index + 1]
@@ -88,6 +91,7 @@ def interp1d_locate_scalar(
         weight = (lower - x) / (lower - previous)
         return index - 1, float(weight)
 
+    # Keep index, not index - 1: the comparisons above are unordered for NaN.
     range_index = _bsearch_range(x, xp, 0, index)
     range_lower = xp[range_index]
     range_upper = xp[range_index + 1]
@@ -139,6 +143,7 @@ def interp1d_eval_scalar(
     right: float = np.nan,
 ) -> float:
     """Evaluate one located point using a valid lower-bound index and weight."""
+    # Inline this leaf, but keep the public eval overload out of repeated-field callers.
     if not extrapolate:
         if weight > 1.0:
             return float(left)
@@ -205,6 +210,7 @@ def interp1d_scalar(
     right: float = np.nan,
 ) -> float:
     """Interpolate one point on conformable one-dimensional grid and value arrays."""
+    # Both leaves must inline into the scalar-only public overload to remove tuple calls.
     index, weight = interp1d_locate_scalar(x, xp, ilb)
     return interp1d_eval_scalar(index, weight, fp, extrapolate, left, right)
 
@@ -222,6 +228,7 @@ def interp1d_array_impl(
 ) -> None:
     """Interpolate array samples into an output with the same shape as ``x``."""
     index = ilb
+    # Version this invariant outside the loop; Numba did not reliably unswitch it.
     if extrapolate:
         for i in range(x.size):
             index, weight = interp1d_locate_scalar(x.flat[i], xp, index)
@@ -261,6 +268,7 @@ def _initial_indices(
     ilb: Sequence[int] | np.ndarray | None,
 ) -> tuple[int, int]:
     """Return initial lower-bound indices for two dimensions."""
+    # The compiled overload below removes this polymorphic branch at typing time.
     if ilb is None:
         return 0, 0
     return int(ilb[0]), int(ilb[1])
@@ -270,6 +278,7 @@ def _initial_indices(
 def _overload_initial_indices(ilb: Any) -> Any:
     from numba import types
 
+    # Separate implementations avoid typing the invalid dead indexing branch for None.
     if isinstance(ilb, types.NoneType):
 
         def impl(ilb):
@@ -294,6 +303,7 @@ def interp2d_locate_scalar_impl(
     weight_out: np.ndarray,
 ) -> None:
     """Locate one point into required index and weight buffers of shape ``(2,)``."""
+    # Keep dimension 0 first and contiguous index stores before weight stores.
     ilb0, ilb1 = _initial_indices(ilb)
     index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
     index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
@@ -374,6 +384,7 @@ def interp2d_eval_scalar(
 
     index0 = index[0]
     index1 = index[1]
+    # Build both row bases first, then load adjacent corners in lower/upper row order.
     lower_row = fp[index0]
     upper_row = fp[index0 + 1]
     lower0 = lower_row[index1]
@@ -402,6 +413,8 @@ def _interp2d_eval_scalar_c(
     ):
         return np.nan
 
+    # C layout needs one row-major offset instead of four multidimensional addresses.
+    # Preserve adjacent row-wise corner loads and the shared complement below.
     n1 = fp.shape[1]
     offset = index[0] * n1 + index[1]
     lower0 = fp.flat[offset]
@@ -468,6 +481,7 @@ def interp2d_scalar(
     extrapolate: bool = True,
 ) -> float:
     """Interpolate one point on conformable two-dimensional grids and values."""
+    # Keep this generic leaf inline; C-contiguous values use the flat helper below.
     ilb0, ilb1 = _initial_indices(ilb)
     index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
     index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
@@ -497,6 +511,7 @@ def _interp2d_scalar_c(
 ) -> float:
     """Interpolate one point with C-contiguous two-dimensional values."""
     ilb0, ilb1 = _initial_indices(ilb)
+    # Dimension 1 is contiguous and fast-moving; this order is faster only here.
     index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
     index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
 
@@ -505,6 +520,7 @@ def _interp2d_scalar_c(
     ):
         return np.nan
 
+    # Keep direct flat expressions here; extra corner/complement locals add pressure.
     n1 = fp.shape[1]
     offset = index0 * n1 + index1
     value0 = weight0 * fp.flat[offset] + (1.0 - weight0) * fp.flat[offset + n1]
@@ -526,11 +542,13 @@ def interp2d_array_impl(
 ) -> None:
     """Interpolate equal-shaped coordinates into an output of the same shape."""
     ilb0, ilb1 = _initial_indices(ilb)
+    # Hoist the mode branch and keep dimension 0 search first in both loop versions.
     if extrapolate:
         for i in range(x0.size):
             ilb0, weight0 = interp1d_locate_scalar(x0.flat[i], xp0, ilb0)
             ilb1, weight1 = interp1d_locate_scalar(x1.flat[i], xp1, ilb1)
 
+            # Keep both row bases and this lower/upper contiguous load order intact.
             lower_row = fp[ilb0]
             upper_row = fp[ilb0 + 1]
             lower0 = lower_row[ilb1]

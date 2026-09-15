@@ -129,9 +129,16 @@ benchmark-specific shortcuts.
   merges and improving every 1D case, random 2D, and arrays. It also eliminated
   all `NumbaIRAssumptionWarning` output in the interpolation suite. Run 59 then
   located fast-moving dimension 1 before dimension 0 only in C-layout fused 2D
-  scalar interpolation. Current best is `geomean_ns=7.333094`; local 1D locate is
-  about 3.78 ns, buffered 2D locate about 13.6 ns, and grouped JMP-style 2D eval
-  about 4.36 ns.
+  scalar interpolation. Run 63 restored NaN hint semantics while simplifying the
+  downward fallback bound.
+- Runs 64-66 versioned extrapolation outside 1D/2D array loops and loaded 2D array
+  corners in contiguous row order. Runs 71-72 cached row views for arbitrary-
+  strided scalar evaluation and extrapolating array interpolation. Run 81 split
+  scalar and array public 1D overloads so only scalar combined interpolation is
+  forced inline.
+- Run 100 ended the session with `geomean_ns=6.981633`; local 1D locate is about
+  3.47 ns, buffered 2D locate about 13.7 ns, and grouped JMP-style 2D eval about
+  4.34 ns. This is a 61.0% reduction from the dashboard baseline.
 - Difference-form 1D arithmetic (run 13), dimension-1-first bilinear arithmetic
   (runs 10-11), full array-loop inlining (run 16), flat-iterator caching (runs 33
   and 47), and C-layout array specialization (runs 44-45) regressed or failed to
