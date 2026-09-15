@@ -19,6 +19,8 @@ from numpy.typing import NDArray
 from pydynopt.numba import JIT_OPTIONS, jit, overload as numba_overload
 
 from .numba.linear import (
+    _interp2d_eval_scalar_c,
+    _interp2d_scalar_c,
     interp1d_array,
     interp1d_array_impl,
     interp1d_eval_array,
@@ -919,7 +921,7 @@ def _numba_real_array(value: Any) -> bool:
     )
 
 
-@numba_overload(interp1d_locate, jit_options=JIT_OPTIONS)
+@numba_overload(interp1d_locate, jit_options=JIT_OPTIONS, inline='always')
 def _overload_interp1d_locate(
     x: Any,
     xp: Any,
@@ -927,6 +929,7 @@ def _overload_interp1d_locate(
     index_out: Any = None,
     weight_out: Any = None,
 ) -> Any:
+    # Inline scalar locate so tuple results and two-element views scalarize in callers.
     if _numba_real_scalar(x):
         if not _numba_none(index_out) or not _numba_none(weight_out):
             return None
@@ -980,8 +983,8 @@ def _overload_interp1d_eval(
     return None
 
 
-@numba_overload(interp1d, jit_options=JIT_OPTIONS)
-def _overload_interp1d(
+@numba_overload(interp1d, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp1d_scalar_inline(
     x: Any,
     xp: Any,
     fp: Any,
@@ -991,9 +994,8 @@ def _overload_interp1d(
     right: Any = np.nan,
     out: Any = None,
 ) -> Any:
-    if _numba_real_scalar(x):
-        if not _numba_none(out):
-            return None
+    # Keep scalar inlining separate: forcing the array overload inline expands hot loops.
+    if _numba_real_scalar(x) and _numba_none(out):
 
         def impl(
             x,
@@ -1008,12 +1010,29 @@ def _overload_interp1d(
             return interp1d_scalar(x, xp, fp, ilb, extrapolate, left, right)
 
         return impl
+    return None
+
+
+@numba_overload(interp1d, jit_options=JIT_OPTIONS)
+def _overload_interp1d(
+    x: Any,
+    xp: Any,
+    fp: Any,
+    ilb: Any = 0,
+    extrapolate: Any = True,
+    left: Any = np.nan,
+    right: Any = np.nan,
+    out: Any = None,
+) -> Any:
+    # Scalar signatures are claimed above; array wrappers must remain out of line.
+    if _numba_real_scalar(x):
+        return None
     if _numba_real_array(x):
         return interp1d_array
     return None
 
 
-@numba_overload(interp2d_locate, jit_options=JIT_OPTIONS)
+@numba_overload(interp2d_locate, jit_options=JIT_OPTIONS, inline='always')
 def _overload_interp2d_locate(
     x0: Any,
     x1: Any,
@@ -1023,10 +1042,36 @@ def _overload_interp2d_locate(
     index_out: Any = None,
     weight_out: Any = None,
 ) -> Any:
+    # Inline the scalar wrapper so supplied two-element buffers remain scalarized.
     if _numba_real_scalar(x0) and _numba_real_scalar(x1):
         return interp2d_locate_scalar
     if _numba_real_array(x0) and _numba_real_array(x1):
         return interp2d_locate_array
+    return None
+
+
+@numba_overload(interp2d_eval, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp2d_eval_strided(
+    index: Any,
+    weight: Any,
+    fp: Any,
+    extrapolate: Any = True,
+    out: Any = None,
+) -> Any:
+    from numba import types
+
+    # A-layout row views need caller inlining; C layout performs better out of line.
+    if (
+        isinstance(index, types.Array)
+        and index.ndim == 1
+        and getattr(fp, 'layout', None) == 'A'
+        and _numba_none(out)
+    ):
+
+        def impl(index, weight, fp, extrapolate=True, out=None):
+            return interp2d_eval_scalar(index, weight, fp, extrapolate)
+
+        return impl
     return None
 
 
@@ -1041,15 +1086,59 @@ def _overload_interp2d_eval(
     from numba import types
 
     if isinstance(index, types.Array) and index.ndim == 1:
-        if not _numba_none(out):
+        # The always-inline template above exclusively owns arbitrary-strided scalars.
+        if getattr(fp, 'layout', None) == 'A' or not _numba_none(out):
             return None
 
-        def impl(index, weight, fp, extrapolate=True, out=None):
-            return interp2d_eval_scalar(index, weight, fp, extrapolate)
+        # Keep this public C-layout call compact; only its flat-address leaf is inline.
+        if getattr(fp, 'layout', None) == 'C':
+
+            def impl(index, weight, fp, extrapolate=True, out=None):
+                return _interp2d_eval_scalar_c(index, weight, fp, extrapolate)
+
+        else:
+
+            def impl(index, weight, fp, extrapolate=True, out=None):
+                return interp2d_eval_scalar(index, weight, fp, extrapolate)
 
         return impl
     if isinstance(index, types.Array) and index.ndim > 1:
         return interp2d_eval_array
+    return None
+
+
+@numba_overload(interp2d, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp2d_scalar_c(
+    x0: Any,
+    x1: Any,
+    xp0: Any,
+    xp1: Any,
+    fp: Any,
+    ilb: Any = None,
+    extrapolate: Any = True,
+    out: Any = None,
+) -> Any:
+    # Isolate C scalars so forced inlining never expands generic or array implementations.
+    if (
+        _numba_real_scalar(x0)
+        and _numba_real_scalar(x1)
+        and getattr(fp, 'layout', None) == 'C'
+        and _numba_none(out)
+    ):
+
+        def impl(
+            x0,
+            x1,
+            xp0,
+            xp1,
+            fp,
+            ilb=None,
+            extrapolate=True,
+            out=None,
+        ):
+            return _interp2d_scalar_c(x0, x1, xp0, xp1, fp, ilb, extrapolate)
+
+        return impl
     return None
 
 
@@ -1064,8 +1153,9 @@ def _overload_interp2d(
     extrapolate: Any = True,
     out: Any = None,
 ) -> Any:
+    # C scalar signatures are claimed above; keep generic and array paths uninlined.
     if _numba_real_scalar(x0) and _numba_real_scalar(x1):
-        if not _numba_none(out):
+        if getattr(fp, 'layout', None) == 'C' or not _numba_none(out):
             return None
 
         def impl(

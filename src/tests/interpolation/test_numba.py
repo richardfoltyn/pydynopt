@@ -32,6 +32,15 @@ def _locate1_array(x: np.ndarray, xp: np.ndarray) -> tuple[np.ndarray, np.ndarra
 
 
 @njit
+def _locate1_scalar_hint(
+    x: float,
+    xp: np.ndarray,
+    ilb: int,
+) -> tuple[int, float]:
+    return interp1d_locate(x, xp, ilb)
+
+
+@njit
 def _eval1_scalar(index: int, weight: float, fp: np.ndarray) -> float:
     return interp1d_eval(index, weight, fp, False, -10.0, 10.0)
 
@@ -165,6 +174,17 @@ def test_public_1d_numba_scalar_and_array_paths() -> None:
         _interp1_array,
     ):
         assert function.nopython_signatures
+
+
+def test_numba_nan_location_matches_python_path() -> None:
+    xp = np.array([-2.0, 0.0, 1.0, 4.0])
+
+    expected_index, expected_weight = interp1d_locate(np.nan, xp, ilb=2)
+    index, weight = _locate1_scalar_hint(np.nan, xp, 2)
+
+    assert index == expected_index
+    assert np.isnan(weight)
+    assert np.isnan(expected_weight)
 
 
 def test_public_2d_numba_scalar_and_array_paths() -> None:

@@ -57,7 +57,26 @@ def bsearch(needle: float | np.number, haystack: np.ndarray, ilb: int = 0) -> in
     return bsearch_impl(needle, haystack, ilb_start)
 
 
-@jit(inline='always', **JIT_OPTIONS)
+@jit(**JIT_OPTIONS)
+def _bsearch_range(
+    needle: float | np.number,
+    haystack: np.ndarray,
+    ilb: int,
+    iub: int,
+) -> int:
+    """Search known lower and upper bounds for a bracketing interval."""
+    # Keep this cold loop out of line: inlining expands every array and 2D caller.
+    while iub > (ilb + 1):
+        imid = (iub + ilb) // 2
+        if haystack[imid] > needle:
+            iub = imid
+        else:
+            ilb = imid
+
+    return ilb
+
+
+@jit(**JIT_OPTIONS)
 def bsearch_impl(needle: float | np.number, haystack: np.ndarray, ilb: int = 0) -> int:
     """Locate an interval without validating inputs.
 
@@ -67,10 +86,16 @@ def bsearch_impl(needle: float | np.number, haystack: np.ndarray, ilb: int = 0) 
     n = haystack.shape[0]
     iub = n - 1
 
+    # Reused hints usually hit the same or an adjacent interval before this fallback.
     if haystack[ilb] <= needle:
         if haystack[ilb + 1] > needle or ilb == (n - 2):
             return ilb
+        ilb += 1
+        if haystack[ilb + 1] > needle or ilb == (n - 2):
+            return ilb
     else:
+        if ilb > 0 and haystack[ilb - 1] <= needle:
+            return ilb - 1
         ilb, iub = 0, ilb
 
     while iub > (ilb + 1):

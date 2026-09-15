@@ -12,12 +12,18 @@ Author: Richard Foltyn
 """
 
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
-from pydynopt.numba import JIT_OPTIONS, register_jitable
+from pydynopt.numba import (
+    JIT_OPTIONS,
+    JIT_OPTIONS_INLINE,
+    overload as numba_overload,
+    register_jitable,
+)
 
-from .search import bsearch_impl
+from .search import _bsearch_range
 
 __all__ = [
     'interp1d_array',
@@ -42,7 +48,7 @@ __all__ = [
 ]
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp1d_locate_scalar(
     x: float | np.number,
     xp: np.ndarray,
@@ -53,9 +59,44 @@ def interp1d_locate_scalar(
     ``xp`` must satisfy the module grid preconditions, and ``ilb`` must be in
     ``[0, len(xp) - 2]``.
     """
-    index = bsearch_impl(x, xp, ilb)
-    weight = (xp[index + 1] - x) / (xp[index + 1] - xp[index])
-    return index, float(weight)
+    # Preserve branch-local early returns: merged endpoints produce poor Numba SSA.
+    # Reuse loaded grid endpoints through weighting on the same/adjacent hot paths.
+    index = ilb
+    lower = xp[index]
+    upper = xp[index + 1]
+    if lower <= x:
+        if upper > x or index == xp.shape[0] - 2:
+            weight = (upper - x) / (upper - lower)
+            return index, float(weight)
+
+        next_index = index + 1
+        next_upper = xp[next_index + 1]
+        if next_upper > x or next_index == xp.shape[0] - 2:
+            weight = (next_upper - x) / (next_upper - upper)
+            return next_index, float(weight)
+
+        # Keep distant search out of line so local callers do not absorb its loop.
+        range_index = _bsearch_range(x, xp, next_index, xp.shape[0] - 1)
+        range_lower = xp[range_index]
+        range_upper = xp[range_index + 1]
+        weight = (range_upper - x) / (range_upper - range_lower)
+        return range_index, float(weight)
+
+    if index == 0:
+        weight = (upper - x) / (upper - lower)
+        return index, float(weight)
+
+    previous = xp[index - 1]
+    if previous <= x:
+        weight = (lower - x) / (lower - previous)
+        return index - 1, float(weight)
+
+    # Keep index, not index - 1: the comparisons above are unordered for NaN.
+    range_index = _bsearch_range(x, xp, 0, index)
+    range_lower = xp[range_index]
+    range_upper = xp[range_index + 1]
+    weight = (range_upper - x) / (range_upper - range_lower)
+    return range_index, float(weight)
 
 
 @register_jitable(**JIT_OPTIONS)
@@ -92,7 +133,7 @@ def interp1d_locate_array(
     return index, weight
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp1d_eval_scalar(
     index: int | np.integer,
     weight: float | np.number,
@@ -102,6 +143,7 @@ def interp1d_eval_scalar(
     right: float = np.nan,
 ) -> float:
     """Evaluate one located point using a valid lower-bound index and weight."""
+    # Inline this leaf, but keep the public eval overload out of repeated-field callers.
     if not extrapolate:
         if weight > 1.0:
             return float(left)
@@ -157,7 +199,7 @@ def interp1d_eval_array(
     return result
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp1d_scalar(
     x: float | np.number,
     xp: np.ndarray,
@@ -168,6 +210,7 @@ def interp1d_scalar(
     right: float = np.nan,
 ) -> float:
     """Interpolate one point on conformable one-dimensional grid and value arrays."""
+    # Both leaves must inline into the scalar-only public overload to remove tuple calls.
     index, weight = interp1d_locate_scalar(x, xp, ilb)
     return interp1d_eval_scalar(index, weight, fp, extrapolate, left, right)
 
@@ -185,13 +228,21 @@ def interp1d_array_impl(
 ) -> None:
     """Interpolate array samples into an output with the same shape as ``x``."""
     index = ilb
+    # Version this invariant outside the loop; Numba did not reliably unswitch it.
+    if extrapolate:
+        for i in range(x.size):
+            index, weight = interp1d_locate_scalar(x.flat[i], xp, index)
+            value = weight * fp[index] + (1.0 - weight) * fp[index + 1]
+            out.flat[i] = float(value)
+        return
+
     for i in range(x.size):
         index, weight = interp1d_locate_scalar(x.flat[i], xp, index)
         out.flat[i] = interp1d_eval_scalar(
             index,
             weight,
             fp,
-            extrapolate,
+            False,
             left,
             right,
         )
@@ -213,17 +264,35 @@ def interp1d_array(
     return result
 
 
-@register_jitable(**JIT_OPTIONS)
 def _initial_indices(
     ilb: Sequence[int] | np.ndarray | None,
 ) -> tuple[int, int]:
     """Return initial lower-bound indices for two dimensions."""
+    # The compiled overload below removes this polymorphic branch at typing time.
     if ilb is None:
         return 0, 0
     return int(ilb[0]), int(ilb[1])
 
 
-@register_jitable(**JIT_OPTIONS)
+@numba_overload(_initial_indices, jit_options=JIT_OPTIONS, inline='always')
+def _overload_initial_indices(ilb: Any) -> Any:
+    from numba import types
+
+    # Separate implementations avoid typing the invalid dead indexing branch for None.
+    if isinstance(ilb, types.NoneType):
+
+        def impl(ilb):
+            return 0, 0
+
+    else:
+
+        def impl(ilb):
+            return int(ilb[0]), int(ilb[1])
+
+    return impl
+
+
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp2d_locate_scalar_impl(
     x0: float | np.number,
     x1: float | np.number,
@@ -234,6 +303,7 @@ def interp2d_locate_scalar_impl(
     weight_out: np.ndarray,
 ) -> None:
     """Locate one point into required index and weight buffers of shape ``(2,)``."""
+    # Keep dimension 0 first and contiguous index stores before weight stores.
     ilb0, ilb1 = _initial_indices(ilb)
     index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
     index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
@@ -297,7 +367,7 @@ def interp2d_locate_array(
     return index, weight
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp2d_eval_scalar(
     index: np.ndarray,
     weight: np.ndarray,
@@ -314,10 +384,46 @@ def interp2d_eval_scalar(
 
     index0 = index[0]
     index1 = index[1]
-    value0 = weight0 * fp[index0, index1] + (1.0 - weight0) * fp[index0 + 1, index1]
-    value1 = (
-        weight0 * fp[index0, index1 + 1] + (1.0 - weight0) * fp[index0 + 1, index1 + 1]
-    )
+    # Build both row bases first, then load adjacent corners in lower/upper row order.
+    lower_row = fp[index0]
+    upper_row = fp[index0 + 1]
+    lower0 = lower_row[index1]
+    lower1 = lower_row[index1 + 1]
+    upper0 = upper_row[index1]
+    upper1 = upper_row[index1 + 1]
+    upper_weight0 = 1.0 - weight0
+    value0 = weight0 * lower0 + upper_weight0 * upper0
+    value1 = weight0 * lower1 + upper_weight0 * upper1
+    value = weight1 * value0 + (1.0 - weight1) * value1
+    return float(value)
+
+
+@register_jitable(**JIT_OPTIONS_INLINE)
+def _interp2d_eval_scalar_c(
+    index: np.ndarray,
+    weight: np.ndarray,
+    fp: np.ndarray,
+    extrapolate: bool = True,
+) -> float:
+    """Evaluate one point with C-contiguous two-dimensional values."""
+    weight0 = weight[0]
+    weight1 = weight[1]
+    if not extrapolate and (
+        weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
+    ):
+        return np.nan
+
+    # C layout needs one row-major offset instead of four multidimensional addresses.
+    # Preserve adjacent row-wise corner loads and the shared complement below.
+    n1 = fp.shape[1]
+    offset = index[0] * n1 + index[1]
+    lower0 = fp.flat[offset]
+    lower1 = fp.flat[offset + 1]
+    upper0 = fp.flat[offset + n1]
+    upper1 = fp.flat[offset + n1 + 1]
+    upper_weight0 = 1.0 - weight0
+    value0 = weight0 * lower0 + upper_weight0 * upper0
+    value1 = weight0 * lower1 + upper_weight0 * upper1
     value = weight1 * value0 + (1.0 - weight1) * value1
     return float(value)
 
@@ -364,7 +470,7 @@ def interp2d_eval_array(
     return result
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**JIT_OPTIONS_INLINE)
 def interp2d_scalar(
     x0: float | np.number,
     x1: float | np.number,
@@ -375,6 +481,7 @@ def interp2d_scalar(
     extrapolate: bool = True,
 ) -> float:
     """Interpolate one point on conformable two-dimensional grids and values."""
+    # Keep this generic leaf inline; C-contiguous values use the flat helper below.
     ilb0, ilb1 = _initial_indices(ilb)
     index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
     index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
@@ -392,6 +499,36 @@ def interp2d_scalar(
     return float(value)
 
 
+@register_jitable(**JIT_OPTIONS_INLINE)
+def _interp2d_scalar_c(
+    x0: float | np.number,
+    x1: float | np.number,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    fp: np.ndarray,
+    ilb: Sequence[int] | np.ndarray | None = None,
+    extrapolate: bool = True,
+) -> float:
+    """Interpolate one point with C-contiguous two-dimensional values."""
+    ilb0, ilb1 = _initial_indices(ilb)
+    # Dimension 1 is contiguous and fast-moving; this order is faster only here.
+    index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
+    index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
+
+    if not extrapolate and (
+        weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
+    ):
+        return np.nan
+
+    # Keep direct flat expressions here; extra corner/complement locals add pressure.
+    n1 = fp.shape[1]
+    offset = index0 * n1 + index1
+    value0 = weight0 * fp.flat[offset] + (1.0 - weight0) * fp.flat[offset + n1]
+    value1 = weight0 * fp.flat[offset + 1] + (1.0 - weight0) * fp.flat[offset + n1 + 1]
+    value = weight1 * value0 + (1.0 - weight1) * value1
+    return float(value)
+
+
 @register_jitable(**JIT_OPTIONS)
 def interp2d_array_impl(
     x0: np.ndarray,
@@ -405,13 +542,29 @@ def interp2d_array_impl(
 ) -> None:
     """Interpolate equal-shaped coordinates into an output of the same shape."""
     ilb0, ilb1 = _initial_indices(ilb)
+    # Hoist the mode branch and keep dimension 0 search first in both loop versions.
+    if extrapolate:
+        for i in range(x0.size):
+            ilb0, weight0 = interp1d_locate_scalar(x0.flat[i], xp0, ilb0)
+            ilb1, weight1 = interp1d_locate_scalar(x1.flat[i], xp1, ilb1)
+
+            # Keep both row bases and this lower/upper contiguous load order intact.
+            lower_row = fp[ilb0]
+            upper_row = fp[ilb0 + 1]
+            lower0 = lower_row[ilb1]
+            lower1 = lower_row[ilb1 + 1]
+            upper0 = upper_row[ilb1]
+            upper1 = upper_row[ilb1 + 1]
+            value0 = weight0 * lower0 + (1.0 - weight0) * upper0
+            value1 = weight0 * lower1 + (1.0 - weight0) * upper1
+            out.flat[i] = weight1 * value0 + (1.0 - weight1) * value1
+        return
+
     for i in range(x0.size):
         ilb0, weight0 = interp1d_locate_scalar(x0.flat[i], xp0, ilb0)
         ilb1, weight1 = interp1d_locate_scalar(x1.flat[i], xp1, ilb1)
 
-        if not extrapolate and (
-            weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0
-        ):
+        if weight0 < 0.0 or weight0 > 1.0 or weight1 < 0.0 or weight1 > 1.0:
             out.flat[i] = np.nan
             continue
 
