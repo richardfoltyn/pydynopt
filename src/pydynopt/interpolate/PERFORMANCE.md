@@ -33,6 +33,31 @@ A narrow direct-case improvement is not enough when unchanged common cases regre
 Small source changes can alter Numba's register allocation and caller code layout,
 so rerun borderline results.
 
+## Reuse located scalar components
+
+Pass length-two index and weight tuples to `interp2d_eval` when an outer Numba
+kernel already holds their components as scalars and evaluates several fields at
+those coordinates:
+
+```python
+from numba import njit
+
+from pydynopt.interpolate import interp2d_eval
+
+
+@njit
+def evaluate_fields(index0, index1, weight0, weight1, fp0, fp1):
+    index = (index0, index1)
+    weight = (weight0, weight1)
+    value0 = interp2d_eval(index, weight, fp0)
+    value1 = interp2d_eval(index, weight, fp1)
+    return value0, value1
+```
+
+Numba represents these fixed-size tuples without NRT allocation. This form uses the
+same lower-grid-point weight convention, extrapolation checks, arithmetic order,
+and layout-specialized leaves as array-based `interp2d_eval` calls.
+
 ## Separate hot local search from cold distant search
 
 The central 1D primitive is `interp1d_locate_scalar` in
@@ -98,7 +123,7 @@ Inlining policy was as important as kernel arithmetic. The useful policy is not
   index/weight views can scalarize.
 - Public scalar 1D combined interpolation has its own always-inline overload.
 - The C-layout scalar 2D combined overload is isolated and always inline.
-- The arbitrary-strided scalar 2D evaluator is selected by its own always-inline
+- The arbitrary-strided one-point 2D evaluator is selected by its own always-inline
   overload so caller-side index and weight views scalarize.
 - `_initial_indices` uses compile-time `None` and indexable implementations and is
   always inline.
@@ -108,8 +133,8 @@ Inlining policy was as important as kernel arithmetic. The useful policy is not
 - `_bsearch_range`, to prevent binary-loop duplication.
 - Public 1D evaluation in repeated-field callers; inlining it enlarged the caller
   and slowed the pipeline.
-- Public C-layout 2D evaluation; its compact call boundary schedules better when
-  several fields are evaluated at one point.
+- Public C-layout 2D evaluation, including scalar-tuple `interp2d_eval`; its compact
+  call boundary schedules better when several fields are evaluated at one point.
 - Array loop implementations and public array wrappers; forcing them inline caused
   severe code-size and code-layout regressions.
 
@@ -126,7 +151,7 @@ kernel. Compile-time layout information supports two different strategies.
 
 ### C-contiguous values
 
-`_interp2d_eval_scalar_c` and `_interp2d_scalar_c` calculate one row-major base
+`_interp2d_eval_point_c` and `_interp2d_scalar_c` calculate one row-major base
 offset:
 
 ```text
@@ -143,7 +168,7 @@ leaf should inline into that overload.
 
 ### Arbitrary-strided values
 
-For `interp2d_eval_scalar`, cache the lower and upper row views, then load adjacent
+For `interp2d_eval_point`, cache the lower and upper row views, then load adjacent
 columns from each row. Construct the lower row and then the upper row before loading
 all four corners. Reordering row creation or serializing row creation with corner
 loads materially slowed strided arrays.
@@ -237,7 +262,7 @@ When optimizing another interpolation package:
    policies at typing time.
 7. Keep cold loops and large array loops out of line.
 8. Specialize C-layout scalar corner addressing with one flat offset.
-9. Cache row bases for arbitrary-strided 2D scalar evaluation.
+9. Cache row bases for arbitrary-strided one-point 2D evaluation.
 10. Version invariant modes outside array loops.
 11. Preserve arithmetic order and public semantics.
 12. Measure the aggregate and every directly affected workload; rerun marginal

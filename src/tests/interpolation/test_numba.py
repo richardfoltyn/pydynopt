@@ -41,7 +41,7 @@ def _locate1_scalar_hint(
 
 
 @njit
-def _eval1_scalar(index: int, weight: float, fp: np.ndarray) -> float:
+def _eval1_point(index: int, weight: float, fp: np.ndarray) -> float:
     return interp1d_eval(index, weight, fp, False, -10.0, 10.0)
 
 
@@ -81,13 +81,49 @@ def _locate2_array(
 
 
 @njit
-def _eval2_scalar(index: np.ndarray, weight: np.ndarray, fp: np.ndarray) -> float:
+def _eval2_point(index: np.ndarray, weight: np.ndarray, fp: np.ndarray) -> float:
     return _interp2d_eval_any(index, weight, fp)
 
 
 @njit
 def _eval2_array(index: np.ndarray, weight: np.ndarray, fp: np.ndarray) -> np.ndarray:
     return _interp2d_eval_any(index, weight, fp)
+
+
+@njit
+def _eval2_tuple(
+    index0: int,
+    index1: int,
+    weight0: float,
+    weight1: float,
+    fp: np.ndarray,
+    extrapolate: bool = True,
+) -> float:
+    return interp2d_eval(
+        (index0, index1),
+        (weight0, weight1),
+        fp,
+        extrapolate,
+    )
+
+
+@njit
+def _eval2_tuples_repeated(
+    index0: int,
+    index1: int,
+    weight0: float,
+    weight1: float,
+    fp0: np.ndarray,
+    fp1: np.ndarray,
+    fp2: np.ndarray,
+) -> tuple[float, float, float]:
+    index = (index0, index1)
+    weight = (weight0, weight1)
+    return (
+        interp2d_eval(index, weight, fp0),
+        interp2d_eval(index, weight, fp1),
+        interp2d_eval(index, weight, fp2),
+    )
 
 
 @njit
@@ -161,14 +197,14 @@ def test_public_1d_numba_scalar_and_array_paths() -> None:
     assert _locate1_scalar(0.5, xp) == pytest.approx((0, 0.5))
     index, weight = _locate1_array(x, xp)
     np.testing.assert_allclose(_eval1_array(index, weight, fp), 2.0 * x)
-    assert _eval1_scalar(0, 1.5, fp) == -10.0
+    assert _eval1_point(0, 1.5, fp) == -10.0
     assert _interp1_scalar(0.5, xp, fp) == pytest.approx(1.0)
     np.testing.assert_allclose(_interp1_array(x, xp, fp), 2.0 * x)
 
     for function in (
         _locate1_scalar,
         _locate1_array,
-        _eval1_scalar,
+        _eval1_point,
         _eval1_array,
         _interp1_scalar,
         _interp1_array,
@@ -196,7 +232,7 @@ def test_public_2d_numba_scalar_and_array_paths() -> None:
 
     index, weight = _locate2_scalar(0.5, 1.0, xp0, xp1)
     assert index.shape == weight.shape == (2,)
-    assert _eval2_scalar(index, weight, fp) == pytest.approx(2.5)
+    assert _eval2_point(index, weight, fp) == pytest.approx(2.5)
     assert _interp2_scalar(0.5, 1.0, xp0, xp1, fp) == pytest.approx(2.5)
 
     index, weight = _locate2_array(x0, x1, xp0, xp1)
@@ -207,12 +243,51 @@ def test_public_2d_numba_scalar_and_array_paths() -> None:
     for function in (
         _locate2_scalar,
         _locate2_array,
-        _eval2_scalar,
+        _eval2_point,
         _eval2_array,
         _interp2_scalar,
         _interp2_array,
     ):
         assert function.nopython_signatures
+
+
+def test_numba_scalar_tuple_eval_is_allocation_free() -> None:
+    rows = np.arange(12.0).reshape(3, 4)
+    fields_c = (rows, 2.0 * rows, -rows)
+    backing = tuple(np.repeat(fp, 2, axis=1) for fp in fields_c)
+    fields_a = tuple(fp[:, ::2] for fp in backing)
+    assert all(fp.flags.c_contiguous for fp in fields_c)
+    assert all(
+        not fp.flags.c_contiguous and not fp.flags.f_contiguous for fp in fields_a
+    )
+
+    for fields in (fields_c, fields_a):
+        expected = tuple(interp2d_eval((1, 2), (0.25, 0.75), fp) for fp in fields)
+        result = _eval2_tuples_repeated(1, 2, 0.25, 0.75, *fields)
+        np.testing.assert_allclose(result, expected)
+
+    index = np.array([1, 2], dtype=np.int64)
+    weight = np.array([0.25, 0.75])
+    expected = interp2d_eval((1, 2), (0.25, 0.75), fields_a[0])
+    assert _eval2_point(index, weight, fields_a[0]) == pytest.approx(expected)
+
+    assert np.isnan(_eval2_tuple(0, 0, 1.5, 0.5, rows, False))
+    assert _eval2_tuple.nopython_signatures
+    assert _eval2_tuples_repeated.nopython_signatures
+    tuple_layouts = {
+        getattr(sig[4], 'layout', None) for sig in _eval2_tuples_repeated.signatures
+    }
+    assert tuple_layouts == {'A', 'C'}
+    assert any(
+        getattr(sig[2], 'layout', None) == 'A' for sig in _eval2_point.signatures
+    )
+    for llvm in _eval2_tuples_repeated.inspect_llvm().values():
+        allocation_calls = [
+            line
+            for line in llvm.splitlines()
+            if 'call' in line and 'NRT_MemInfo_alloc' in line
+        ]
+        assert not allocation_calls
 
 
 def test_numba_output_buffer_identity() -> None:
@@ -257,7 +332,7 @@ def test_all_retained_kernels() -> None:
     np.testing.assert_allclose(weight, weight_out)
 
     expected1 = 2.0 * x0
-    assert kernels.interp1d_eval_scalar(0, 0.5, fp1) == pytest.approx(1.0)
+    assert kernels.interp1d_eval_point(0, 0.5, fp1) == pytest.approx(1.0)
     np.testing.assert_allclose(
         kernels.interp1d_eval_array(index, weight, fp1), expected1
     )
@@ -273,17 +348,17 @@ def test_all_retained_kernels() -> None:
     index2_out = np.empty_like(index2)
     weight2_out = np.empty_like(weight2)
     kernels.interp2d_locate_array_impl(x0, x1, xp0, xp1, None, index2_out, weight2_out)
-    index_scalar, weight_scalar = kernels.interp2d_locate_scalar(0.5, 1.0, xp0, xp1)
+    index_point, weight_point = kernels.interp2d_locate_scalar(0.5, 1.0, xp0, xp1)
     kernels.interp2d_locate_scalar_impl(
-        0.5, 1.0, xp0, xp1, None, index_scalar, weight_scalar
+        0.5, 1.0, xp0, xp1, None, index_point, weight_point
     )
     np.testing.assert_allclose(index2, index2_out)
     np.testing.assert_allclose(weight2, weight2_out)
 
     expected2 = x0 + 2.0 * x1
-    assert kernels.interp2d_eval_scalar(
-        index_scalar, weight_scalar, fp2
-    ) == pytest.approx(2.5)
+    assert kernels.interp2d_eval_point(index_point, weight_point, fp2) == pytest.approx(
+        2.5
+    )
     np.testing.assert_allclose(
         kernels.interp2d_eval_array(index2, weight2, fp2), expected2
     )

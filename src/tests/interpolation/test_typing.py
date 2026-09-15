@@ -50,11 +50,19 @@ def test_consumer_return_types() -> None:
     )
     index2, weight2 = interp2d_locate(x, x, xp, xp)
     assert_type(
-        interp2d_eval(index2[0], weight2[0], fp[:, None] + fp),
+        interp2d_eval(index, weight, fp[:, None] + fp),
         float | NDArray[np.float64],
     )
     assert_type(
         interp2d_eval(index2, weight2, fp[:, None] + fp), float | NDArray[np.float64]
+    )
+    assert_type(
+        interp2d_eval(
+            (0, np.int64(0)),
+            (0.5, np.float32(0.5)),
+            fp[:, None] + fp,
+        ),
+        float,
     )
     assert_type(interp2d(0.5, 0.5, xp, xp, fp[:, None] + fp), float)
     assert_type(interp2d(x, 0.5, xp, xp, fp[:, None] + fp), NDArray[np.float64])

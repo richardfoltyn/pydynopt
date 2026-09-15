@@ -104,6 +104,7 @@ assert interp1d(0.5, xp, fp) == 1.0
 fp2 = np.array([[0.0, 2.0], [1.0, 3.0]])
 index2, weight2 = interp2d_locate(0.5, 0.5, xp, xp)
 assert interp2d_eval(index2, weight2, fp2) == 1.5
+assert interp2d_eval((0, 0), (0.5, 0.5), fp2) == 1.5
 assert interp2d(0.5, 0.5, xp, xp, fp2) == 1.5
 
 root_func = lambda x: x * x - 2.0

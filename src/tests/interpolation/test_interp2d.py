@@ -9,6 +9,7 @@ from scipy.interpolate import RegularGridInterpolator
 from pydynopt.interpolate import interp2d, interp2d_eval, interp2d_locate
 
 _interp2d_any: Any = interp2d
+_interp2d_eval_any: Any = interp2d_eval
 
 
 @pytest.fixture
@@ -66,6 +67,61 @@ def test_eval_single_point_returns_float(
     value = interp2d_eval(index, weight, fp)
     assert isinstance(value, float)
     assert value == pytest.approx(3.0)
+
+
+@pytest.mark.parametrize('dtype', [np.float32, np.float64])
+@pytest.mark.parametrize('strided', [False, True])
+@pytest.mark.parametrize(
+    ('index0', 'index1', 'weight0', 'weight1', 'extrapolate'),
+    [
+        (1, 0, 0.5, 1.0 / 3.0, True),
+        (0, 0, 1.0, 1.0, True),
+        (2, 1, 0.0, 0.0, True),
+        (0, 1, 1.5, -0.5, True),
+        (0, 1, 1.5, -0.5, False),
+        (1, 0, np.nan, 0.5, True),
+    ],
+)
+def test_eval_scalar_tuples_match_array_api(
+    grid: tuple[np.ndarray, np.ndarray, np.ndarray],
+    dtype: type[np.float32] | type[np.float64],
+    strided: bool,
+    index0: int,
+    index1: int,
+    weight0: float,
+    weight1: float,
+    extrapolate: bool,
+) -> None:
+    _, _, fp = grid
+    values = fp.astype(dtype)
+    if strided:
+        backing = np.empty((values.shape[0], 2 * values.shape[1]), dtype=dtype)
+        backing[:, ::2] = values
+        values = backing[:, ::2]
+    assert values.flags.c_contiguous is not strided
+
+    index = np.array([index0, index1], dtype=np.int32)
+    weight = np.array([weight0, weight1], dtype=dtype)
+    expected = interp2d_eval(index, weight, values, extrapolate)
+    result = interp2d_eval(
+        (index[0], index[1]),
+        (weight[0], weight[1]),
+        values,
+        extrapolate,
+    )
+    assert isinstance(result, float)
+    np.testing.assert_allclose(result, expected, equal_nan=True)
+
+
+def test_eval_scalar_tuples_preserve_nonfinite_values(
+    grid: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> None:
+    _, _, fp = grid
+    values = fp.copy()
+    values[1, 1] = np.inf
+    expected = interp2d_eval(np.array([1, 0]), np.array([0.5, 0.0]), values)
+    result = interp2d_eval((1, 0), (0.5, 0.0), values)
+    np.testing.assert_allclose(result, expected, equal_nan=True)
 
 
 def test_eval_array_and_output_identity(
@@ -172,8 +228,20 @@ def test_invalid_shapes_and_indices(
         interp2d_eval(np.zeros((2, 3), dtype=np.int64), np.zeros((2, 3)), fp)
     with pytest.raises(ValueError):
         interp2d_eval(np.zeros((2, 2), dtype=np.int64), np.zeros((1, 2)), fp)
+    with pytest.raises(ValueError):
+        _interp2d_eval_any((0,), (0.5,), fp)
+    with pytest.raises(TypeError):
+        _interp2d_eval_any((0, 0), np.array([0.5, 0.5]), fp)
     with pytest.raises(IndexError):
         interp2d_eval(np.array([fp.shape[0] - 1, 0]), np.array([0.5, 0.5]), fp)
+    with pytest.raises(TypeError):
+        _interp2d_eval_any((0.0, 0), (0.5, 0.5), fp)
+    with pytest.raises(TypeError):
+        _interp2d_eval_any((0, 0), (0.5j, 0.5), fp)
+    with pytest.raises(ValueError):
+        interp2d_eval((0, 0), (0.5, 0.5), fp[0])
+    with pytest.raises(IndexError):
+        interp2d_eval((fp.shape[0] - 1, 0), (0.5, 0.5), fp)
 
 
 def test_invalid_output_buffers(
@@ -185,6 +253,8 @@ def test_invalid_output_buffers(
         _interp2d_any(0.5, 1.0, xp0, xp1, fp, out=np.empty(1))
     with pytest.raises(TypeError):
         interp2d_eval(np.array([1, 0]), np.array([0.5, 0.5]), fp, out=np.empty(1))
+    with pytest.raises(TypeError):
+        _interp2d_eval_any((1, 0), (0.5, 0.5), fp, out=np.empty(1))
     with pytest.raises(ValueError):
         interp2d(x, x, xp0, xp1, fp, out=np.empty(3))
     with pytest.raises(TypeError):

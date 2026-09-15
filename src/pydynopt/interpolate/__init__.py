@@ -8,6 +8,8 @@
   must have shape ``(len(xp0), len(xp1))``.
 - Locate and evaluate operations are available separately from combined
   interpolation.
+- Length-two tuple inputs to ``interp2d_eval`` avoid temporary index and weight
+  arrays when a Numba kernel evaluates several fields at the same coordinates.
 
 The same six functions can be called from ordinary Python and Numba-compiled code.
 Low-level kernels live in the ``pydynopt.interpolate.numba`` submodules.

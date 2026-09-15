@@ -19,13 +19,13 @@ from numpy.typing import NDArray
 from pydynopt.numba import JIT_OPTIONS, jit, overload as numba_overload
 
 from .numba.linear import (
-    _interp2d_eval_scalar_c,
+    _interp2d_eval_point_c,
     _interp2d_scalar_c,
     interp1d_array,
     interp1d_array_impl,
     interp1d_eval_array,
     interp1d_eval_array_impl,
-    interp1d_eval_scalar,
+    interp1d_eval_point,
     interp1d_locate_array,
     interp1d_locate_array_impl,
     interp1d_locate_scalar,
@@ -34,7 +34,7 @@ from .numba.linear import (
     interp2d_array_impl,
     interp2d_eval_array,
     interp2d_eval_array_impl,
-    interp2d_eval_scalar,
+    interp2d_eval_point as _interp2d_eval_point,
     interp2d_locate_array,
     interp2d_locate_array_impl,
     interp2d_locate_scalar,
@@ -57,16 +57,19 @@ type ArrayQuery = Sequence[RealScalar] | np.ndarray
 type FloatArray = NDArray[np.float64]
 type IndexArray = NDArray[np.int64]
 type InitialIndex2D = Sequence[IntegerScalar] | np.ndarray | None
+type ScalarIndex2D = tuple[IntegerScalar, IntegerScalar]
+type ScalarWeight2D = tuple[RealScalar, RealScalar]
 
 _interp1d_locate_scalar_jit = jit(interp1d_locate_scalar, **JIT_OPTIONS)
 _interp1d_locate_array_jit = jit(interp1d_locate_array_impl, **JIT_OPTIONS)
-_interp1d_eval_scalar_jit = jit(interp1d_eval_scalar, **JIT_OPTIONS)
+_interp1d_eval_point_jit = jit(interp1d_eval_point, **JIT_OPTIONS)
 _interp1d_eval_array_jit = jit(interp1d_eval_array_impl, **JIT_OPTIONS)
 _interp1d_scalar_jit = jit(interp1d_scalar, **JIT_OPTIONS)
 _interp1d_array_jit = jit(interp1d_array_impl, **JIT_OPTIONS)
 _interp2d_locate_scalar_jit = jit(interp2d_locate_scalar_impl, **JIT_OPTIONS)
 _interp2d_locate_array_jit = jit(interp2d_locate_array_impl, **JIT_OPTIONS)
-_interp2d_eval_scalar_jit = jit(interp2d_eval_scalar, **JIT_OPTIONS)
+_interp2d_eval_point_jit = jit(_interp2d_eval_point, **JIT_OPTIONS)
+_interp2d_eval_point_c_jit = jit(_interp2d_eval_point_c, **JIT_OPTIONS)
 _interp2d_eval_array_jit = jit(interp2d_eval_array_impl, **JIT_OPTIONS)
 _interp2d_scalar_jit = jit(interp2d_scalar, **JIT_OPTIONS)
 _interp2d_array_jit = jit(interp2d_array_impl, **JIT_OPTIONS)
@@ -429,7 +432,7 @@ def interp1d_eval(
         if out is not None:
             msg = 'scalar interp1d_eval calls do not accept an output buffer'
             raise TypeError(msg)
-        value = _interp1d_eval_scalar_jit(
+        value = _interp1d_eval_point_jit(
             operator_index(index_array.item()),
             weight_array.item(),
             fp,
@@ -672,9 +675,29 @@ def interp2d_locate(
     return index, weight
 
 
+@typing_overload
+def interp2d_eval(
+    index: ScalarIndex2D,
+    weight: ScalarWeight2D,
+    fp: np.ndarray,
+    extrapolate: bool = True,
+    out: None = None,
+) -> float: ...
+
+
+@typing_overload
 def interp2d_eval(
     index: np.ndarray,
     weight: np.ndarray,
+    fp: np.ndarray,
+    extrapolate: bool = True,
+    out: FloatArray | None = None,
+) -> float | FloatArray: ...
+
+
+def interp2d_eval(
+    index: ScalarIndex2D | np.ndarray,
+    weight: ScalarWeight2D | np.ndarray,
     fp: np.ndarray,
     extrapolate: bool = True,
     out: FloatArray | None = None,
@@ -684,19 +707,19 @@ def interp2d_eval(
     Parameters
     ----------
     index
-        Integer NumPy array with shape ``sample_shape + (2,)`` containing valid
-        lower-bound indices for each axis.
+        A length-two tuple of scalar lower-bound indices for one point, or an integer
+        NumPy array with shape ``sample_shape + (2,)``.
     weight
-        Real NumPy array with the same shape as ``index`` containing lower-grid-point
-        weights for each axis.
+        Lower-grid-point weights with the same category and shape as ``index``. A
+        tuple is evaluated without temporary arrays in Numba-compiled callers.
     fp
         Two-dimensional NumPy array with at least two function values on each axis.
     extrapolate
         Whether to evaluate the bilinear extrapolant outside either grid. If false,
         an exterior point receives ``NaN``.
     out
-        Optional writable float64 buffer with ``sample_shape``. Not supported when
-        ``index`` has shape ``(2,)`` and therefore describes one point.
+        Optional writable float64 buffer with ``sample_shape``. Not supported for
+        tuple inputs or when ``index`` is an array with shape ``(2,)``.
 
     Returns
     -------
@@ -706,16 +729,55 @@ def interp2d_eval(
     Raises
     ------
     TypeError
-        If an input or output buffer has an unsupported type or dtype, or ``out`` is
-        supplied for one point.
+        If inputs have incompatible tuple and array categories or unsupported types
+        or dtypes, or ``out`` is supplied for one point.
     ValueError
         If input or output shapes are invalid, ``fp`` is not conformable, or ``out``
         is not writable.
     IndexError
         If any lower-bound index is outside the corresponding valid range.
     """
+    _validate_real_array(fp, 'fp', ndim=2)
+    if fp.shape[0] < 2 or fp.shape[1] < 2:
+        msg = 'fp must have at least two values on each axis'
+        raise ValueError(msg)
+
+    if isinstance(index, tuple):
+        if not isinstance(weight, tuple):
+            msg = 'index and weight must both be arrays or both be length-two tuples'
+            raise TypeError(msg)
+        if len(index) != 2 or len(weight) != 2:
+            msg = 'tuple index and weight inputs must have length two'
+            raise ValueError(msg)
+        if out is not None:
+            msg = 'single-point interp2d_eval calls do not accept an output buffer'
+            raise TypeError(msg)
+
+        try:
+            index0 = operator_index(index[0])
+            index1 = operator_index(index[1])
+        except TypeError as exc:
+            msg = 'tuple index inputs must contain integer scalars'
+            raise TypeError(msg) from exc
+        _validate_real_scalar(weight[0], 'weight[0]')
+        _validate_real_scalar(weight[1], 'weight[1]')
+        if (
+            index0 < 0
+            or index0 >= fp.shape[0] - 1
+            or index1 < 0
+            or index1 >= fp.shape[1] - 1
+        ):
+            msg = 'index values are outside the valid lower-bound ranges'
+            raise IndexError(msg)
+
+        if fp.flags.c_contiguous:
+            value = _interp2d_eval_point_c_jit(index, weight, fp, extrapolate)
+        else:
+            value = _interp2d_eval_point_jit(index, weight, fp, extrapolate)
+        return float(value)
+
     if not isinstance(index, np.ndarray) or not isinstance(weight, np.ndarray):
-        msg = 'index and weight must be NumPy arrays'
+        msg = 'index and weight must both be arrays or both be length-two tuples'
         raise TypeError(msg)
     if index.dtype.kind not in 'iu':
         msg = 'index must have an integer dtype'
@@ -726,11 +788,6 @@ def interp2d_eval(
         raise ValueError(msg)
     if index.ndim < 1 or index.shape[-1] != 2:
         msg = 'index and weight must end in a coordinate dimension of length two'
-        raise ValueError(msg)
-
-    _validate_real_array(fp, 'fp', ndim=2)
-    if fp.shape[0] < 2 or fp.shape[1] < 2:
-        msg = 'fp must have at least two values on each axis'
         raise ValueError(msg)
     if (
         np.any(index[..., 0] < 0)
@@ -747,7 +804,7 @@ def interp2d_eval(
         if out is not None:
             msg = 'single-point interp2d_eval calls do not accept an output buffer'
             raise TypeError(msg)
-        value = _interp2d_eval_scalar_jit(index_work, weight_work, fp, extrapolate)
+        value = _interp2d_eval_point_jit(index_work, weight_work, fp, extrapolate)
         return float(value)
 
     shape = index.shape[:-1]
@@ -921,6 +978,28 @@ def _numba_real_array(value: Any) -> bool:
     )
 
 
+def _numba_integer_pair(value: Any) -> bool:
+    """Return whether a Numba type is a length-two integer tuple."""
+    from numba import types
+
+    return (
+        isinstance(value, types.BaseTuple)
+        and len(value) == 2
+        and all(item in types.integer_domain for item in value.types)
+    )
+
+
+def _numba_real_pair(value: Any) -> bool:
+    """Return whether a Numba type is a length-two real numeric tuple."""
+    from numba import types
+
+    return (
+        isinstance(value, types.BaseTuple)
+        and len(value) == 2
+        and all(_numba_real_scalar(item) for item in value.types)
+    )
+
+
 @numba_overload(interp1d_locate, jit_options=JIT_OPTIONS, inline='always')
 def _overload_interp1d_locate(
     x: Any,
@@ -968,7 +1047,7 @@ def _overload_interp1d_eval(
             right=np.nan,
             out=None,
         ):
-            return interp1d_eval_scalar(
+            return interp1d_eval_point(
                 index,
                 weight,
                 fp,
@@ -1060,16 +1139,22 @@ def _overload_interp2d_eval_strided(
 ) -> Any:
     from numba import types
 
-    # A-layout row views need caller inlining; C layout performs better out of line.
+    tuple_input = (
+        _numba_integer_pair(index)
+        and _numba_real_pair(weight)
+        and _numba_real_array(fp)
+        and fp.ndim == 2
+    )
+    array_input = isinstance(index, types.Array) and index.ndim == 1
+    # A-layout row views need caller inlining; tuples scalarize without NRT allocation.
     if (
-        isinstance(index, types.Array)
-        and index.ndim == 1
+        (tuple_input or array_input)
         and getattr(fp, 'layout', None) == 'A'
         and _numba_none(out)
     ):
 
         def impl(index, weight, fp, extrapolate=True, out=None):
-            return interp2d_eval_scalar(index, weight, fp, extrapolate)
+            return _interp2d_eval_point(index, weight, fp, extrapolate)
 
         return impl
     return None
@@ -1085,8 +1170,15 @@ def _overload_interp2d_eval(
 ) -> Any:
     from numba import types
 
-    if isinstance(index, types.Array) and index.ndim == 1:
-        # The always-inline template above exclusively owns arbitrary-strided scalars.
+    tuple_input = (
+        _numba_integer_pair(index)
+        and _numba_real_pair(weight)
+        and _numba_real_array(fp)
+        and fp.ndim == 2
+    )
+    array_input = isinstance(index, types.Array) and index.ndim == 1
+    if tuple_input or array_input:
+        # The always-inline template above exclusively owns arbitrary-strided points.
         if getattr(fp, 'layout', None) == 'A' or not _numba_none(out):
             return None
 
@@ -1094,12 +1186,12 @@ def _overload_interp2d_eval(
         if getattr(fp, 'layout', None) == 'C':
 
             def impl(index, weight, fp, extrapolate=True, out=None):
-                return _interp2d_eval_scalar_c(index, weight, fp, extrapolate)
+                return _interp2d_eval_point_c(index, weight, fp, extrapolate)
 
         else:
 
             def impl(index, weight, fp, extrapolate=True, out=None):
-                return interp2d_eval_scalar(index, weight, fp, extrapolate)
+                return _interp2d_eval_point(index, weight, fp, extrapolate)
 
         return impl
     if isinstance(index, types.Array) and index.ndim > 1:

@@ -30,7 +30,7 @@ __all__ = [
     'interp1d_array_impl',
     'interp1d_eval_array',
     'interp1d_eval_array_impl',
-    'interp1d_eval_scalar',
+    'interp1d_eval_point',
     'interp1d_locate_array',
     'interp1d_locate_array_impl',
     'interp1d_locate_scalar',
@@ -39,7 +39,7 @@ __all__ = [
     'interp2d_array_impl',
     'interp2d_eval_array',
     'interp2d_eval_array_impl',
-    'interp2d_eval_scalar',
+    'interp2d_eval_point',
     'interp2d_locate_array',
     'interp2d_locate_array_impl',
     'interp2d_locate_scalar',
@@ -134,7 +134,7 @@ def interp1d_locate_array(
 
 
 @register_jitable(**JIT_OPTIONS_INLINE)
-def interp1d_eval_scalar(
+def interp1d_eval_point(
     index: int | np.integer,
     weight: float | np.number,
     fp: np.ndarray,
@@ -166,7 +166,7 @@ def interp1d_eval_array_impl(
 ) -> None:
     """Evaluate located samples into an output matching index and weight shapes."""
     for i in range(index.size):
-        out.flat[i] = interp1d_eval_scalar(
+        out.flat[i] = interp1d_eval_point(
             index.flat[i],
             weight.flat[i],
             fp,
@@ -212,7 +212,7 @@ def interp1d_scalar(
     """Interpolate one point on conformable one-dimensional grid and value arrays."""
     # Both leaves must inline into the scalar-only public overload to remove tuple calls.
     index, weight = interp1d_locate_scalar(x, xp, ilb)
-    return interp1d_eval_scalar(index, weight, fp, extrapolate, left, right)
+    return interp1d_eval_point(index, weight, fp, extrapolate, left, right)
 
 
 @register_jitable(**JIT_OPTIONS)
@@ -238,7 +238,7 @@ def interp1d_array_impl(
 
     for i in range(x.size):
         index, weight = interp1d_locate_scalar(x.flat[i], xp, index)
-        out.flat[i] = interp1d_eval_scalar(
+        out.flat[i] = interp1d_eval_point(
             index,
             weight,
             fp,
@@ -368,13 +368,13 @@ def interp2d_locate_array(
 
 
 @register_jitable(**JIT_OPTIONS_INLINE)
-def interp2d_eval_scalar(
-    index: np.ndarray,
-    weight: np.ndarray,
+def interp2d_eval_point(
+    index: Sequence[int | np.integer] | np.ndarray,
+    weight: Sequence[float | np.number] | np.ndarray,
     fp: np.ndarray,
     extrapolate: bool = True,
 ) -> float:
-    """Evaluate one point from valid index and weight arrays of shape ``(2,)``."""
+    """Evaluate one point from valid index and weight pairs of length two."""
     weight0 = weight[0]
     weight1 = weight[1]
     if not extrapolate and (
@@ -399,9 +399,9 @@ def interp2d_eval_scalar(
 
 
 @register_jitable(**JIT_OPTIONS_INLINE)
-def _interp2d_eval_scalar_c(
-    index: np.ndarray,
-    weight: np.ndarray,
+def _interp2d_eval_point_c(
+    index: Sequence[int | np.integer] | np.ndarray,
+    weight: Sequence[float | np.number] | np.ndarray,
     fp: np.ndarray,
     extrapolate: bool = True,
 ) -> float:
