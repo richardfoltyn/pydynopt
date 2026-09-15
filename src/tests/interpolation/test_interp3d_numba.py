@@ -47,6 +47,21 @@ def _eval3_array(index: np.ndarray, weight: np.ndarray, fp: np.ndarray) -> np.nd
 
 
 @njit
+def _locate_eval3_array_out(
+    x0: np.ndarray,
+    x1: np.ndarray,
+    x2: np.ndarray,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    xp2: np.ndarray,
+    fp: np.ndarray,
+    out: np.ndarray,
+) -> np.ndarray:
+    index, weight = interp3d_locate(x0, x1, x2, xp0, xp1, xp2)
+    return _interp3d_eval_any(index, weight, fp, out=out)
+
+
+@njit
 def _eval3_tuple(
     index0: int,
     index1: int,
@@ -170,6 +185,20 @@ def test_public_3d_numba_point_and_array_paths() -> None:
         _interp3_array,
     ):
         assert function.nopython_signatures
+
+
+def test_numba_array_locate_eval_pipeline_with_keyword_output() -> None:
+    xp0, xp1, xp2, fp = _data()
+    x0 = np.array([0.5, 2.0])
+    x1 = np.array([1.0, 4.0])
+    x2 = np.array([1.0, 5.0])
+    out = np.empty_like(x0)
+
+    result = _locate_eval3_array_out(x0, x1, x2, xp0, xp1, xp2, fp, out)
+
+    assert result is out
+    np.testing.assert_allclose(result, x0 + 2.0 * x1 + 3.0 * x2)
+    assert _locate_eval3_array_out.nopython_signatures
 
 
 def test_numba_point_tuples_are_allocation_free_for_all_layouts() -> None:

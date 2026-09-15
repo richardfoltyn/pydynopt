@@ -1572,14 +1572,20 @@ def _numba_real_triplet(value: Any) -> bool:
 
 
 @numba_overload(interp1d_locate, jit_options=JIT_OPTIONS, inline='always')
-def _overload_interp1d_locate(
+def _overload_interp1d_locate_scalar_inline(
     x: Any,
     xp: Any,
     ilb: Any = 0,
     index_out: Any = None,
     weight_out: Any = None,
 ) -> Any:
-    # Inline scalar locate so tuple results and two-element views scalarize in callers.
+    """Claim scalar locations for forced caller inlining.
+
+    Exposing the small scalar kernel lets Numba scalarize its ``(index, weight)``
+    result in hot loops. This template must not claim arrays: forcing the allocating
+    array wrapper inline makes its output variables optional in the caller and also
+    expands the full array loop there.
+    """
     if _numba_real_scalar(x):
         if not _numba_none(index_out) or not _numba_none(weight_out):
             return None
@@ -1588,6 +1594,28 @@ def _overload_interp1d_locate(
             return interp1d_locate_scalar(x, xp, ilb)
 
         return impl
+    return None
+
+
+@numba_overload(interp1d_locate, jit_options=JIT_OPTIONS)
+def _overload_interp1d_locate(
+    x: Any,
+    xp: Any,
+    ilb: Any = 0,
+    index_out: Any = None,
+    weight_out: Any = None,
+) -> Any:
+    """Claim array locations without forcing the wrapper inline.
+
+    The scalar template above owns scalar signatures. Keeping
+    ``interp1d_locate_array`` out of line resolves its optional output-allocation
+    branches inside the wrapper, so callers receive concrete arrays. Otherwise a
+    chained ``interp1d_eval(..., out=...)`` can carry optional arrays into Numba's
+    unsupported keyword-resolution path and fail with an internal assertion.
+    The separate boundary also avoids copying the array loop into every caller.
+    """
+    if _numba_real_scalar(x):
+        return None
     if _numba_real_array(x):
         return interp1d_locate_array
     return None
@@ -1683,6 +1711,28 @@ def _overload_interp1d(
 
 
 @numba_overload(interp2d_locate, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp2d_locate_scalar_inline(
+    x0: Any,
+    x1: Any,
+    xp0: Any,
+    xp1: Any,
+    ilb: Any = None,
+    index_out: Any = None,
+    weight_out: Any = None,
+) -> Any:
+    """Claim scalar locations for forced caller inlining.
+
+    Inlining this point-sized wrapper lets Numba scalarize its two index and weight
+    components, including caller-provided length-two buffers used in stateful hot
+    loops. Array signatures are deliberately left to the normal overload below so
+    their allocation branches and loops are not expanded into scalar callers.
+    """
+    if _numba_real_scalar(x0) and _numba_real_scalar(x1):
+        return interp2d_locate_scalar
+    return None
+
+
+@numba_overload(interp2d_locate, jit_options=JIT_OPTIONS)
 def _overload_interp2d_locate(
     x0: Any,
     x1: Any,
@@ -1692,9 +1742,16 @@ def _overload_interp2d_locate(
     index_out: Any = None,
     weight_out: Any = None,
 ) -> Any:
-    # Inline the scalar wrapper so supplied two-element buffers remain scalarized.
+    """Claim array locations without forcing the wrapper inline.
+
+    The scalar template above owns point signatures. An always-inlined
+    ``interp2d_locate_array`` exposes optional output branches to the caller; its
+    returned index and weight values can then remain optional while typing a chained
+    ``interp2d_eval(..., out=...)`` call. Keeping this template out of line avoids
+    Numba's unsupported keyword-resolution path and prevents array-loop expansion.
+    """
     if _numba_real_scalar(x0) and _numba_real_scalar(x1):
-        return interp2d_locate_scalar
+        return None
     if _numba_real_array(x0) and _numba_real_array(x1):
         return interp2d_locate_array
     return None
@@ -1840,6 +1897,30 @@ def _overload_interp2d(
 
 
 @numba_overload(interp3d_locate, jit_options=JIT_OPTIONS, inline='always')
+def _overload_interp3d_locate_point_inline(
+    x0: Any,
+    x1: Any,
+    x2: Any,
+    xp0: Any,
+    xp1: Any,
+    xp2: Any,
+    ilb: Any = None,
+    index_out: Any = None,
+    weight_out: Any = None,
+) -> Any:
+    """Claim point locations for forced caller inlining.
+
+    The point wrapper is small enough to inline profitably, and exposing it lets
+    Numba scalarize its three index and weight components or caller-provided
+    length-three buffers. Restricting this template to scalar coordinates prevents
+    the allocating array wrapper and its loop from inheriting the same policy.
+    """
+    if _numba_real_scalar(x0) and _numba_real_scalar(x1) and _numba_real_scalar(x2):
+        return interp3d_locate_point
+    return None
+
+
+@numba_overload(interp3d_locate, jit_options=JIT_OPTIONS)
 def _overload_interp3d_locate(
     x0: Any,
     x1: Any,
@@ -1851,14 +1932,16 @@ def _overload_interp3d_locate(
     index_out: Any = None,
     weight_out: Any = None,
 ) -> Any:
-    """Select point or array location at Numba typing time.
+    """Claim array locations without forcing the wrapper inline.
 
-    The point wrapper is always inlined so its three-element output buffers can be
-    scalarized when the caller supplies them. The array loop remains in its
-    separately compiled implementation.
+    The point template above owns scalar-coordinate signatures. Compiling
+    ``interp3d_locate_array`` behind a normal call boundary keeps its optional
+    allocation results concrete before a chained ``interp3d_eval(..., out=...)``
+    is typed. This avoids Numba's internal keyword assertion and keeps the larger
+    three-dimensional array loop out of its callers.
     """
     if _numba_real_scalar(x0) and _numba_real_scalar(x1) and _numba_real_scalar(x2):
-        return interp3d_locate_point
+        return None
     if _numba_real_array(x0) and _numba_real_array(x1) and _numba_real_array(x2):
         return interp3d_locate_array
     return None

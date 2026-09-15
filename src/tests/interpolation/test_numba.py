@@ -51,6 +51,17 @@ def _eval1_array(index: np.ndarray, weight: np.ndarray, fp: np.ndarray) -> np.nd
 
 
 @njit
+def _locate_eval1_array_out(
+    x: np.ndarray,
+    xp: np.ndarray,
+    fp: np.ndarray,
+    out: np.ndarray,
+) -> np.ndarray:
+    index, weight = interp1d_locate(x, xp)
+    return interp1d_eval(index, weight, fp, out=out)
+
+
+@njit
 def _interp1_scalar(x: float, xp: np.ndarray, fp: np.ndarray) -> float:
     return interp1d(x, xp, fp)
 
@@ -88,6 +99,19 @@ def _eval2_point(index: np.ndarray, weight: np.ndarray, fp: np.ndarray) -> float
 @njit
 def _eval2_array(index: np.ndarray, weight: np.ndarray, fp: np.ndarray) -> np.ndarray:
     return _interp2d_eval_any(index, weight, fp)
+
+
+@njit
+def _locate_eval2_array_out(
+    x0: np.ndarray,
+    x1: np.ndarray,
+    xp0: np.ndarray,
+    xp1: np.ndarray,
+    fp: np.ndarray,
+    out: np.ndarray,
+) -> np.ndarray:
+    index, weight = interp2d_locate(x0, x1, xp0, xp1)
+    return _interp2d_eval_any(index, weight, fp, out=out)
 
 
 @njit
@@ -249,6 +273,28 @@ def test_public_2d_numba_scalar_and_array_paths() -> None:
         _interp2_array,
     ):
         assert function.nopython_signatures
+
+
+def test_numba_array_locate_eval_pipeline_with_keyword_output() -> None:
+    xp0 = np.array([0.0, 1.0, 3.0])
+    xp1 = np.array([0.0, 2.0, 5.0])
+    fp1 = 2.0 * xp0
+    fp2 = xp0[:, None] + 2.0 * xp1[None, :]
+    x0 = np.array([0.5, 2.0])
+    x1 = np.array([1.0, 4.0])
+
+    out1 = np.empty_like(x0)
+    result1 = _locate_eval1_array_out(x0, xp0, fp1, out1)
+    assert result1 is out1
+    np.testing.assert_allclose(result1, 2.0 * x0)
+
+    out2 = np.empty_like(x0)
+    result2 = _locate_eval2_array_out(x0, x1, xp0, xp1, fp2, out2)
+    assert result2 is out2
+    np.testing.assert_allclose(result2, x0 + 2.0 * x1)
+
+    assert _locate_eval1_array_out.nopython_signatures
+    assert _locate_eval2_array_out.nopython_signatures
 
 
 def test_numba_scalar_tuple_eval_is_allocation_free() -> None:
