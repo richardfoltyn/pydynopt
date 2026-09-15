@@ -7,9 +7,12 @@ Numba release.
 
 On the frozen benchmark used for this work, the geometric mean fell from about
 17.92 ns to 6.98 ns per query, a reduction of about 61%. Compilation and warm-up
-were excluded. The largest gains came from search locality, selective inlining,
-Numba-friendly control flow, and layout-specific 2D addressing rather than from
-changing interpolation arithmetic.
+were excluded. The research harness allowed execution on CPUs 0-7, so these values
+are not directly comparable to results from the permanent, single-CPU benchmark
+suite documented in [`benchmarks/README.md`](../../../benchmarks/README.md). The
+largest gains came from search locality, selective inlining, Numba-friendly control
+flow, and layout-specific 2D addressing rather than from changing interpolation
+arithmetic.
 
 ## Start with a representative workload
 
