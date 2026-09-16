@@ -78,6 +78,8 @@ type ScalarIndex3D = tuple[IntegerScalar, IntegerScalar, IntegerScalar]
 type ScalarWeight2D = tuple[RealScalar, RealScalar]
 type ScalarWeight3D = tuple[RealScalar, RealScalar, RealScalar]
 
+_JIT_OPTIONS_FMA = JIT_OPTIONS | {'fastmath': {'contract'}}
+
 _interp1d_locate_scalar_jit = jit(interp1d_locate_scalar, **JIT_OPTIONS)
 _interp1d_locate_array_jit = jit(interp1d_locate_array_impl, **JIT_OPTIONS)
 _interp1d_eval_point_jit = jit(interp1d_eval_point, **JIT_OPTIONS)
@@ -1571,7 +1573,7 @@ def _numba_real_triplet(value: Any) -> bool:
     )
 
 
-@numba_overload(interp1d_locate, jit_options=JIT_OPTIONS, inline='always')
+@numba_overload(interp1d_locate, jit_options=_JIT_OPTIONS_FMA, inline='always')
 def _overload_interp1d_locate_scalar_inline(
     x: Any,
     xp: Any,
@@ -1597,7 +1599,7 @@ def _overload_interp1d_locate_scalar_inline(
     return None
 
 
-@numba_overload(interp1d_locate, jit_options=JIT_OPTIONS)
+@numba_overload(interp1d_locate, jit_options=_JIT_OPTIONS_FMA)
 def _overload_interp1d_locate(
     x: Any,
     xp: Any,
@@ -1621,7 +1623,7 @@ def _overload_interp1d_locate(
     return None
 
 
-@numba_overload(interp1d_eval, jit_options=JIT_OPTIONS)
+@numba_overload(interp1d_eval, jit_options=_JIT_OPTIONS_FMA)
 def _overload_interp1d_eval(
     index: Any,
     weight: Any,
@@ -1710,7 +1712,7 @@ def _overload_interp1d(
     return None
 
 
-@numba_overload(interp2d_locate, jit_options=JIT_OPTIONS, inline='always')
+@numba_overload(interp2d_locate, jit_options=_JIT_OPTIONS_FMA, inline='always')
 def _overload_interp2d_locate_scalar_inline(
     x0: Any,
     x1: Any,
@@ -1732,7 +1734,7 @@ def _overload_interp2d_locate_scalar_inline(
     return None
 
 
-@numba_overload(interp2d_locate, jit_options=JIT_OPTIONS)
+@numba_overload(interp2d_locate, jit_options=_JIT_OPTIONS_FMA)
 def _overload_interp2d_locate(
     x0: Any,
     x1: Any,
@@ -1757,7 +1759,7 @@ def _overload_interp2d_locate(
     return None
 
 
-@numba_overload(interp2d_eval, jit_options=JIT_OPTIONS, inline='always')
+@numba_overload(interp2d_eval, jit_options=_JIT_OPTIONS_FMA, inline='always')
 def _overload_interp2d_eval_strided(
     index: Any,
     weight: Any,
@@ -1788,7 +1790,7 @@ def _overload_interp2d_eval_strided(
     return None
 
 
-@numba_overload(interp2d_eval, jit_options=JIT_OPTIONS)
+@numba_overload(interp2d_eval, jit_options=_JIT_OPTIONS_FMA)
 def _overload_interp2d_eval(
     index: Any,
     weight: Any,
@@ -1896,7 +1898,7 @@ def _overload_interp2d(
     return None
 
 
-@numba_overload(interp3d_locate, jit_options=JIT_OPTIONS, inline='always')
+@numba_overload(interp3d_locate, jit_options=_JIT_OPTIONS_FMA, inline='always')
 def _overload_interp3d_locate_point_inline(
     x0: Any,
     x1: Any,
@@ -1920,7 +1922,7 @@ def _overload_interp3d_locate_point_inline(
     return None
 
 
-@numba_overload(interp3d_locate, jit_options=JIT_OPTIONS)
+@numba_overload(interp3d_locate, jit_options=_JIT_OPTIONS_FMA)
 def _overload_interp3d_locate(
     x0: Any,
     x1: Any,
@@ -1947,7 +1949,7 @@ def _overload_interp3d_locate(
     return None
 
 
-@numba_overload(interp3d_eval, jit_options=JIT_OPTIONS, inline='always')
+@numba_overload(interp3d_eval, jit_options=_JIT_OPTIONS_FMA, inline='always')
 def _overload_interp3d_eval_strided(
     index: Any,
     weight: Any,
@@ -1983,7 +1985,7 @@ def _overload_interp3d_eval_strided(
     return None
 
 
-@numba_overload(interp3d_eval, jit_options=JIT_OPTIONS)
+@numba_overload(interp3d_eval, jit_options=_JIT_OPTIONS_FMA)
 def _overload_interp3d_eval(
     index: Any,
     weight: Any,

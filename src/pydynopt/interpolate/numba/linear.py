@@ -25,6 +25,9 @@ from pydynopt.numba import (
 
 from .search import _bsearch_range
 
+_JIT_OPTIONS_FMA = JIT_OPTIONS | {'fastmath': {'contract'}}
+_JIT_OPTIONS_FMA_INLINE = JIT_OPTIONS_INLINE | {'fastmath': {'contract'}}
+
 __all__ = [
     'interp1d_array',
     'interp1d_array_impl',
@@ -58,7 +61,7 @@ __all__ = [
 ]
 
 
-@register_jitable(**JIT_OPTIONS_INLINE)
+@register_jitable(**_JIT_OPTIONS_FMA_INLINE)
 def interp1d_locate_scalar(
     x: float | np.number,
     xp: np.ndarray,
@@ -109,7 +112,7 @@ def interp1d_locate_scalar(
     return range_index, float(weight)
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**_JIT_OPTIONS_FMA)
 def interp1d_locate_array_impl(
     x: np.ndarray,
     xp: np.ndarray,
@@ -143,7 +146,7 @@ def interp1d_locate_array(
     return index, weight
 
 
-@register_jitable(**JIT_OPTIONS_INLINE)
+@register_jitable(**_JIT_OPTIONS_FMA_INLINE)
 def interp1d_eval_point(
     index: int | np.integer,
     weight: float | np.number,
@@ -164,7 +167,7 @@ def interp1d_eval_point(
     return float(value)
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**_JIT_OPTIONS_FMA)
 def interp1d_eval_array_impl(
     index: np.ndarray,
     weight: np.ndarray,
@@ -225,7 +228,7 @@ def interp1d_scalar(
     return interp1d_eval_point(index, weight, fp, extrapolate, left, right)
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**_JIT_OPTIONS_FMA)
 def interp1d_array_impl(
     x: np.ndarray,
     xp: np.ndarray,
@@ -284,7 +287,7 @@ def _initial_indices(
     return int(ilb[0]), int(ilb[1])
 
 
-@numba_overload(_initial_indices, jit_options=JIT_OPTIONS, inline='always')
+@numba_overload(_initial_indices, jit_options=_JIT_OPTIONS_FMA, inline='always')
 def _overload_initial_indices(ilb: Any) -> Any:
     from numba import types
 
@@ -302,7 +305,7 @@ def _overload_initial_indices(ilb: Any) -> Any:
     return impl
 
 
-@register_jitable(**JIT_OPTIONS_INLINE)
+@register_jitable(**_JIT_OPTIONS_FMA_INLINE)
 def interp2d_locate_scalar_impl(
     x0: float | np.number,
     x1: float | np.number,
@@ -339,7 +342,7 @@ def interp2d_locate_scalar(
     return index, weight
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**_JIT_OPTIONS_FMA)
 def interp2d_locate_array_impl(
     x0: np.ndarray,
     x1: np.ndarray,
@@ -377,7 +380,7 @@ def interp2d_locate_array(
     return index, weight
 
 
-@register_jitable(**JIT_OPTIONS_INLINE)
+@register_jitable(**_JIT_OPTIONS_FMA_INLINE)
 def interp2d_eval_point(
     index: Sequence[int | np.integer] | np.ndarray,
     weight: Sequence[float | np.number] | np.ndarray,
@@ -408,7 +411,7 @@ def interp2d_eval_point(
     return float(value)
 
 
-@register_jitable(**JIT_OPTIONS_INLINE)
+@register_jitable(**_JIT_OPTIONS_FMA_INLINE)
 def _interp2d_eval_point_c(
     index: Sequence[int | np.integer] | np.ndarray,
     weight: Sequence[float | np.number] | np.ndarray,
@@ -438,7 +441,7 @@ def _interp2d_eval_point_c(
     return float(value)
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**_JIT_OPTIONS_FMA)
 def interp2d_eval_array_impl(
     index: np.ndarray,
     weight: np.ndarray,
@@ -539,7 +542,7 @@ def _interp2d_scalar_c(
     return float(value)
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**_JIT_OPTIONS_FMA)
 def interp2d_array_impl(
     x0: np.ndarray,
     x1: np.ndarray,
@@ -613,7 +616,11 @@ def _initial_indices_3d(
     return int(ilb[0]), int(ilb[1]), int(ilb[2])
 
 
-@numba_overload(_initial_indices_3d, jit_options=JIT_OPTIONS, inline='always')
+@numba_overload(
+    _initial_indices_3d,
+    jit_options=_JIT_OPTIONS_FMA,
+    inline='always',
+)
 def _overload_initial_indices_3d(ilb: Any) -> Any:
     """Remove the optional-hint branch during Numba compilation.
 
@@ -635,7 +642,7 @@ def _overload_initial_indices_3d(ilb: Any) -> Any:
     return impl
 
 
-@register_jitable(**JIT_OPTIONS_INLINE)
+@register_jitable(**_JIT_OPTIONS_FMA_INLINE)
 def interp3d_locate_point_impl(
     x0: float | np.number,
     x1: float | np.number,
@@ -692,7 +699,7 @@ def interp3d_locate_point(
     return index, weight
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**_JIT_OPTIONS_FMA)
 def interp3d_locate_array_impl(
     x0: np.ndarray,
     x1: np.ndarray,
@@ -750,7 +757,7 @@ def interp3d_locate_array(
     return index, weight
 
 
-@register_jitable(**JIT_OPTIONS_INLINE)
+@register_jitable(**_JIT_OPTIONS_FMA_INLINE)
 def interp3d_eval_point(
     index: Sequence[int | np.integer] | np.ndarray,
     weight: Sequence[float | np.number] | np.ndarray,
@@ -809,7 +816,7 @@ def interp3d_eval_point(
     return float(value)
 
 
-@register_jitable(**JIT_OPTIONS_INLINE)
+@register_jitable(**_JIT_OPTIONS_FMA_INLINE)
 def _interp3d_eval_point_c(
     index: Sequence[int | np.integer] | np.ndarray,
     weight: Sequence[float | np.number] | np.ndarray,
@@ -863,7 +870,18 @@ def _interp3d_eval_point_c(
     return float(value)
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**_JIT_OPTIONS_FMA)
+def _interp3d_eval_point_c_fma(
+    index: Sequence[int | np.integer] | np.ndarray,
+    weight: Sequence[float | np.number] | np.ndarray,
+    fp: np.ndarray,
+    extrapolate: bool = True,
+) -> float:
+    """Retain contraction when called from a strict always-inline fused kernel."""
+    return _interp3d_eval_point_c(index, weight, fp, extrapolate)
+
+
+@register_jitable(**_JIT_OPTIONS_FMA)
 def interp3d_eval_array_impl(
     index: np.ndarray,
     weight: np.ndarray,
@@ -1022,43 +1040,12 @@ def _interp3d_point_c(
     index1, weight1 = interp1d_locate_scalar(x1, xp1, ilb1)
     index0, weight0 = interp1d_locate_scalar(x0, xp0, ilb0)
 
-    if not extrapolate and (
-        weight0 < 0.0
-        or weight0 > 1.0
-        or weight1 < 0.0
-        or weight1 > 1.0
-        or weight2 < 0.0
-        or weight2 > 1.0
-    ):
-        return np.nan
-
-    # Form one row-major base and keep axis-2 corner accesses adjacent. Direct flat
-    # expressions avoid extra address temporaries in this search-heavy fused leaf.
-    n1 = fp.shape[1]
-    n2 = fp.shape[2]
-    plane_size = n1 * n2
-    offset = index0 * plane_size + index1 * n2 + index2
-    value00 = weight0 * fp.flat[offset] + (1.0 - weight0) * fp.flat[offset + plane_size]
-    value01 = (
-        weight0 * fp.flat[offset + 1]
-        + (1.0 - weight0) * fp.flat[offset + plane_size + 1]
-    )
-    value10 = (
-        weight0 * fp.flat[offset + n2]
-        + (1.0 - weight0) * fp.flat[offset + plane_size + n2]
-    )
-    value11 = (
-        weight0 * fp.flat[offset + n2 + 1]
-        + (1.0 - weight0) * fp.flat[offset + plane_size + n2 + 1]
-    )
-    # Preserve the generic arithmetic association after the specialized loads.
-    value0 = weight1 * value00 + (1.0 - weight1) * value10
-    value1 = weight1 * value01 + (1.0 - weight1) * value11
-    value = weight2 * value0 + (1.0 - weight2) * value1
-    return float(value)
+    index = (index0, index1, index2)
+    weight = (weight0, weight1, weight2)
+    return _interp3d_eval_point_c_fma(index, weight, fp, extrapolate)
 
 
-@register_jitable(**JIT_OPTIONS)
+@register_jitable(**_JIT_OPTIONS_FMA)
 def interp3d_array_impl(
     x0: np.ndarray,
     x1: np.ndarray,
